@@ -1,0 +1,56 @@
+{
+  "strategy_name": "MAGoldenCross",
+  "core_issues": [
+    "generate_signals() 함수의 조건 중 일부가 잘못된 신호를 발생시킬 수 있음",
+    "파라미터 값이 한국 주식 시장에 최적화되지 않았을 가능성",
+    "청산 로직에서 추가적인 조건이 필요할 수 있음"
+  ],
+  "code_problems": [
+    {
+      "location": "generate_signals() - golden_cross 조건",
+      "problem": "골든크로스 조건이 단순히 MA 교차만 확인하고 있음",
+      "suggestion": "추세의 강도를 확인하기 위해 추가적인 모멘텀 지표를 고려"
+    },
+    {
+      "location": "generate_signals() - volume_surge 조건",
+      "problem": "거래량 급증 조건이 지나치게 높을 수 있음",
+      "suggestion": "volume_threshold를 1.5에서 1.2로 낮추어 더 많은 신호를 포착"
+    },
+    {
+      "location": "generate_signals() - macd_ok 조건",
+      "problem": "MACD 조건이 지나치게 느슨함",
+      "suggestion": "MACD > MACD Signal 조건을 강화하여 신호의 신뢰성을 높임"
+    },
+    {
+      "location": "should_exit() - death_cross 조건",
+      "problem": "데스 크로스 조건이 지나치게 단순함",
+      "suggestion": "추가적인 모멘텀 지표를 사용하여 추세 반전의 신뢰성을 높임"
+    }
+  ],
+  "parameter_changes": {
+    "short_period": {
+      "current": 10,
+      "recommended": 9,
+      "reason": "한국 시장의 변동성을 고려하여 더 빠른 반응을 위해",
+      "expected_impact": "더 빠른 신호 포착 가능"
+    },
+    "long_period": {
+      "current": 30,
+      "recommended": 25,
+      "reason": "휩소를 줄이면서도 빠른 추세 전환을 포착하기 위해",
+      "expected_impact": "추세 전환 시점의 신호 개선"
+    },
+    "volume_threshold": {
+      "current": 1.5,
+      "recommended": 1.2,
+      "reason": "더 많은 거래 기회를 포착하기 위해",
+      "expected_impact": "신호 발생 빈도 증가"
+    }
+  },
+  "new_filters": [
+    "RSI 지표를 추가하여 과매수/과매도 상태를 확인",
+    "ADX 지표를 추가하여 추세의 강도를 확인"
+  ],
+  "expected_improvement": "신호의 신뢰성을 높이고, 더 많은 거래 기회를 포착하여 승률과 총 수익률을 개선할 수 있음",
+  "confidence": 0.85
+}

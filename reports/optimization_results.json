@@ -1,0 +1,273 @@
+{
+  "VolumeBreakout": {
+    "analysis": {
+      "strategy_name": "VolumeBreakout",
+      "core_issues": [
+        "낮은 승률과 손익비",
+        "과도한 거래 수",
+        "부적절한 진입 조건으로 인한 잘못된 신호 발생"
+      ],
+      "code_problems": [
+        {
+          "location": "generate_signals() - volume_surge",
+          "problem": "거래량 급증 조건이 지나치게 완화되어 잘못된 신호 발생 가능",
+          "suggestion": "volume_surge_ratio를 3.0으로 복원하여 과열 방지"
+        },
+        {
+          "location": "generate_signals() - price_breakout",
+          "problem": "단순히 전일 고가 돌파만으로는 신뢰성 부족",
+          "suggestion": "최근 N일간의 고가 돌파 조건 추가"
+        },
+        {
+          "location": "generate_signals() - bullish",
+          "problem": "단순한 양봉 여부로는 상승 추세를 판단하기 어려움",
+          "suggestion": "양봉 여부 외에 추가적인 상승 추세 확인 지표 필요"
+        },
+        {
+          "location": "generate_signals() - not_limit_up",
+          "problem": "상한가 제한 조건이 지나치게 높음",
+          "suggestion": "상한가 제한을 0.15로 조정하여 과도한 변동성 필터링"
+        },
+        {
+          "location": "generate_signals() - close_above_ma",
+          "problem": "단순히 MA20 위에 있는지 여부만으로는 불충분",
+          "suggestion": "MA20 위에 있는 기간을 고려하여 조건 강화"
+        }
+      ],
+      "parameter_changes": {
+        "volume_surge_ratio": {
+          "current": 2.5,
+          "recommended": 3.0,
+          "reason": "과열 방지를 위해 거래량 급증 조건 강화 필요",
+          "expected_impact": "잘못된 신호 감소 및 신호 품질 향상"
+        },
+        "max_gap": {
+          "current": 0.02,
+          "recommended": 0.015,
+          "reason": "갭 상승 제한을 강화하여 급격한 가격 변동 필터링",
+          "expected_impact": "과도한 변동성으로 인한 손실 거래 감소"
+        }
+      },
+      "new_filters": [
+        "최근 5일간의 고가 돌파 여부 확인",
+        "ADX 지표를 사용한 추세 강도 필터 추가",
+        "거래량 급증 후 일정 기간 내의 조정 여부 확인"
+      ],
+      "expected_improvement": "신호 품질 향상으로 승률 증가 및 손익비 개선, 거래 수 감소로 인한 거래 비용 절감",
+      "confidence": 0.85
+    },
+    "improved_params": [
+      {
+        "param": "volume_surge_ratio",
+        "from": 2.5,
+        "to": 3.0,
+        "win_rate_change": 1.999851035304637,
+        "return_change": 3.9475170000000004
+      },
+      {
+        "param": "max_gap",
+        "from": 0.02,
+        "to": 0.015,
+        "win_rate_change": 0.46923879040667416,
+        "return_change": 1.1297160000000002
+      }
+    ]
+  },
+  "TopVolumeMomentum": {
+    "analysis": {
+      "strategy_name": "TopVolumeMomentum",
+      "core_issues": [
+        "generate_signals() 함수의 조건들이 지나치게 엄격하여 신호 발생이 제한적일 수 있음",
+        "should_exit() 함수의 청산 조건이 지나치게 느슨하여 손실을 키울 가능성이 있음"
+      ],
+      "code_problems": [
+        {
+          "location": "generate_signals() - consecutive_up 조건",
+          "problem": "2일 연속 상승 조건이 지나치게 엄격하여 신호 발생이 제한적일 수 있음",
+          "suggestion": "1일 연속 상승으로 완화하여 더 많은 기회를 포착"
+        },
+        {
+          "location": "generate_signals() - rsi_ok 조건",
+          "problem": "RSI 범위가 50-70으로 설정되어 있어 초기 모멘텀 포착이 어려울 수 있음",
+          "suggestion": "RSI 범위를 40-70으로 확장하여 더 많은 초기 모멘텀 포착"
+        },
+        {
+          "location": "generate_signals() - volume_increasing 조건",
+          "problem": "3일 평균 거래량 증가 조건이 지나치게 엄격하여 신호 발생이 제한적일 수 있음",
+          "suggestion": "최근 2일 평균 거래량 증가로 완화"
+        },
+        {
+          "location": "should_exit() - MA5 이탈 조건",
+          "problem": "MA5 이탈 조건이 지나치게 느슨하여 손실을 키울 가능성이 있음",
+          "suggestion": "MA5 이탈 시 즉시 청산하도록 수정"
+        }
+      ],
+      "parameter_changes": {
+        "consecutive_up_days": {
+          "current": 2,
+          "recommended": 1,
+          "reason": "더 많은 기회를 포착하기 위해",
+          "expected_impact": "신호 발생 빈도 증가"
+        },
+        "min_rsi": {
+          "current": 50,
+          "recommended": 40,
+          "reason": "더 많은 초기 모멘텀 포착을 위해",
+          "expected_impact": "신호 발생 빈도 증가"
+        },
+        "min_volume_ratio": {
+          "current": 1.3,
+          "recommended": 1.0,
+          "reason": "거래량 증가 조건을 완화하여 더 많은 기회를 포착",
+          "expected_impact": "신호 발생 빈도 증가"
+        }
+      },
+      "new_filters": [
+        "거래대금 상위 30% 종목 필터 추가",
+        "최근 5일간 평균 거래량 대비 현재 거래량이 1.5배 이상인 경우 필터 추가"
+      ],
+      "expected_improvement": "신호 발생 빈도가 증가하고, 초기 모멘텀 포착이 개선되어 전체적인 전략 성과가 향상될 것으로 기대",
+      "confidence": 0.85
+    },
+    "improved_params": [
+      {
+        "param": "consecutive_up_days",
+        "from": 2,
+        "to": 1,
+        "win_rate_change": 0.1738397513564749,
+        "return_change": 5.507435
+      },
+      {
+        "param": "min_rsi",
+        "from": 50,
+        "to": 40,
+        "win_rate_change": 0.5178047294677945,
+        "return_change": 1.9667569999999999
+      }
+    ]
+  },
+  "High52WeekBreakout": {
+    "analysis": {
+      "strategy_name": "High52WeekBreakout",
+      "core_issues": [
+        "낮은 승률과 높은 손실 비율",
+        "불필요한 신호 발생 가능성",
+        "청산 로직의 부재"
+      ],
+      "code_problems": [
+        {
+          "location": "generate_signals() - new_high 조건",
+          "problem": "52주 신고가를 단순히 돌파하는 것만으로는 충분하지 않음",
+          "suggestion": "신고가 돌파 후 일정 기간 동안의 가격 유지 여부를 확인"
+        },
+        {
+          "location": "generate_signals() - volume_surge 조건",
+          "problem": "거래량 급증 조건이 지나치게 높아 신호를 놓칠 수 있음",
+          "suggestion": "거래량 기준을 1.5x로 낮추고, 다른 조건과의 조합을 강화"
+        },
+        {
+          "location": "generate_signals() - bullish 조건",
+          "problem": "단순히 종가가 시가보다 높은 것만으로는 충분하지 않음",
+          "suggestion": "캔들 패턴 분석을 추가하여 강력한 상승 신호 확인"
+        },
+        {
+          "location": "generate_signals() - clear_breakout 조건",
+          "problem": "1% 돌파는 지나치게 낮은 기준일 수 있음",
+          "suggestion": "최소 2% 이상의 돌파를 요구"
+        },
+        {
+          "location": "generate_signals() - volume_increasing 조건",
+          "problem": "5일 평균 거래량이 20일 평균의 1.2배 이상이어야 하는 조건이 지나치게 엄격할 수 있음",
+          "suggestion": "1.1배로 완화"
+        },
+        {
+          "location": "generate_signals() - not_overheated 조건",
+          "problem": "RSI가 80 이상일 때만 과열로 판단",
+          "suggestion": "RSI 기준을 70으로 낮추어 과열 상태를 더 엄격히 판단"
+        }
+      ],
+      "parameter_changes": {
+        "volume_threshold": {
+          "current": 2.0,
+          "recommended": 1.5,
+          "reason": "거래량 급증 조건이 지나치게 높아 신호를 놓칠 수 있음",
+          "expected_impact": "더 많은 신호 발생 가능"
+        },
+        "min_breakout_pct": {
+          "current": 0.01,
+          "recommended": 0.02,
+          "reason": "1% 돌파는 지나치게 낮은 기준일 수 있음",
+          "expected_impact": "더 강력한 신호만 포착"
+        },
+        "require_uptrend": {
+          "current": true,
+          "recommended": false,
+          "reason": "상승 추세 필터가 지나치게 엄격하여 신호를 놓칠 수 있음",
+          "expected_impact": "더 많은 신호 발생 가능"
+        }
+      },
+      "new_filters": [
+        "볼린저 밴드 상단 돌파 여부 확인",
+        "ADX를 사용하여 강한 추세 확인"
+      ],
+      "expected_improvement": "신호의 질을 높이고 불필요한 신호를 줄이며, 더 많은 기회를 포착할 수 있을 것으로 기대",
+      "confidence": 0.85
+    },
+    "improved_params": [
+      {
+        "param": "min_breakout_pct",
+        "from": 0.01,
+        "to": 0.02,
+        "win_rate_change": 1.8181818181818166,
+        "return_change": 0.27010100000000037
+      }
+    ]
+  },
+  "VWAPReversion": {
+    "analysis": {
+      "strategy_name": "VWAPReversion",
+      "core_issues": [
+        "generate_signals() 함수의 조건들이 지나치게 엄격하여 신호 발생이 제한적일 수 있음",
+        "should_exit() 함수에서 VWAP+0.5% 도달 조건이 지나치게 보수적일 수 있음"
+      ],
+      "code_problems": [
+        {
+          "location": "generate_signals() - volume_increasing 조건",
+          "problem": "거래량 증가 조건이 지나치게 엄격하여 신호 발생을 제한할 수 있음",
+          "suggestion": "거래량 증가 조건을 완화하여, 오늘 거래량이 이전 거래량의 0.8배 이상이면 충분하도록 수정"
+        },
+        {
+          "location": "generate_signals() - stoch_oversold 조건",
+          "problem": "스토캐스틱 K 값이 30 미만일 때만 과매도로 간주하여 신호 발생이 제한적",
+          "suggestion": "스토캐스틱 K 값의 임계값을 30에서 40으로 상향 조정하여 신호 발생 가능성 증가"
+        },
+        {
+          "location": "generate_signals() - not_falling_knife 조건",
+          "problem": "하락폭이 -5% 미만일 때만 신호를 생성하지 않도록 설정되어 있어, 지나치게 보수적",
+          "suggestion": "하락폭 조건을 -3%로 조정하여 더 많은 신호를 포착할 수 있도록 수정"
+        }
+      ],
+      "parameter_changes": {
+        "deviation_threshold": {
+          "current": 0.03,
+          "recommended": 0.025,
+          "reason": "VWAP 이탈 기준을 약간 완화하여 더 많은 기회를 포착",
+          "expected_impact": "신호 발생 빈도 증가"
+        },
+        "max_rsi": {
+          "current": 30,
+          "recommended": 35,
+          "reason": "RSI 과매도 기준을 완화하여 더 많은 반등 기회를 포착",
+          "expected_impact": "신호 발생 빈도 증가"
+        }
+      },
+      "new_filters": [
+        "MACD 히스토그램이 양수로 전환되는 시점을 추가하여 상승 모멘텀 확인",
+        "볼린저 밴드 하단을 터치한 후 반등하는 조건 추가"
+      ],
+      "expected_improvement": "신호 발생 빈도가 증가하고, 더 많은 반등 기회를 포착하여 승률과 총 수익률이 개선될 것으로 예상",
+      "confidence": 0.85
+    },
+    "improved_params": []
+  }
+}

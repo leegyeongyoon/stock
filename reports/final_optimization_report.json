@@ -1,0 +1,102 @@
+{
+  "VolumeBreakout": {
+    "original_win_rate": 28.1,
+    "optimized_win_rate": 30.3,
+    "win_rate_change": 2.2,
+    "original_return": 0.57,
+    "optimized_return": 5.21,
+    "return_change": 4.64,
+    "total_trades": 188,
+    "improved": true
+  },
+  "GapUp": {
+    "original_win_rate": 37.5,
+    "optimized_win_rate": 39.7,
+    "win_rate_change": 2.2,
+    "original_return": -0.81,
+    "optimized_return": -0.07,
+    "return_change": 0.74,
+    "total_trades": 68,
+    "improved": true
+  },
+  "VWAPReversion": {
+    "original_win_rate": 47.6,
+    "optimized_win_rate": 47.6,
+    "win_rate_change": 0.0,
+    "original_return": 2.77,
+    "optimized_return": 2.77,
+    "return_change": 0.0,
+    "total_trades": 21,
+    "improved": false
+  },
+  "RSIOversold": {
+    "original_win_rate": 33.3,
+    "optimized_win_rate": 44.0,
+    "win_rate_change": 10.7,
+    "original_return": -1.85,
+    "optimized_return": 0.97,
+    "return_change": 2.82,
+    "total_trades": 25,
+    "improved": true
+  },
+  "MAGoldenCross": {
+    "original_win_rate": 43.8,
+    "optimized_win_rate": 43.8,
+    "win_rate_change": 0.0,
+    "original_return": 12.83,
+    "optimized_return": 12.83,
+    "return_change": 0.0,
+    "total_trades": 80,
+    "improved": false
+  },
+  "BBSqueeze": {
+    "original_win_rate": 33.3,
+    "optimized_win_rate": 37.1,
+    "win_rate_change": 3.8,
+    "original_return": 6.69,
+    "optimized_return": 10.71,
+    "return_change": 4.02,
+    "total_trades": 140,
+    "improved": true
+  },
+  "TopVolumeMomentum": {
+    "original_win_rate": 31.5,
+    "optimized_win_rate": 32.6,
+    "win_rate_change": 1.1,
+    "original_return": -2.69,
+    "optimized_return": 5.56,
+    "return_change": 8.25,
+    "total_trades": 620,
+    "improved": true
+  },
+  "High52WeekBreakout": {
+    "original_win_rate": 18.2,
+    "optimized_win_rate": 20.0,
+    "win_rate_change": 1.8,
+    "original_return": -9.38,
+    "optimized_return": -9.11,
+    "return_change": 0.27,
+    "total_trades": 10,
+    "improved": true
+  },
+  "InstitutionalFlow": {
+    "original_win_rate": 28.2,
+    "optimized_win_rate": 27.8,
+    "win_rate_change": -0.4,
+    "original_return": -11.54,
+    "optimized_return": -3.36,
+    "return_change": 8.18,
+    "total_trades": 90,
+    "improved": true
+  },
+  "SectorRotation": {
+    "original_win_rate": 0.0,
+    "optimized_win_rate": 22.9,
+    "win_rate_change": 22.9,
+    "original_return": -3.58,
+    "optimized_return": -6.48,
+    "return_change": -2.9,
+    "total_trades": 48,
+    "improved": false
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "strategy_name": "BBSqueeze",
+  "core_issues": [
+    "볼린저 밴드 폭 수축 조건이 지나치게 엄격하여 신호 발생이 제한될 수 있음",
+    "MACD 조건이 지나치게 느슨하여 잘못된 신호를 발생시킬 가능성이 있음",
+    "거래량 급증 조건이 과도하게 설정되어 신호 발생이 제한될 수 있음"
+  ],
+  "code_problems": [
+    {
+      "location": "generate_signals() - is_squeeze 조건",
+      "problem": "볼린저 밴드 폭 수축 조건이 지나치게 엄격하여 신호 발생이 제한될 수 있음",
+      "suggestion": "bb_width_min * 1.05 대신 bb_width_min * 1.1로 변경하여 조건을 완화"
+    },
+    {
+      "location": "generate_signals() - macd_ok 조건",
+      "problem": "MACD 조건이 지나치게 느슨하여 잘못된 신호를 발생시킬 가능성이 있음",
+      "suggestion": "macd_cross와 macd_bullish 조건을 모두 만족해야만 macd_ok를 True로 설정"
+    },
+    {
+      "location": "generate_signals() - volume_surge 조건",
+      "problem": "거래량 급증 조건이 과도하게 설정되어 신호 발생이 제한될 수 있음",
+      "suggestion": "min_volume_ratio를 1.5에서 1.3으로 낮춰 조건을 완화"
+    }
+  ],
+  "parameter_changes": {
+    "squeeze_lookback": {
+      "current": 15,
+      "recommended": 20,
+      "reason": "더 긴 기간의 스퀴즈를 확인하여 신호의 신뢰성을 높임",
+      "expected_impact": "신호의 품질 향상"
+    },
+    "min_volume_ratio": {
+      "current": 1.5,
+      "recommended": 1.3,
+      "reason": "거래량 급증 조건을 완화하여 신호 발생 빈도를 증가",
+      "expected_impact": "더 많은 신호 발생"
+    }
+  },
+  "new_filters": [
+    "RSI 필터 추가: 과매수/과매도 상태를 피하기 위해 RSI가 30~70 범위 내에 있을 때만 진입",
+    "ADX 필터 추가: 추세 강도를 확인하기 위해 ADX가 20 이상일 때만 진입"
+  ],
+  "expected_improvement": "신호의 품질과 빈도를 개선하여 전략의 승률과 총 수익률을 향상시킬 수 있음",
+  "confidence": 0.85
+}

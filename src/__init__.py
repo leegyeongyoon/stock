@@ -1,0 +1,1 @@
+"""Stock Auto-Trading System."""

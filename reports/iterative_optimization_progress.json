@@ -1,0 +1,999 @@
+{
+  "VolumeBreakout": {
+    "strategy_name": "VolumeBreakout",
+    "initial_win_rate": 30.3,
+    "initial_return": 5.21,
+    "current_win_rate": 33.33,
+    "current_return": 8.3,
+    "total_improvement": 3.09,
+    "win_rate_improvement": 3.03,
+    "current_params": {
+      "volume_surge_ratio": 3.2,
+      "volume_ma_period": 20,
+      "stop_loss": 0.022,
+      "take_profit": 0.05,
+      "require_uptrend": true,
+      "max_rsi": 70,
+      "max_gap": 0.015
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "volume_surge_ratio",
+        "from": 3.0,
+        "to": 2.8,
+        "win_rate_change": -0.31914893617021534,
+        "return_change": -1.5066499999999996,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.015,
+        "win_rate_change": -2.8059214229427027,
+        "return_change": -0.636876,
+        "iteration": 1
+      },
+      {
+        "param": "take_profit",
+        "from": 0.05,
+        "to": 0.06,
+        "win_rate_change": -2.5779438734904296,
+        "return_change": 0.8930829999999998,
+        "iteration": 2
+      },
+      {
+        "param": "volume_ma_period",
+        "from": 20,
+        "to": 15,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 3
+      },
+      {
+        "param": "max_rsi",
+        "from": 70,
+        "to": 65,
+        "win_rate_change": -3.861855897605647,
+        "return_change": -6.801363,
+        "iteration": 3
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.018,
+        "win_rate_change": -0.5847953216374258,
+        "return_change": 1.10346,
+        "iteration": 4
+      },
+      {
+        "param": "take_profit",
+        "from": 0.05,
+        "to": 0.055,
+        "win_rate_change": -1.5755073959408286,
+        "return_change": 1.971401000000001,
+        "iteration": 4
+      },
+      {
+        "param": "max_gap",
+        "from": 0.015,
+        "to": 0.012,
+        "win_rate_change": 0.7476497150048118,
+        "return_change": -0.4405429999999999,
+        "iteration": 4
+      },
+      {
+        "param": "max_rsi",
+        "from": 70,
+        "to": 68,
+        "win_rate_change": -0.4566210045662089,
+        "return_change": -3.007334000000001,
+        "iteration": 5
+      }
+    ]
+  },
+  "GapUp": {
+    "strategy_name": "GapUp",
+    "initial_win_rate": 39.7,
+    "initial_return": -0.07,
+    "current_win_rate": 39.71,
+    "current_return": -0.07,
+    "total_improvement": 0.0,
+    "win_rate_improvement": 0.01,
+    "current_params": {
+      "min_gap": 0.03,
+      "max_gap": 0.1,
+      "stop_loss": 0.02,
+      "take_profit": 0.03,
+      "min_volume_ratio": 1.5,
+      "gap_fill_threshold": -0.005
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "min_gap",
+        "from": 0.03,
+        "to": 0.035,
+        "win_rate_change": -0.93037214885954,
+        "return_change": 0.023206000000000004,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.015,
+        "win_rate_change": -1.470588235294116,
+        "return_change": 0.180176,
+        "iteration": 1
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.5,
+        "to": 1.7,
+        "win_rate_change": -1.244343891402707,
+        "return_change": 0.17216700000000001,
+        "iteration": 1
+      },
+      {
+        "param": "take_profit",
+        "from": 0.03,
+        "to": 0.035,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 2
+      },
+      {
+        "param": "gap_fill_threshold",
+        "from": -0.005,
+        "to": 0.0,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 2
+      },
+      {
+        "param": "max_gap",
+        "from": 0.1,
+        "to": 0.08,
+        "win_rate_change": -1.244343891402707,
+        "return_change": -1.9859790000000004,
+        "iteration": 3
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.025,
+        "win_rate_change": 0.0,
+        "return_change": -0.141133,
+        "iteration": 3
+      },
+      {
+        "param": "gap_fill_threshold",
+        "from": -0.005,
+        "to": -0.01,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 3
+      },
+      {
+        "param": "min_gap",
+        "from": 0.03,
+        "to": 0.025,
+        "win_rate_change": -0.17099863201094223,
+        "return_change": -1.919469,
+        "iteration": 4
+      },
+      {
+        "param": "max_gap",
+        "from": 0.1,
+        "to": 0.12,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 4
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.018,
+        "win_rate_change": -1.470588235294116,
+        "return_change": 0.21944400000000003,
+        "iteration": 5
+      },
+      {
+        "param": "take_profit",
+        "from": 0.03,
+        "to": 0.032,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.5,
+        "to": 1.6,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      }
+    ]
+  },
+  "VWAPReversion": {
+    "strategy_name": "VWAPReversion",
+    "initial_win_rate": 47.6,
+    "initial_return": 2.77,
+    "current_win_rate": 50.0,
+    "current_return": 2.84,
+    "total_improvement": 0.07,
+    "win_rate_improvement": 2.4,
+    "current_params": {
+      "deviation_threshold": 0.03,
+      "stop_loss": 0.015,
+      "take_profit": 0.025,
+      "max_rsi": 30,
+      "min_down_days": 2,
+      "min_volume_ratio": 0.8
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "deviation_threshold",
+        "from": 0.03,
+        "to": 0.035,
+        "win_rate_change": 0.0,
+        "return_change": 0.010944999999999983,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.015,
+        "to": 0.02,
+        "win_rate_change": 0.0,
+        "return_change": -0.48787199999999986,
+        "iteration": 1
+      },
+      {
+        "param": "deviation_threshold",
+        "from": 0.03,
+        "to": 0.025,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 2
+      },
+      {
+        "param": "max_rsi",
+        "from": 30,
+        "to": 35,
+        "win_rate_change": -1.6731016731016624,
+        "return_change": 0.5653740000000003,
+        "iteration": 2
+      },
+      {
+        "param": "take_profit",
+        "from": 0.025,
+        "to": 0.03,
+        "win_rate_change": 0.0,
+        "return_change": 0.02800899999999995,
+        "iteration": 3
+      },
+      {
+        "param": "min_down_days",
+        "from": 2,
+        "to": 3,
+        "win_rate_change": -7.142857142857146,
+        "return_change": -0.416617,
+        "iteration": 3
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.015,
+        "to": 0.012,
+        "win_rate_change": 0.0,
+        "return_change": 0.1943710000000003,
+        "iteration": 4
+      },
+      {
+        "param": "take_profit",
+        "from": 0.025,
+        "to": 0.027,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 4
+      },
+      {
+        "param": "deviation_threshold",
+        "from": 0.03,
+        "to": 0.032,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      },
+      {
+        "param": "max_rsi",
+        "from": 30,
+        "to": 28,
+        "win_rate_change": -6.25,
+        "return_change": -0.799836,
+        "iteration": 5
+      }
+    ]
+  },
+  "RSIOversold": {
+    "strategy_name": "RSIOversold",
+    "initial_win_rate": 44.0,
+    "initial_return": 0.97,
+    "current_win_rate": 53.49,
+    "current_return": 3.19,
+    "total_improvement": 2.22,
+    "win_rate_improvement": 9.49,
+    "current_params": {
+      "rsi_oversold": 33,
+      "rsi_exit": 50,
+      "rsi_period": 14,
+      "stop_loss": 0.02,
+      "take_profit": 0.04,
+      "require_macd_turn": true,
+      "min_volume_ratio": 1.0,
+      "min_down_days": 2
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "rsi_oversold",
+        "from": 30,
+        "to": 25,
+        "win_rate_change": -10.666666666666671,
+        "return_change": -2.7094750000000003,
+        "iteration": 1
+      },
+      {
+        "param": "rsi_exit",
+        "from": 50,
+        "to": 45,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.025,
+        "win_rate_change": 0.0,
+        "return_change": -0.5035860000000001,
+        "iteration": 1
+      },
+      {
+        "param": "rsi_oversold",
+        "from": 32,
+        "to": 31,
+        "win_rate_change": -1.724137931034484,
+        "return_change": -0.10675299999999988,
+        "iteration": 3
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.02,
+        "to": 0.018,
+        "win_rate_change": 0.0,
+        "return_change": 0.2411660000000002,
+        "iteration": 3
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.0,
+        "to": 0.9,
+        "win_rate_change": -1.6365202411714037,
+        "return_change": -2.9105830000000004,
+        "iteration": 4
+      },
+      {
+        "param": "rsi_oversold",
+        "from": 33,
+        "to": 34,
+        "win_rate_change": -3.4883720930232514,
+        "return_change": -0.34238000000000035,
+        "iteration": 5
+      },
+      {
+        "param": "rsi_exit",
+        "from": 50,
+        "to": 52,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      },
+      {
+        "param": "min_down_days",
+        "from": 2,
+        "to": 3,
+        "win_rate_change": -3.4883720930232514,
+        "return_change": -0.4410010000000004,
+        "iteration": 5
+      }
+    ]
+  },
+  "MAGoldenCross": {
+    "strategy_name": "MAGoldenCross",
+    "initial_win_rate": 43.8,
+    "initial_return": 12.83,
+    "current_win_rate": 45.0,
+    "current_return": 12.94,
+    "total_improvement": 0.11,
+    "win_rate_improvement": 1.2,
+    "current_params": {
+      "short_period": 10,
+      "long_period": 30,
+      "volume_threshold": 1.5,
+      "stop_loss": 0.045,
+      "take_profit": 0.08,
+      "require_macd": true,
+      "confirm_days": 1
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "confirm_days",
+        "from": 1,
+        "to": 2,
+        "win_rate_change": -3.75,
+        "return_change": -11.278251000000001,
+        "iteration": 1
+      },
+      {
+        "param": "short_period",
+        "from": 10,
+        "to": 12,
+        "win_rate_change": -2.766393442622949,
+        "return_change": -8.813074,
+        "iteration": 2
+      },
+      {
+        "param": "long_period",
+        "from": 30,
+        "to": 35,
+        "win_rate_change": 0.8653846153846203,
+        "return_change": -5.12748,
+        "iteration": 2
+      },
+      {
+        "param": "volume_threshold",
+        "from": 1.5,
+        "to": 1.6,
+        "win_rate_change": -1.2842465753424648,
+        "return_change": -1.5137850000000004,
+        "iteration": 2
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.04,
+        "to": 0.03,
+        "win_rate_change": -3.75,
+        "return_change": -1.4683910000000004,
+        "iteration": 3
+      },
+      {
+        "param": "take_profit",
+        "from": 0.08,
+        "to": 0.07,
+        "win_rate_change": 0.0,
+        "return_change": -0.8473590000000009,
+        "iteration": 3
+      },
+      {
+        "param": "volume_threshold",
+        "from": 1.5,
+        "to": 1.4,
+        "win_rate_change": -2.57352941176471,
+        "return_change": -3.696135,
+        "iteration": 4
+      },
+      {
+        "param": "take_profit",
+        "from": 0.08,
+        "to": 0.085,
+        "win_rate_change": -2.5,
+        "return_change": -2.202426000000001,
+        "iteration": 5
+      },
+      {
+        "param": "short_period",
+        "from": 10,
+        "to": 9,
+        "win_rate_change": -3.82352941176471,
+        "return_change": -2.1897780000000004,
+        "iteration": 5
+      }
+    ]
+  },
+  "BBSqueeze": {
+    "strategy_name": "BBSqueeze",
+    "initial_win_rate": 37.1,
+    "initial_return": 10.71,
+    "current_win_rate": 37.14,
+    "current_return": 10.71,
+    "total_improvement": 0.0,
+    "win_rate_improvement": 0.04,
+    "current_params": {
+      "bb_period": 20,
+      "bb_std": 2.0,
+      "squeeze_lookback": 20,
+      "stop_loss": 0.025,
+      "take_profit": 0.06,
+      "min_volume_ratio": 1.3,
+      "require_macd_cross": true
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "bb_std",
+        "from": 2.0,
+        "to": 2.2,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 1
+      },
+      {
+        "param": "squeeze_lookback",
+        "from": 20,
+        "to": 18,
+        "win_rate_change": -0.779220779220779,
+        "return_change": -0.13172800000000073,
+        "iteration": 1
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.3,
+        "to": 1.35,
+        "win_rate_change": -0.3781512605042039,
+        "return_change": -0.6895740000000004,
+        "iteration": 1
+      },
+      {
+        "param": "bb_period",
+        "from": 20,
+        "to": 22,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 2
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.03,
+        "win_rate_change": 1.9875776397515494,
+        "return_change": -10.365623000000001,
+        "iteration": 2
+      },
+      {
+        "param": "take_profit",
+        "from": 0.06,
+        "to": 0.065,
+        "win_rate_change": -2.142857142857146,
+        "return_change": -1.675097000000001,
+        "iteration": 3
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.3,
+        "to": 1.4,
+        "win_rate_change": -0.779220779220779,
+        "return_change": -1.2214729999999996,
+        "iteration": 3
+      },
+      {
+        "param": "bb_std",
+        "from": 2.0,
+        "to": 1.8,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 4
+      },
+      {
+        "param": "squeeze_lookback",
+        "from": 20,
+        "to": 25,
+        "win_rate_change": 0.0664451827242516,
+        "return_change": -3.057786,
+        "iteration": 4
+      },
+      {
+        "param": "bb_period",
+        "from": 20,
+        "to": 18,
+        "win_rate_change": -0.5231388329979865,
+        "return_change": -0.8908660000000008,
+        "iteration": 5
+      },
+      {
+        "param": "take_profit",
+        "from": 0.06,
+        "to": 0.055,
+        "win_rate_change": 1.8642350557244143,
+        "return_change": -1.597677000000001,
+        "iteration": 5
+      }
+    ]
+  },
+  "TopVolumeMomentum": {
+    "strategy_name": "TopVolumeMomentum",
+    "initial_win_rate": 32.6,
+    "initial_return": 5.56,
+    "current_win_rate": 35.36,
+    "current_return": 8.46,
+    "total_improvement": 2.9,
+    "win_rate_improvement": 2.76,
+    "current_params": {
+      "consecutive_up_days": 1,
+      "stop_loss": 0.03,
+      "take_profit": 0.065,
+      "min_volume_ratio": 1.6,
+      "min_rsi": 40,
+      "max_rsi": 68
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "consecutive_up_days",
+        "from": 1,
+        "to": 2,
+        "win_rate_change": -0.5293631100082692,
+        "return_change": -6.2868200000000005,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.03,
+        "to": 0.025,
+        "win_rate_change": -0.5232288933477349,
+        "return_change": 1.3192959999999996,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.03,
+        "to": 0.035,
+        "win_rate_change": 0.4937228143231138,
+        "return_change": -0.5165129999999998,
+        "iteration": 2
+      },
+      {
+        "param": "take_profit",
+        "from": 0.07,
+        "to": 0.075,
+        "win_rate_change": -0.43323766570998856,
+        "return_change": -1.4814239999999996,
+        "iteration": 2
+      },
+      {
+        "param": "min_rsi",
+        "from": 40,
+        "to": 45,
+        "win_rate_change": -0.18450184501845257,
+        "return_change": -0.1406319999999992,
+        "iteration": 2
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.6,
+        "to": 1.7,
+        "win_rate_change": -0.1872941270989017,
+        "return_change": 0.7507290000000006,
+        "iteration": 4
+      },
+      {
+        "param": "max_rsi",
+        "from": 68,
+        "to": 70,
+        "win_rate_change": -1.7421766127279525,
+        "return_change": -0.9279250000000001,
+        "iteration": 4
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.03,
+        "to": 0.028,
+        "win_rate_change": -0.1517969668717214,
+        "return_change": 1.4207310000000009,
+        "iteration": 5
+      },
+      {
+        "param": "min_rsi",
+        "from": 40,
+        "to": 42,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      }
+    ]
+  },
+  "High52WeekBreakout": {
+    "strategy_name": "High52WeekBreakout",
+    "initial_win_rate": 20.0,
+    "initial_return": -9.11,
+    "current_win_rate": 20.0,
+    "current_return": -0.9,
+    "total_improvement": 8.21,
+    "win_rate_improvement": 0.0,
+    "current_params": {
+      "volume_threshold": 2.0,
+      "lookback_days": 252,
+      "stop_loss": 0.025,
+      "take_profit": 0.08,
+      "min_breakout_pct": 0.02,
+      "require_uptrend": true
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "take_profit",
+        "from": 0.08,
+        "to": 0.07,
+        "win_rate_change": 0.0,
+        "return_change": -0.49261200000000016,
+        "iteration": 1
+      },
+      {
+        "param": "volume_threshold",
+        "from": 2.0,
+        "to": 1.8,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 2
+      },
+      {
+        "param": "min_breakout_pct",
+        "from": 0.02,
+        "to": 0.015,
+        "win_rate_change": -1.8181818181818166,
+        "return_change": -0.27744,
+        "iteration": 2
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.03,
+        "win_rate_change": 0.0,
+        "return_change": -8.205407,
+        "iteration": 3
+      },
+      {
+        "param": "min_breakout_pct",
+        "from": 0.02,
+        "to": 0.025,
+        "win_rate_change": -8.88888888888889,
+        "return_change": -1.285695,
+        "iteration": 3
+      },
+      {
+        "param": "volume_threshold",
+        "from": 2.0,
+        "to": 1.9,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 4
+      },
+      {
+        "param": "lookback_days",
+        "from": 252,
+        "to": 200,
+        "win_rate_change": 1.428571428571427,
+        "return_change": -1.4053870000000002,
+        "iteration": 4
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.02,
+        "win_rate_change": 0.0,
+        "return_change": 0.517844,
+        "iteration": 5
+      },
+      {
+        "param": "take_profit",
+        "from": 0.08,
+        "to": 0.09,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      }
+    ]
+  },
+  "InstitutionalFlow": {
+    "strategy_name": "InstitutionalFlow",
+    "initial_win_rate": 27.8,
+    "initial_return": -3.36,
+    "current_win_rate": 32.46,
+    "current_return": 0.9,
+    "total_improvement": 4.26,
+    "win_rate_improvement": 4.66,
+    "current_params": {
+      "consecutive_days": 3,
+      "stop_loss": 0.025,
+      "take_profit": 0.06,
+      "min_volume_ratio": 2.5,
+      "require_uptrend": true
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "consecutive_days",
+        "from": 3,
+        "to": 2,
+        "win_rate_change": 0.3831417624521052,
+        "return_change": -4.469492000000001,
+        "iteration": 1
+      },
+      {
+        "param": "take_profit",
+        "from": 0.06,
+        "to": 0.065,
+        "win_rate_change": -2.6767676767676747,
+        "return_change": -1.3237479999999997,
+        "iteration": 1
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.02,
+        "win_rate_change": -3.145795523290989,
+        "return_change": 0.11707699999999999,
+        "iteration": 2
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 2.5,
+        "to": 3.0,
+        "win_rate_change": -0.2339181286549703,
+        "return_change": -2.541098,
+        "iteration": 2
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.03,
+        "win_rate_change": 1.1721782331936055,
+        "return_change": -4.201436,
+        "iteration": 3
+      },
+      {
+        "param": "take_profit",
+        "from": 0.06,
+        "to": 0.055,
+        "win_rate_change": -0.5595886267392594,
+        "return_change": -2.435126,
+        "iteration": 3
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.0275,
+        "win_rate_change": 0.0,
+        "return_change": -2.336647,
+        "iteration": 4
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 2.5,
+        "to": 2.7,
+        "win_rate_change": -0.7253711201079618,
+        "return_change": -1.43559,
+        "iteration": 4
+      },
+      {
+        "param": "stop_loss",
+        "from": 0.025,
+        "to": 0.0225,
+        "win_rate_change": -1.1517925247902312,
+        "return_change": 0.3868840000000001,
+        "iteration": 5
+      },
+      {
+        "param": "take_profit",
+        "from": 0.06,
+        "to": 0.058,
+        "win_rate_change": 0.0,
+        "return_change": -0.07338299999999998,
+        "iteration": 5
+      }
+    ]
+  },
+  "SectorRotation": {
+    "strategy_name": "SectorRotation",
+    "initial_win_rate": 22.9,
+    "initial_return": -6.48,
+    "current_win_rate": 25.0,
+    "current_return": -3.48,
+    "total_improvement": 3.0,
+    "win_rate_improvement": 2.1,
+    "current_params": {
+      "leader_gain_threshold": 0.09,
+      "lag_threshold": 0.03,
+      "stop_loss": 0.05,
+      "take_profit": 0.08,
+      "min_rsi": 30,
+      "max_rsi": 70,
+      "min_volume_ratio": 1.5
+    },
+    "iterations_completed": 5,
+    "failed_recommendations": [
+      {
+        "param": "stop_loss",
+        "from": 0.05,
+        "to": 0.03,
+        "win_rate_change": -2.0833333333333286,
+        "return_change": -0.2626489999999997,
+        "iteration": 1
+      },
+      {
+        "param": "take_profit",
+        "from": 0.08,
+        "to": 0.1,
+        "win_rate_change": 0.0,
+        "return_change": 0.45312899999999967,
+        "iteration": 1
+      },
+      {
+        "param": "leader_gain_threshold",
+        "from": 0.08,
+        "to": 0.07,
+        "win_rate_change": -0.5028735632183867,
+        "return_change": -1.550002,
+        "iteration": 2
+      },
+      {
+        "param": "lag_threshold",
+        "from": 0.03,
+        "to": 0.025,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 2
+      },
+      {
+        "param": "min_rsi",
+        "from": 30,
+        "to": 35,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 3
+      },
+      {
+        "param": "min_rsi",
+        "from": 30,
+        "to": 25,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 4
+      },
+      {
+        "param": "max_rsi",
+        "from": 70,
+        "to": 75,
+        "win_rate_change": 1.3808139534883708,
+        "return_change": -2.573505,
+        "iteration": 4
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.5,
+        "to": 1.4,
+        "win_rate_change": 3.125,
+        "return_change": -1.1092469999999999,
+        "iteration": 4
+      },
+      {
+        "param": "lag_threshold",
+        "from": 0.03,
+        "to": 0.035,
+        "win_rate_change": 0.0,
+        "return_change": 0.0,
+        "iteration": 5
+      },
+      {
+        "param": "min_volume_ratio",
+        "from": 1.5,
+        "to": 1.6,
+        "win_rate_change": -1.9230769230769234,
+        "return_change": -0.38196299999999983,
+        "iteration": 5
+      }
+    ]
+  }
+}

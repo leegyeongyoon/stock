@@ -1,0 +1,493 @@
+{
+  "analysis_date": "2026-02-10",
+  "backtest_results": {
+    "VolumeBreakout": {
+      "win_rate": 28.1,
+      "total_return": 0.57,
+      "total_trades": 274,
+      "sharpe_ratio": -0.5,
+      "max_drawdown": 7.91,
+      "profit_factor": 1.01,
+      "avg_win": 7.74,
+      "avg_loss": -3.22,
+      "winning_trades": 77,
+      "losing_trades": 197
+    },
+    "RSIOversold": {
+      "win_rate": 33.3,
+      "total_return": -1.85,
+      "total_trades": 12,
+      "sharpe_ratio": -4.16,
+      "max_drawdown": 2.75,
+      "profit_factor": 0.31,
+      "avg_win": 2.13,
+      "avg_loss": -3.48,
+      "winning_trades": 4,
+      "losing_trades": 8
+    },
+    "BBSqueeze": {
+      "win_rate": 33.3,
+      "total_return": 6.69,
+      "total_trades": 150,
+      "sharpe_ratio": -0.17,
+      "max_drawdown": 4.31,
+      "profit_factor": 1.22,
+      "avg_win": 8.6,
+      "avg_loss": -3.81,
+      "winning_trades": 50,
+      "losing_trades": 100
+    },
+    "GapUp": {
+      "win_rate": 37.5,
+      "total_return": -0.81,
+      "total_trades": 72,
+      "sharpe_ratio": -1.09,
+      "max_drawdown": 4.29,
+      "profit_factor": 0.94,
+      "avg_win": 4.98,
+      "avg_loss": -3.16,
+      "winning_trades": 27,
+      "losing_trades": 45
+    },
+    "TopVolumeMomentum": {
+      "win_rate": 31.5,
+      "total_return": -2.69,
+      "total_trades": 463,
+      "sharpe_ratio": -0.63,
+      "max_drawdown": 11.82,
+      "profit_factor": 0.96,
+      "avg_win": 5.76,
+      "avg_loss": -2.75,
+      "winning_trades": 146,
+      "losing_trades": 317
+    },
+    "High52WeekBreakout": {
+      "win_rate": 18.2,
+      "total_return": -9.38,
+      "total_trades": 11,
+      "sharpe_ratio": -1.28,
+      "max_drawdown": 11.25,
+      "profit_factor": 0.21,
+      "avg_win": 12.71,
+      "avg_loss": -14.59,
+      "winning_trades": 2,
+      "losing_trades": 9
+    },
+    "InstitutionalFlow": {
+      "win_rate": 28.2,
+      "total_return": -11.54,
+      "total_trades": 298,
+      "sharpe_ratio": -1.23,
+      "max_drawdown": 12.18,
+      "profit_factor": 0.82,
+      "avg_win": 8.52,
+      "avg_loss": -4.09,
+      "winning_trades": 84,
+      "losing_trades": 214
+    },
+    "SectorRotation": {
+      "win_rate": 0.0,
+      "total_return": -3.58,
+      "total_trades": 8,
+      "sharpe_ratio": -4.22,
+      "max_drawdown": 3.58,
+      "profit_factor": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -4.54,
+      "winning_trades": 0,
+      "losing_trades": 8
+    },
+    "MAGoldenCross": {
+      "win_rate": 43.8,
+      "total_return": 12.83,
+      "total_trades": 80,
+      "sharpe_ratio": 0.3,
+      "max_drawdown": 4.42,
+      "profit_factor": 1.62,
+      "avg_win": 10.16,
+      "avg_loss": -4.95,
+      "winning_trades": 35,
+      "losing_trades": 45
+    },
+    "VWAPReversion": {
+      "win_rate": 47.6,
+      "total_return": 2.77,
+      "total_trades": 21,
+      "sharpe_ratio": -1.09,
+      "max_drawdown": 1.17,
+      "profit_factor": 2.34,
+      "avg_win": 4.9,
+      "avg_loss": -1.91,
+      "winning_trades": 10,
+      "losing_trades": 11
+    }
+  },
+  "ai_analysis": {
+    "VolumeBreakout": {
+      "core_issues": [
+        "낮은 승률로 인한 지속적인 손실",
+        "샤프 비율이 음수로, 리스크 대비 수익이 낮음",
+        "최대 낙폭이 커서 자본 손실 위험이 높음"
+      ],
+      "common_patterns": [
+        "거래 대부분이 손절매에 의해 종료됨",
+        "거래 기간이 짧고, 변동성이 큰 종목에서 손실 발생"
+      ],
+      "parameter_changes": {
+        "max_gap": {
+          "current": "0.02",
+          "recommended": "0.01",
+          "reason": "더 작은 갭을 통해 진입 시점을 보수적으로 조정"
+        },
+        "max_rsi": {
+          "current": "70",
+          "recommended": "65",
+          "reason": "과매수 구간을 더 엄격히 설정하여 진입 신호의 신뢰도를 높임"
+        },
+        "volume_surge_ratio": {
+          "current": "2.5",
+          "recommended": "3.0",
+          "reason": "더 강한 거래량 증가를 요구하여 신호의 품질을 개선"
+        }
+      },
+      "new_filters": [
+        "거래량이 일정 수준 이상인 종목만 거래",
+        "최근 3개월 평균 변동성이 낮은 종목 필터링"
+      ],
+      "key_improvements": [
+        "손절매 기준을 재조정하여 불필요한 손실 방지",
+        "거래량과 변동성 기반의 추가 필터 적용으로 신호 품질 개선"
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.7
+    },
+    "RSIOversold": {
+      "core_issues": [
+        "낮은 승률과 손익비로 인해 손실이 누적됨",
+        "RSI oversold 조건이 지나치게 공격적이어서 진입 시점이 부정확함",
+        "MACD 전환 확인 조건이 지나치게 느슨하여 잘못된 진입을 유발함"
+      ],
+      "common_patterns": [
+        "대부분의 거래가 손절매로 종료됨",
+        "진입 후 빠른 손실 발생으로 인한 짧은 보유 기간"
+      ],
+      "parameter_changes": {
+        "rsi_oversold": {
+          "current": 25,
+          "recommended": 30,
+          "reason": "더 보수적인 진입을 통해 잘못된 진입을 줄이고 승률을 높임"
+        },
+        "rsi_exit": {
+          "current": 45,
+          "recommended": 50,
+          "reason": "더 높은 RSI에서 이익 실현을 통해 수익 극대화"
+        },
+        "stop_loss": {
+          "current": 0.025,
+          "recommended": 0.02,
+          "reason": "손실을 더 빨리 제한하여 손실 폭을 줄임"
+        }
+      },
+      "new_filters": [
+        "지지선 및 저항선 분석을 통한 추가 진입 필터",
+        "거래량 급증 시 진입 제한"
+      ],
+      "key_improvements": [
+        "진입 시점의 정확성을 높이기 위해 기술적 지표 추가",
+        "손익비 개선을 위한 이익 실현 전략 조정"
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.7
+    },
+    "BBSqueeze": {
+      "core_issues": [
+        "낮은 승률로 인해 손실이 누적됨",
+        "샤프 비율이 음수로, 위험 대비 수익성이 낮음",
+        "BB Squeeze 신호의 신뢰도가 낮아 보임"
+      ],
+      "common_patterns": [
+        "대부분의 거래가 짧은 기간 내에 손절매로 종료됨",
+        "BB Squeeze 폭이 작을수록 손실 가능성이 높음"
+      ],
+      "parameter_changes": {
+        "bb_std": {
+          "current": 2.0,
+          "recommended": 2.5,
+          "reason": "더 강력한 변동성 필터링을 통해 신호의 신뢰도를 높임"
+        },
+        "min_volume_ratio": {
+          "current": 1.5,
+          "recommended": 2.0,
+          "reason": "거래량 증가를 더 강하게 요구하여 신호의 신뢰도를 높임"
+        }
+      },
+      "new_filters": [
+        "거래량이 평균 거래량의 2배 이상일 때만 진입",
+        "MACD 히스토그램이 양수일 때만 진입"
+      ],
+      "key_improvements": [
+        "BB Squeeze 신호의 품질을 개선하기 위해 추가 필터링 조건 적용",
+        "손익비를 개선하기 위해 손절매와 익절매 비율 조정"
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.7
+    },
+    "GapUp": {
+      "core_issues": [
+        "낮은 승률로 인해 손익비가 1에 가까워도 전체 수익률이 음수임",
+        "최대 보유 기간이 짧아 충분한 회복 기회를 놓침",
+        "손절매가 빈번하게 발생하여 손실이 누적됨"
+      ],
+      "common_patterns": [
+        "대부분의 거래가 최대 보유 기간인 1일에 종료됨",
+        "손절매가 자주 발생하며, 이는 큰 갭 상승 후의 조정과 관련이 있음"
+      ],
+      "parameter_changes": {
+        "max_holding_days": {
+          "current": 1,
+          "recommended": 2,
+          "reason": "추가적인 회복 기회를 제공하여 손실을 줄일 수 있음"
+        },
+        "stop_loss": {
+          "current": 0.015,
+          "recommended": 0.02,
+          "reason": "손절매 빈도를 줄여 손실 누적을 방지"
+        }
+      },
+      "new_filters": [
+        "전일 거래량 대비 오늘 거래량이 1.5배 이상인 경우에만 진입",
+        "전일 종가 대비 오늘 시가가 2% 이상 상승한 경우에만 진입"
+      ],
+      "key_improvements": [
+        "거래량 증가를 필터링하여 신뢰도 높은 신호만 거래",
+        "보유 기간을 늘려 회복 가능성을 높임"
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.7
+    },
+    "TopVolumeMomentum": {
+      "core_issues": [
+        "낮은 승률: 31.5%의 승률은 전략의 효율성이 낮음을 의미합니다.",
+        "손익비 불균형: 평균 수익률이 5.76%인 반면 평균 손실률은 -2.75%로, 손익비가 1보다 작아 수익을 내기 어려움.",
+        "높은 최대 낙폭: 11.82%의 최대 낙폭은 리스크 관리가 부족함을 나타냅니다."
+      ],
+      "common_patterns": [
+        "대부분의 패배 거래는 MA5 아래에서 2일 이상 머무름.",
+        "Stop loss에 자주 걸림: 손실 거래 중 많은 부분이 stop loss에 의해 종료됨."
+      ],
+      "parameter_changes": {
+        "max_rsi": {
+          "current": 70,
+          "recommended": 65,
+          "reason": "RSI가 과매수 구간에 가까울수록 반락 가능성이 높아짐."
+        },
+        "min_volume_ratio": {
+          "current": 1.3,
+          "recommended": 1.5,
+          "reason": "거래량 증가가 충분히 강하지 않을 경우 모멘텀이 지속되지 않을 수 있음."
+        },
+        "stop_loss": {
+          "current": 0.03,
+          "recommended": 0.02,
+          "reason": "손실을 줄여 최대 낙폭을 감소시킴."
+        }
+      },
+      "new_filters": [
+        "MA10 이상에서 진입: 더 긴 이동평균을 사용하여 안정적인 상승 추세를 확인.",
+        "거래량 급증 후 조정 기간 필터: 급격한 거래량 증가 후 조정 기간을 거친 종목만 선택."
+      ],
+      "key_improvements": [
+        "리스크 관리 강화: 손실을 줄이기 위한 더 엄격한 stop loss 및 take profit 설정.",
+        "추세 확인 강화: 진입 시점에서의 추세 강도를 더 엄격히 확인."
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.75
+    },
+    "High52WeekBreakout": {
+      "core_issues": [
+        "낮은 승률과 높은 손실 비율로 인해 전반적인 수익률이 부정적입니다.",
+        "손익비가 0.21로 매우 낮아, 손실 거래의 손실 폭이 승리 거래의 수익 폭보다 큽니다.",
+        "거래 수가 적어 통계적으로 유의미한 결과를 도출하기 어렵습니다."
+      ],
+      "common_patterns": [
+        "대부분의 거래가 손절매에 의해 종료되며, 손실이 발생합니다.",
+        "거래 진입 시 높은 거래량 증가가 있었으나, 이는 지속적인 상승으로 이어지지 않았습니다."
+      ],
+      "parameter_changes": {
+        "min_breakout_pct": {
+          "current": "0.01",
+          "recommended": "0.03",
+          "reason": "더 높은 돌파 비율을 요구하여, 진정한 상승 추세를 포착할 가능성을 높입니다."
+        },
+        "stop_loss": {
+          "current": "0.03",
+          "recommended": "0.05",
+          "reason": "너무 타이트한 손절매로 인해 시장 변동성에 의해 쉽게 손절매가 발생하므로, 손절매 폭을 늘려 시장의 자연스러운 변동성을 견딜 수 있도록 합니다."
+        }
+      },
+      "new_filters": [
+        "RSI 지표를 추가하여 과매수 상태를 피합니다.",
+        "거래량 증가가 일시적이지 않고 지속적인 추세인지 확인하기 위해 거래량 이동 평균을 고려합니다."
+      ],
+      "key_improvements": [
+        "거래량 증가가 지속적인 추세인지 확인하고, 일시적인 급등을 피합니다.",
+        "기술적 지표를 추가하여 진입 시점을 개선하고, 과매수 상태에서의 진입을 피합니다."
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.6
+    },
+    "InstitutionalFlow": {
+      "core_issues": [
+        "낮은 승률: 28.2%의 승률은 전략의 성공 가능성을 제한하며, 손실을 초래하는 주요 요인 중 하나입니다.",
+        "손익비의 불균형: 손익비가 0.82로, 평균 수익보다 평균 손실이 더 크기 때문에 장기적으로 손실이 발생할 가능성이 높습니다.",
+        "높은 최대 낙폭: 12.18%의 최대 낙폭은 전략의 리스크 관리가 충분하지 않음을 나타냅니다."
+      ],
+      "common_patterns": [
+        "대부분의 패배 거래는 'Stop loss triggered'로 인해 종료되며, 이는 손실을 제한하기 위한 손절매가 자주 발생함을 의미합니다.",
+        "패배 거래의 진입 이유가 대부분 '2d up'과 높은 거래량 증가에 기반하고 있어, 이러한 조건이 충분히 유효하지 않을 수 있습니다."
+      ],
+      "parameter_changes": {
+        "consecutive_days": {
+          "current": 2,
+          "recommended": 3,
+          "reason": "더 긴 기간의 상승 추세를 확인하여 진입 신호의 신뢰성을 높입니다."
+        },
+        "min_volume_ratio": {
+          "current": 2.0,
+          "recommended": 3.0,
+          "reason": "더 높은 거래량 증가를 요구하여, 진입 신호의 강도를 강화합니다."
+        },
+        "stop_loss": {
+          "current": 0.025,
+          "recommended": 0.02,
+          "reason": "손실을 더 엄격하게 제한하여, 최대 낙폭을 줄이고 리스크 관리를 강화합니다."
+        }
+      },
+      "new_filters": [
+        "RSI(상대 강도 지수) 필터: 과매수 상태를 피하기 위해 RSI가 70 이상인 경우 진입을 제한합니다.",
+        "MACD 필터: MACD가 양수로 전환될 때만 진입하여, 더 강한 상승 모멘텀을 확인합니다."
+      ],
+      "key_improvements": [
+        "리스크 관리 강화: 손절매 및 이익 실현 기준을 재조정하여 손익비를 개선합니다.",
+        "진입 신호의 정밀도 향상: 추가적인 기술적 지표를 사용하여 진입 신호의 정확성을 높입니다."
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.75
+    },
+    "SectorRotation": {
+      "core_issues": [
+        "전략의 진입 및 청산 기준이 지나치게 엄격하여 시장 변동성을 제대로 반영하지 못함",
+        "손절매가 너무 타이트하여 정상적인 변동성에서도 쉽게 청산됨",
+        "섹터 회전 전략의 특성상 시장의 전반적인 상승세가 없을 경우 성과가 저조함"
+      ],
+      "common_patterns": [
+        "대부분의 거래가 손절매에 의해 청산됨",
+        "진입 후 단기간 내에 가격이 하락하는 경향"
+      ],
+      "parameter_changes": {
+        "max_rsi": {
+          "current": 60,
+          "recommended": 70,
+          "reason": "더 높은 RSI를 통해 과매수 상태에서의 진입을 피하고자 함"
+        },
+        "min_rsi": {
+          "current": 40,
+          "recommended": 30,
+          "reason": "더 낮은 RSI를 통해 과매도 상태에서의 진입을 유도"
+        },
+        "stop_loss": {
+          "current": 0.03,
+          "recommended": 0.05,
+          "reason": "정상적인 변동성을 고려하여 손절매를 완화"
+        },
+        "take_profit": {
+          "current": 0.06,
+          "recommended": 0.08,
+          "reason": "더 큰 수익을 목표로 하여 손익비 개선"
+        }
+      },
+      "new_filters": [
+        "시장 전체의 상승 추세를 확인하는 필터",
+        "거래량 증가 추세를 확인하는 필터"
+      ],
+      "key_improvements": [
+        "시장 추세를 반영한 진입 및 청산 기준 재설정",
+        "손절매 및 이익 실현 기준의 완화",
+        "거래량 및 시장 지표를 활용한 추가 필터링"
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.7
+    },
+    "MAGoldenCross": {
+      "core_issues": [
+        "전략의 승률이 50% 미만으로, 거래의 절반 이상이 손실로 끝남.",
+        "손실 거래의 상당수가 짧은 기간 내에 발생하며, 이는 잘못된 진입 타이밍을 시사함.",
+        "현재의 MACD 필터가 충분히 효과적이지 않음."
+      ],
+      "common_patterns": [
+        "손실 거래는 주로 진입 후 10일 이내에 발생하며, 이는 진입 시점의 시장 변동성에 민감함을 나타냄.",
+        "거래의 상당수가 볼륨 급증 시점에서 발생하나, 이후 가격이 하락하는 패턴을 보임."
+      ],
+      "parameter_changes": {
+        "long_period": {
+          "current": 30,
+          "recommended": 50,
+          "reason": "더 긴 기간의 이동 평균을 사용하여 신호의 신뢰성을 높임."
+        },
+        "short_period": {
+          "current": 10,
+          "recommended": 20,
+          "reason": "짧은 기간의 이동 평균을 늘려서 노이즈를 줄이고 신호의 품질을 향상시킴."
+        },
+        "confirm_days": {
+          "current": 1,
+          "recommended": 3,
+          "reason": "신호의 유효성을 높이기 위해 추가적인 확인 기간을 설정."
+        }
+      },
+      "new_filters": [
+        "RSI 필터를 추가하여 과매수/과매도 상태를 피함.",
+        "볼린저 밴드를 사용하여 가격이 밴드의 상단을 돌파할 때만 진입."
+      ],
+      "key_improvements": [
+        "진입 신호의 품질을 높이기 위해 추가적인 기술적 지표를 활용.",
+        "거래 후 시장의 변동성을 줄이기 위해 진입 시점을 조정."
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.75
+    },
+    "VWAPReversion": {
+      "core_issues": [
+        "전략의 승률이 50% 미만으로, 거래의 절반 이상이 손실로 끝남.",
+        "샤프 비율이 음수로, 위험 대비 수익이 비효율적임.",
+        "손실 거래의 상당수가 최대 보유일에 도달하거나 손절매로 종료됨."
+      ],
+      "common_patterns": [
+        "손실 거래의 대부분이 VWAP 편차가 매우 큰 상태에서 진입.",
+        "RSI가 낮은 상태에서 진입했으나, 반등이 충분히 발생하지 않음."
+      ],
+      "parameter_changes": {
+        "max_rsi": {
+          "current": 30,
+          "recommended": 25,
+          "reason": "RSI가 더 낮은 상태에서 진입하여 반등 가능성을 높임."
+        },
+        "deviation_threshold": {
+          "current": 0.03,
+          "recommended": 0.05,
+          "reason": "더 큰 편차에서만 진입하여 반등 가능성을 높임."
+        }
+      },
+      "new_filters": [
+        "거래량이 평균 거래량의 1.5배 이상일 때만 진입.",
+        "최근 5일간의 평균 가격 상승률이 양수일 때만 진입."
+      ],
+      "key_improvements": [
+        "진입 시점에서의 시장 추세를 고려하여, 하락 추세에서는 진입을 피함.",
+        "손절매를 더 타이트하게 설정하여 손실을 최소화."
+      ],
+      "expected_win_rate": "50% 이상",
+      "confidence": 0.75
+    }
+  }
+}

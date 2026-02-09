@@ -1,0 +1,122 @@
+{
+  "VolumeBreakout": {
+    "win_rate": 28.1,
+    "total_return": 0.57,
+    "total_trades": 274,
+    "sharpe_ratio": -0.5,
+    "max_drawdown": 7.91,
+    "profit_factor": 1.01,
+    "avg_win": 7.74,
+    "avg_loss": -3.22,
+    "winning_trades": 77,
+    "losing_trades": 197
+  },
+  "RSIOversold": {
+    "win_rate": 33.3,
+    "total_return": -1.85,
+    "total_trades": 12,
+    "sharpe_ratio": -4.16,
+    "max_drawdown": 2.75,
+    "profit_factor": 0.31,
+    "avg_win": 2.13,
+    "avg_loss": -3.48,
+    "winning_trades": 4,
+    "losing_trades": 8
+  },
+  "BBSqueeze": {
+    "win_rate": 33.3,
+    "total_return": 6.69,
+    "total_trades": 150,
+    "sharpe_ratio": -0.17,
+    "max_drawdown": 4.31,
+    "profit_factor": 1.22,
+    "avg_win": 8.6,
+    "avg_loss": -3.81,
+    "winning_trades": 50,
+    "losing_trades": 100
+  },
+  "GapUp": {
+    "win_rate": 37.5,
+    "total_return": -0.81,
+    "total_trades": 72,
+    "sharpe_ratio": -1.09,
+    "max_drawdown": 4.29,
+    "profit_factor": 0.94,
+    "avg_win": 4.98,
+    "avg_loss": -3.16,
+    "winning_trades": 27,
+    "losing_trades": 45
+  },
+  "TopVolumeMomentum": {
+    "win_rate": 31.5,
+    "total_return": -2.69,
+    "total_trades": 463,
+    "sharpe_ratio": -0.63,
+    "max_drawdown": 11.82,
+    "profit_factor": 0.96,
+    "avg_win": 5.76,
+    "avg_loss": -2.75,
+    "winning_trades": 146,
+    "losing_trades": 317
+  },
+  "High52WeekBreakout": {
+    "win_rate": 18.2,
+    "total_return": -9.38,
+    "total_trades": 11,
+    "sharpe_ratio": -1.28,
+    "max_drawdown": 11.25,
+    "profit_factor": 0.21,
+    "avg_win": 12.71,
+    "avg_loss": -14.59,
+    "winning_trades": 2,
+    "losing_trades": 9
+  },
+  "InstitutionalFlow": {
+    "win_rate": 28.2,
+    "total_return": -11.54,
+    "total_trades": 298,
+    "sharpe_ratio": -1.23,
+    "max_drawdown": 12.18,
+    "profit_factor": 0.82,
+    "avg_win": 8.52,
+    "avg_loss": -4.09,
+    "winning_trades": 84,
+    "losing_trades": 214
+  },
+  "SectorRotation": {
+    "win_rate": 0.0,
+    "total_return": -3.58,
+    "total_trades": 8,
+    "sharpe_ratio": -4.22,
+    "max_drawdown": 3.58,
+    "profit_factor": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": -4.54,
+    "winning_trades": 0,
+    "losing_trades": 8
+  },
+  "MAGoldenCross": {
+    "win_rate": 43.8,
+    "total_return": 12.83,
+    "total_trades": 80,
+    "sharpe_ratio": 0.3,
+    "max_drawdown": 4.42,
+    "profit_factor": 1.62,
+    "avg_win": 10.16,
+    "avg_loss": -4.95,
+    "winning_trades": 35,
+    "losing_trades": 45
+  },
+  "VWAPReversion": {
+    "win_rate": 47.6,
+    "total_return": 2.77,
+    "total_trades": 21,
+    "sharpe_ratio": -1.09,
+    "max_drawdown": 1.17,
+    "profit_factor": 2.34,
+    "avg_win": 4.9,
+    "avg_loss": -1.91,
+    "winning_trades": 10,
+    "losing_trades": 11
+  }
+}
