@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run iterative optimization with 5 iterations."""
+"""Run iterative optimization with configurable iterations."""
 
 import json
 import os
@@ -21,30 +21,56 @@ logger = get_logger(__name__)
 
 
 def main():
-    """Run 5 iterations of optimization for all strategies."""
-    # Load current optimization report
+    """Run iterations of optimization for all strategies."""
     reports_path = project_root / "reports"
-    report_file = reports_path / "final_optimization_report.json"
 
-    if not report_file.exists():
-        logger.error(f"Report not found: {report_file}")
+    # Try to load previous iterative optimization results first
+    iterative_report_file = reports_path / "iterative_optimization_final.json"
+    base_report_file = reports_path / "final_optimization_report.json"
+
+    previous_results = None
+    if iterative_report_file.exists():
+        with open(iterative_report_file, "r", encoding="utf-8") as f:
+            previous_results = json.load(f)
+        logger.info("📂 Loading previous iterative optimization results...")
+
+    if not base_report_file.exists():
+        logger.error(f"Base report not found: {base_report_file}")
         return
 
-    with open(report_file, "r", encoding="utf-8") as f:
-        initial_report = json.load(f)
+    with open(base_report_file, "r", encoding="utf-8") as f:
+        base_report = json.load(f)
 
     logger.info("=" * 70)
-    logger.info("Starting Iterative Optimization (5 iterations)")
+    logger.info("Starting Iterative Optimization (10 iterations)")
     logger.info("=" * 70)
 
-    # Print initial state
+    # Print initial state (use previous results if available)
     logger.info("\n📊 Initial State:")
     total_initial_return = 0
-    for name, data in initial_report.items():
-        win_rate = data.get("optimized_win_rate", data.get("original_win_rate", 0))
-        ret = data.get("optimized_return", data.get("original_return", 0))
+    initial_data = {}
+
+    for name in base_report.keys():
+        if previous_results and name in previous_results.get("strategies", {}):
+            prev = previous_results["strategies"][name]
+            win_rate = prev["current_win_rate"]
+            ret = prev["current_return"]
+            failed_recs = prev.get("failed_recommendations", [])
+        else:
+            data = base_report[name]
+            win_rate = data.get("optimized_win_rate", data.get("original_win_rate", 0))
+            ret = data.get("optimized_return", data.get("original_return", 0))
+            failed_recs = []
+
         total_initial_return += ret
+        initial_data[name] = {
+            "win_rate": win_rate,
+            "total_return": ret,
+            "total_trades": base_report[name].get("total_trades", 0),
+            "failed_recommendations": failed_recs,
+        }
         logger.info(f"  {name}: 승률 {win_rate:.1f}%, 수익률 {ret:.2f}%")
+
     logger.info(f"\n  Total Initial Return: {total_initial_return:.2f}%")
 
     # Initialize optimizer (using 50 stocks for faster testing)
@@ -53,22 +79,22 @@ def main():
     # Run optimization for each strategy
     all_progress = {}
 
-    for strategy_name, results in initial_report.items():
-        initial_results = {
-            "win_rate": results.get("optimized_win_rate", results.get("original_win_rate", 0)),
-            "total_return": results.get("optimized_return", results.get("original_return", 0)),
-            "total_trades": results.get("total_trades", 0),
-        }
+    for strategy_name, initial_results in initial_data.items():
 
         logger.info(f"\n{'#' * 70}")
         logger.info(f"# Optimizing: {strategy_name}")
         logger.info(f"# Initial: win_rate={initial_results['win_rate']:.1f}%, "
                    f"return={initial_results['total_return']:.2f}%")
+        if initial_results.get("failed_recommendations"):
+            logger.info(f"# Previous failed attempts: {len(initial_results['failed_recommendations'])}")
         logger.info(f"{'#' * 70}")
 
         try:
             progress = optimizer.optimize_strategy(
-                strategy_name, initial_results, num_iterations=5
+                strategy_name,
+                initial_results,
+                num_iterations=10,
+                previous_failed=initial_results.get("failed_recommendations", []),
             )
             all_progress[strategy_name] = progress
 

@@ -30,7 +30,7 @@ class VWAPReversionStrategy(BaseStrategy):
         deviation_threshold: float = 0.03,
         stop_loss: float = 0.015,
         take_profit: float = 0.025,
-        max_rsi: float = 30,
+        max_rsi: float = 32,
         min_down_days: int = 2,
         min_volume_ratio: float = 0.8,
     ):

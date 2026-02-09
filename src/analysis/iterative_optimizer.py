@@ -456,12 +456,15 @@ JSON 형식으로 응답해주세요."""
         strategy_name: str,
         initial_results: dict,
         num_iterations: int = 5,
+        previous_failed: list[dict] = None,
     ) -> StrategyProgress:
         """Run multiple optimization iterations for a strategy."""
         logger.info(f"\n{'#'*60}")
         logger.info(f"Starting iterative optimization for {strategy_name}")
         logger.info(f"Initial: win_rate={initial_results['win_rate']:.1f}%, "
                    f"return={initial_results['total_return']:.2f}%")
+        if previous_failed:
+            logger.info(f"Continuing from previous session with {len(previous_failed)} failed attempts")
         logger.info(f"{'#'*60}")
 
         # Initialize progress
@@ -473,6 +476,7 @@ JSON 형식으로 응답해주세요."""
             current_win_rate=initial_results["win_rate"],
             current_return=initial_results["total_return"],
             current_params=current_params,
+            failed_recommendations=previous_failed or [],
         )
 
         # Run iterations

@@ -31,7 +31,7 @@ class InstitutionalFlowStrategy(BaseStrategy):
         consecutive_days: int = 3,
         stop_loss: float = 0.025,
         take_profit: float = 0.06,
-        min_volume_ratio: float = 2.5,
+        min_volume_ratio: float = 2.6,
         require_uptrend: bool = True,
     ):
         config = StrategyConfig(

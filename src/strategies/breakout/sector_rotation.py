@@ -27,7 +27,7 @@ class SectorRotationStrategy(BaseStrategy):
 
     def __init__(
         self,
-        leader_gain_threshold: float = 0.09,
+        leader_gain_threshold: float = 0.1,
         lag_threshold: float = 0.03,
         stop_loss: float = 0.05,
         take_profit: float = 0.08,

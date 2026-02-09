@@ -27,7 +27,7 @@ class High52WeekBreakoutStrategy(BaseStrategy):
 
     def __init__(
         self,
-        volume_threshold: float = 2.0,
+        volume_threshold: float = 2.5,
         lookback_days: int = 252,
         stop_loss: float = 0.025,
         take_profit: float = 0.08,

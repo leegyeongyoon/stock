@@ -30,7 +30,7 @@ class VolumeBreakoutStrategy(BaseStrategy):
         volume_surge_ratio: float = 3.2,
         volume_ma_period: int = 20,
         stop_loss: float = 0.022,
-        take_profit: float = 0.05,
+        take_profit: float = 0.045,
         require_uptrend: bool = True,
         max_rsi: float = 70,
         max_gap: float = 0.015,
