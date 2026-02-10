@@ -13,18 +13,9 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 전략명 -> 파일 경로 매핑
+# 전략명 -> 파일 경로 매핑 (data-driven strategies)
 STRATEGY_FILE_MAP = {
-    "VolumeBreakout": "src/strategies/momentum/volume_breakout.py",
-    "GapUp": "src/strategies/momentum/gap_up.py",
-    "VWAPReversion": "src/strategies/mean_reversion/vwap_reversion.py",
-    "RSIOversold": "src/strategies/mean_reversion/rsi_oversold.py",
-    "MAGoldenCross": "src/strategies/breakout/ma_golden_cross.py",
-    "BBSqueeze": "src/strategies/mean_reversion/bb_squeeze.py",
-    "TopVolumeMomentum": "src/strategies/momentum/top_volume_momentum.py",
-    "High52WeekBreakout": "src/strategies/momentum/high_52week.py",
-    "InstitutionalFlow": "src/strategies/breakout/institutional_flow.py",
-    "SectorRotation": "src/strategies/breakout/sector_rotation.py",
+    # Data-driven intraday strategies will be added here after Phase 2/3
 }
 
 

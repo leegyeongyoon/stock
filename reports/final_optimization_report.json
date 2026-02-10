@@ -98,5 +98,45 @@
     "return_change": -2.9,
     "total_trades": 48,
     "improved": false
+  },
+  "GapMomentum": {
+    "original_win_rate": 40.43,
+    "original_return": -2.01,
+    "optimized_win_rate": 42.30769230769231,
+    "optimized_return": -1.407284,
+    "total_trades": 0,
+    "improvement": 0.6
+  },
+  "UpperLimitChaser": {
+    "original_win_rate": 0.0,
+    "original_return": 0.0,
+    "optimized_win_rate": 0.0,
+    "optimized_return": 0.0,
+    "total_trades": 0,
+    "improvement": 0.0
+  },
+  "PowerBreakout": {
+    "original_win_rate": 43.16,
+    "original_return": 1.67,
+    "optimized_win_rate": 45.39877300613497,
+    "optimized_return": 5.141699,
+    "total_trades": 0,
+    "improvement": 3.47
+  },
+  "ConsecutiveBullish": {
+    "original_win_rate": 41.32,
+    "original_return": -2.47,
+    "optimized_win_rate": 47.368421052631575,
+    "optimized_return": 1.327281,
+    "total_trades": 0,
+    "improvement": 3.8
+  },
+  "VolumeReversalSniper": {
+    "original_win_rate": 0.0,
+    "original_return": 0.0,
+    "optimized_win_rate": 0.0,
+    "optimized_return": 0.0,
+    "total_trades": 0,
+    "improvement": 0.0
   }
 }

@@ -1,0 +1,121 @@
+{
+  "timestamp": "2026-02-10T11:30:04.641521",
+  "total_iterations": 10,
+  "sample_size": 500,
+  "strategies": {
+    "GapMomentum": {
+      "strategy_name": "GapMomentum",
+      "initial_win_rate": 40.43,
+      "initial_return": -2.01,
+      "current_win_rate": 42.31,
+      "current_return": -1.41,
+      "total_improvement": 0.6,
+      "win_rate_improvement": 1.88,
+      "current_params": {
+        "min_gap": 0.02,
+        "volume_surge_ratio": 3.0,
+        "rsi_lower": 40.0,
+        "rsi_upper": 70.0,
+        "stop_loss": 0.02,
+        "take_profit": 0.05,
+        "max_holding_days": 2,
+        "require_macd_cross": true,
+        "min_body_ratio": 0.003
+      },
+      "iterations_completed": 10,
+      "failed_recommendations": []
+    },
+    "UpperLimitChaser": {
+      "strategy_name": "UpperLimitChaser",
+      "initial_win_rate": 0.0,
+      "initial_return": 0.0,
+      "current_win_rate": 0.0,
+      "current_return": 0.0,
+      "total_improvement": 0.0,
+      "win_rate_improvement": 0.0,
+      "current_params": {
+        "min_prev_gain": 0.25,
+        "open_range_lower": -0.05,
+        "open_range_upper": 0.0,
+        "volume_surge_ratio": 2.0,
+        "stop_loss": 0.03,
+        "take_profit": 0.07,
+        "max_holding_days": 2,
+        "min_volume_abs": 100000
+      },
+      "iterations_completed": 10,
+      "failed_recommendations": []
+    },
+    "PowerBreakout": {
+      "strategy_name": "PowerBreakout",
+      "initial_win_rate": 43.16,
+      "initial_return": 1.67,
+      "current_win_rate": 45.4,
+      "current_return": 5.14,
+      "total_improvement": 3.47,
+      "win_rate_improvement": 2.24,
+      "current_params": {
+        "breakout_period": 20,
+        "volume_surge_ratio": 2.5,
+        "require_bb_breakout": true,
+        "require_ma_uptrend": true,
+        "stop_loss": 0.025,
+        "take_profit": 0.06,
+        "max_holding_days": 3,
+        "min_consolidation_days": 5
+      },
+      "iterations_completed": 10,
+      "failed_recommendations": []
+    },
+    "ConsecutiveBullish": {
+      "strategy_name": "ConsecutiveBullish",
+      "initial_win_rate": 41.32,
+      "initial_return": -2.47,
+      "current_win_rate": 47.37,
+      "current_return": 1.33,
+      "total_improvement": 3.8,
+      "win_rate_improvement": 6.05,
+      "current_params": {
+        "consecutive_days": 3,
+        "min_cumulative_gain": 0.05,
+        "rsi_lower": 50.0,
+        "rsi_upper": 75.0,
+        "require_volume_increase": true,
+        "stop_loss": 0.02,
+        "take_profit": 0.04,
+        "max_holding_days": 2,
+        "min_daily_gain": 0.005
+      },
+      "iterations_completed": 10,
+      "failed_recommendations": []
+    },
+    "VolumeReversalSniper": {
+      "strategy_name": "VolumeReversalSniper",
+      "initial_win_rate": 0.0,
+      "initial_return": 0.0,
+      "current_win_rate": 0.0,
+      "current_return": 0.0,
+      "total_improvement": 0.0,
+      "win_rate_improvement": 0.0,
+      "current_params": {
+        "min_decline_days": 5,
+        "volume_surge_ratio": 4.0,
+        "rsi_threshold": 25.0,
+        "min_lower_wick_ratio": 0.5,
+        "stop_loss": 0.02,
+        "take_profit": 0.05,
+        "max_holding_days": 3,
+        "min_decline_pct": 0.1
+      },
+      "iterations_completed": 10,
+      "failed_recommendations": []
+    }
+  },
+  "summary": {
+    "total_initial_return": -2.81,
+    "total_final_return": 5.061696,
+    "strategies_improved": 3,
+    "total_strategies": 5,
+    "total_improvement": 7.871696
+  }
+}

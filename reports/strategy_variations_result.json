@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-02-10T16:47:49.130709",
+  "model": "gpt-4o",
+  "strategy_1": {
+    "accepted": true,
+    "is_metrics": {
+      "win_rate": 40.6,
+      "total_return_pct": 7.86,
+      "total_trades": 130,
+      "time_window": "9-11시",
+      "key_filters": "RSI 40-60 + ATR >= 0.005389 + 직전 bar 양봉"
+    }
+  },
+  "variations": {
+    "3": {
+      "accepted": true,
+      "iterations": 1,
+      "is_metrics": {
+        "total_trades": 163,
+        "winning_trades": 67,
+        "losing_trades": 96,
+        "win_rate": 41.1,
+        "total_pnl": 290213.0,
+        "total_return_pct": 5.8,
+        "avg_win": 2.37,
+        "avg_loss": -1.23,
+        "profit_factor": 1.16,
+        "max_drawdown": 7.39,
+        "avg_holding_time_minutes": 224.3,
+        "trades_per_day": 3.7,
+        "best_trade": 5.0,
+        "worst_trade": -3.0
+      },
+      "oos_metrics": {
+        "total_trades": 50,
+        "winning_trades": 29,
+        "losing_trades": 21,
+        "win_rate": 58.0,
+        "total_pnl": 285681.0,
+        "total_return_pct": 5.71,
+        "avg_win": 1.66,
+        "avg_loss": -1.0,
+        "profit_factor": 1.88,
+        "max_drawdown": 0.83,
+        "avg_holding_time_minutes": 237.4,
+        "trades_per_day": 3.33,
+        "best_trade": 5.0,
+        "worst_trade": -3.0
+      }
+    }
+  }
+}

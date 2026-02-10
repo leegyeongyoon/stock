@@ -1,0 +1,1162 @@
+{
+  "timestamp": "2026-02-10T13:26:57.692954",
+  "sample_size": 462,
+  "initial_capital": 5000000,
+  "data_type": "intraday_5min",
+  "config": {
+    "initial_capital": 5000000,
+    "max_positions": 3,
+    "position_size": 0.3
+  },
+  "strategies": {
+    "VWAP Scalper": {
+      "metrics": {
+        "total_trades": 468,
+        "winning_trades": 184,
+        "losing_trades": 284,
+        "win_rate": 39.32,
+        "total_pnl": -1125854.0,
+        "total_return_pct": -22.52,
+        "avg_win": 1.23,
+        "avg_loss": -0.9,
+        "profit_factor": 0.66,
+        "max_drawdown": 24.75,
+        "avg_holding_time_minutes": 65.8,
+        "trades_per_day": 7.93,
+        "best_trade": 2.0,
+        "worst_trade": -1.5
+      },
+      "num_trades": 468,
+      "params": {
+        "deviation_threshold": 0.015,
+        "min_volume_ratio": 1.2,
+        "rsi_oversold": 35,
+        "rsi_overbought": 65,
+        "stop_loss": 0.015,
+        "take_profit": 0.02
+      },
+      "trades_sample": [
+        {
+          "code": "469610",
+          "entry_price": 49000.0,
+          "exit_price": 48265.0,
+          "entry_time": "2025-11-14 11:50:00",
+          "exit_time": "2025-11-14 12:05:00",
+          "pnl": -22267.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "011170",
+          "entry_price": 86200.0,
+          "exit_price": 84907.0,
+          "entry_time": "2025-11-14 11:45:00",
+          "exit_time": "2025-11-14 13:05:00",
+          "pnl": -22198.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "380550",
+          "entry_price": 22300.0,
+          "exit_price": 21965.5,
+          "entry_time": "2025-11-14 13:10:00",
+          "exit_time": "2025-11-14 13:20:00",
+          "pnl": -22294.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "019180",
+          "entry_price": 6290.0,
+          "exit_price": 6195.65,
+          "entry_time": "2025-11-14 13:05:00",
+          "exit_time": "2025-11-14 13:50:00",
+          "pnl": -22486.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "077970",
+          "entry_price": 31550.0,
+          "exit_price": 32181.0,
+          "entry_time": "2025-11-14 11:25:00",
+          "exit_time": "2025-11-14 13:55:00",
+          "pnl": 25951.0,
+          "pnl_pct": 2.0,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "005950",
+          "entry_price": 9400.0,
+          "exit_price": 9259.0,
+          "entry_time": "2025-11-14 13:50:00",
+          "exit_time": "2025-11-14 14:05:00",
+          "pnl": -22213.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "469610",
+          "entry_price": 43400.0,
+          "exit_price": 42749.0,
+          "entry_time": "2025-11-14 14:05:00",
+          "exit_time": "2025-11-14 14:10:00",
+          "pnl": -21695.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "020150",
+          "entry_price": 37700.0,
+          "exit_price": 37134.5,
+          "entry_time": "2025-11-14 13:20:00",
+          "exit_time": "2025-11-14 14:45:00",
+          "pnl": -22272.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "004800",
+          "entry_price": 133000.0,
+          "exit_price": 132300.0,
+          "entry_time": "2025-11-14 13:55:00",
+          "exit_time": "2025-11-14 14:55:00",
+          "pnl": -7918.0,
+          "pnl_pct": -0.53,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "000810",
+          "entry_price": 490000.0,
+          "exit_price": 495000.0,
+          "entry_time": "2025-11-14 14:10:00",
+          "exit_time": "2025-11-14 14:55:00",
+          "pnl": 7574.0,
+          "pnl_pct": 1.02,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "020150",
+          "entry_price": 37350.0,
+          "exit_price": 37250.0,
+          "entry_time": "2025-11-14 14:50:00",
+          "exit_time": "2025-11-14 14:55:00",
+          "pnl": -4118.0,
+          "pnl_pct": -0.27,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "016880",
+          "entry_price": 3050.0,
+          "exit_price": 3111.0,
+          "entry_time": "2025-11-17 11:50:00",
+          "exit_time": "2025-11-17 11:55:00",
+          "pnl": 25515.0,
+          "pnl_pct": 2.0,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "138490",
+          "entry_price": 8130.0,
+          "exit_price": 8140.0,
+          "entry_time": "2025-11-17 11:10:00",
+          "exit_time": "2025-11-17 14:55:00",
+          "pnl": -1780.0,
+          "pnl_pct": 0.12,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "381620",
+          "entry_price": 16200.0,
+          "exit_price": 16060.0,
+          "entry_time": "2025-11-17 12:30:00",
+          "exit_time": "2025-11-17 14:55:00",
+          "pnl": -12817.0,
+          "pnl_pct": -0.86,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "000810",
+          "entry_price": 478500.0,
+          "exit_price": 476000.0,
+          "entry_time": "2025-11-17 13:10:00",
+          "exit_time": "2025-11-17 14:55:00",
+          "pnl": -7714.0,
+          "pnl_pct": -0.52,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "476060",
+          "entry_price": 14060.0,
+          "exit_price": 13849.1,
+          "entry_time": "2025-11-18 10:50:00",
+          "exit_time": "2025-11-18 12:10:00",
+          "pnl": -21937.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "457370",
+          "entry_price": 7510.0,
+          "exit_price": 7397.349999999999,
+          "entry_time": "2025-11-18 11:00:00",
+          "exit_time": "2025-11-18 12:40:00",
+          "pnl": -22069.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "145720",
+          "entry_price": 51700.0,
+          "exit_price": 50924.5,
+          "entry_time": "2025-11-18 11:00:00",
+          "exit_time": "2025-11-18 12:55:00",
+          "pnl": -21928.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "476060",
+          "entry_price": 13320.0,
+          "exit_price": 13120.2,
+          "entry_time": "2025-11-18 12:20:00",
+          "exit_time": "2025-11-18 13:00:00",
+          "pnl": -21993.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "494120",
+          "entry_price": 49150.0,
+          "exit_price": 48412.75,
+          "entry_time": "2025-11-18 12:40:00",
+          "exit_time": "2025-11-18 13:00:00",
+          "pnl": -21591.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        }
+      ]
+    },
+    "Opening Range Breakout": {
+      "metrics": {
+        "total_trades": 1299,
+        "winning_trades": 263,
+        "losing_trades": 1036,
+        "win_rate": 20.25,
+        "total_pnl": -1897818.0,
+        "total_return_pct": -37.96,
+        "avg_win": 1.23,
+        "avg_loss": -0.38,
+        "profit_factor": 0.59,
+        "max_drawdown": 42.76,
+        "avg_holding_time_minutes": 33.1,
+        "trades_per_day": 22.02,
+        "best_trade": 3.0,
+        "worst_trade": -2.0
+      },
+      "num_trades": 1299,
+      "params": {
+        "opening_range_minutes": 30,
+        "min_range_pct": 0.005,
+        "max_range_pct": 0.03,
+        "breakout_buffer": 0.001,
+        "volume_surge": 1.5,
+        "stop_loss": 0.02,
+        "take_profit": 0.03
+      },
+      "trades_sample": [
+        {
+          "code": "389650",
+          "entry_price": 65900.0,
+          "exit_price": 64582.0,
+          "entry_time": "2025-11-14 10:35:00",
+          "exit_time": "2025-11-14 10:45:00",
+          "pnl": -29209.0,
+          "pnl_pct": -2.0,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "175330",
+          "entry_price": 25000.0,
+          "exit_price": 24850.0,
+          "entry_time": "2025-11-14 10:35:00",
+          "exit_time": "2025-11-14 10:45:00",
+          "pnl": -9224.0,
+          "pnl_pct": -0.6,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "014830",
+          "entry_price": 68600.0,
+          "exit_price": 68400.0,
+          "entry_time": "2025-11-14 10:45:00",
+          "exit_time": "2025-11-14 10:55:00",
+          "pnl": -4415.0,
+          "pnl_pct": -0.29,
+          "exit_reason": "레인지 내 복귀"
+        },
+        {
+          "code": "006040",
+          "entry_price": 47100.0,
+          "exit_price": 47050.0,
+          "entry_time": "2025-11-14 10:35:00",
+          "exit_time": "2025-11-14 11:00:00",
+          "pnl": -1769.0,
+          "pnl_pct": -0.11,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "139130",
+          "entry_price": 14620.0,
+          "exit_price": 14610.0,
+          "entry_time": "2025-11-14 11:00:00",
+          "exit_time": "2025-11-14 11:20:00",
+          "pnl": -1231.0,
+          "pnl_pct": -0.07,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "006040",
+          "entry_price": 47050.0,
+          "exit_price": 46900.0,
+          "entry_time": "2025-11-14 11:20:00",
+          "exit_time": "2025-11-14 11:30:00",
+          "pnl": -4868.0,
+          "pnl_pct": -0.32,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "000240",
+          "entry_price": 28300.0,
+          "exit_price": 28150.0,
+          "entry_time": "2025-11-14 10:50:00",
+          "exit_time": "2025-11-14 12:00:00",
+          "pnl": -8020.0,
+          "pnl_pct": -0.53,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "389650",
+          "entry_price": 65100.0,
+          "exit_price": 65100.0,
+          "entry_time": "2025-11-14 10:55:00",
+          "exit_time": "2025-11-14 12:00:00",
+          "pnl": -215.0,
+          "pnl_pct": 0.0,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "376270",
+          "entry_price": 28450.0,
+          "exit_price": 28250.0,
+          "entry_time": "2025-11-14 12:05:00",
+          "exit_time": "2025-11-14 12:10:00",
+          "pnl": -10620.0,
+          "pnl_pct": -0.7,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "002240",
+          "entry_price": 18230.0,
+          "exit_price": 18200.0,
+          "entry_time": "2025-11-14 12:05:00",
+          "exit_time": "2025-11-14 12:10:00",
+          "pnl": -2651.0,
+          "pnl_pct": -0.16,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "138930",
+          "entry_price": 15590.0,
+          "exit_price": 15620.0,
+          "entry_time": "2025-11-14 11:30:00",
+          "exit_time": "2025-11-14 12:30:00",
+          "pnl": -786.0,
+          "pnl_pct": 0.19,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "042660",
+          "entry_price": 130700.0,
+          "exit_price": 130700.0,
+          "entry_time": "2025-11-14 12:10:00",
+          "exit_time": "2025-11-14 12:40:00",
+          "pnl": -216.0,
+          "pnl_pct": 0.0,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "376270",
+          "entry_price": 28500.0,
+          "exit_price": 28400.0,
+          "entry_time": "2025-11-14 12:35:00",
+          "exit_time": "2025-11-14 13:05:00",
+          "pnl": -5317.0,
+          "pnl_pct": -0.35,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "007210",
+          "entry_price": 1785.0,
+          "exit_price": 1780.0,
+          "entry_time": "2025-11-14 13:05:00",
+          "exit_time": "2025-11-14 13:15:00",
+          "pnl": -4351.0,
+          "pnl_pct": -0.28,
+          "exit_reason": "레인지 내 복귀"
+        },
+        {
+          "code": "033530",
+          "entry_price": 8120.0,
+          "exit_price": 8030.0,
+          "entry_time": "2025-11-14 13:15:00",
+          "exit_time": "2025-11-14 13:30:00",
+          "pnl": -16508.0,
+          "pnl_pct": -1.11,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "007340",
+          "entry_price": 23650.0,
+          "exit_price": 23700.0,
+          "entry_time": "2025-11-14 12:10:00",
+          "exit_time": "2025-11-14 13:45:00",
+          "pnl": -500.0,
+          "pnl_pct": 0.21,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "033780",
+          "entry_price": 143000.0,
+          "exit_price": 142500.0,
+          "entry_time": "2025-11-14 13:45:00",
+          "exit_time": "2025-11-14 13:50:00",
+          "pnl": -5214.0,
+          "pnl_pct": -0.35,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "025540",
+          "entry_price": 62100.0,
+          "exit_price": 61300.0,
+          "entry_time": "2025-11-14 13:30:00",
+          "exit_time": "2025-11-14 13:55:00",
+          "pnl": -18611.0,
+          "pnl_pct": -1.29,
+          "exit_reason": "강한 하락 캔들"
+        },
+        {
+          "code": "376270",
+          "entry_price": 28450.0,
+          "exit_price": 27881.0,
+          "entry_time": "2025-11-14 13:50:00",
+          "exit_time": "2025-11-14 13:55:00",
+          "pnl": -29232.0,
+          "pnl_pct": -2.0,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "376270",
+          "entry_price": 28350.0,
+          "exit_price": 28250.0,
+          "entry_time": "2025-11-14 13:55:00",
+          "exit_time": "2025-11-14 14:15:00",
+          "pnl": -5316.0,
+          "pnl_pct": -0.35,
+          "exit_reason": "강한 하락 캔들"
+        }
+      ]
+    },
+    "Momentum Burst": {
+      "metrics": {
+        "total_trades": 1123,
+        "winning_trades": 302,
+        "losing_trades": 821,
+        "win_rate": 26.89,
+        "total_pnl": -2498367.0,
+        "total_return_pct": -49.97,
+        "avg_win": 1.72,
+        "avg_loss": -0.8,
+        "profit_factor": 0.65,
+        "max_drawdown": 53.42,
+        "avg_holding_time_minutes": 11.1,
+        "trades_per_day": 19.03,
+        "best_trade": 2.5,
+        "worst_trade": -1.5
+      },
+      "num_trades": 1123,
+      "params": {
+        "price_surge_pct": 0.015,
+        "lookback_bars": 3,
+        "volume_surge": 2.0,
+        "rsi_min": 40,
+        "rsi_max": 70,
+        "stop_loss": 0.015,
+        "take_profit": 0.025
+      },
+      "trades_sample": [
+        {
+          "code": "079160",
+          "entry_price": 5340.0,
+          "exit_price": 5310.0,
+          "entry_time": "2025-11-14 10:50:00",
+          "exit_time": "2025-11-14 11:00:00",
+          "pnl": -8623.0,
+          "pnl_pct": -0.56,
+          "exit_reason": "거래량 감소"
+        },
+        {
+          "code": "005750",
+          "entry_price": 4460.0,
+          "exit_price": 4571.5,
+          "entry_time": "2025-11-14 12:00:00",
+          "exit_time": "2025-11-14 12:10:00",
+          "pnl": 33600.0,
+          "pnl_pct": 2.5,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "000990",
+          "entry_price": 68600.0,
+          "exit_price": 67571.0,
+          "entry_time": "2025-11-14 13:20:00",
+          "exit_time": "2025-11-14 13:25:00",
+          "pnl": -21822.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "488280",
+          "entry_price": 20450.0,
+          "exit_price": 20143.25,
+          "entry_time": "2025-11-14 13:45:00",
+          "exit_time": "2025-11-14 13:50:00",
+          "pnl": -22613.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "077970",
+          "entry_price": 32250.0,
+          "exit_price": 31766.25,
+          "entry_time": "2025-11-14 13:55:00",
+          "exit_time": "2025-11-14 14:00:00",
+          "pnl": -22472.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "488280",
+          "entry_price": 20850.0,
+          "exit_price": 21371.249999999996,
+          "entry_time": "2025-11-14 13:55:00",
+          "exit_time": "2025-11-14 14:00:00",
+          "pnl": 33291.0,
+          "pnl_pct": 2.5,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "007540",
+          "entry_price": 50900.0,
+          "exit_price": 50600.0,
+          "entry_time": "2025-11-14 14:00:00",
+          "exit_time": "2025-11-14 14:05:00",
+          "pnl": -8920.0,
+          "pnl_pct": -0.59,
+          "exit_reason": "거래량 감소"
+        },
+        {
+          "code": "488280",
+          "entry_price": 20750.0,
+          "exit_price": 20650.0,
+          "entry_time": "2025-11-14 14:05:00",
+          "exit_time": "2025-11-14 14:10:00",
+          "pnl": -7423.0,
+          "pnl_pct": -0.48,
+          "exit_reason": "모멘텀 약화 (연속 음봉)"
+        },
+        {
+          "code": "001550",
+          "entry_price": 11270.0,
+          "exit_price": 11100.95,
+          "entry_time": "2025-11-14 14:10:00",
+          "exit_time": "2025-11-14 14:15:00",
+          "pnl": -22534.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "000500",
+          "entry_price": 73800.0,
+          "exit_price": 73500.0,
+          "entry_time": "2025-11-14 14:20:00",
+          "exit_time": "2025-11-14 14:25:00",
+          "pnl": -6220.0,
+          "pnl_pct": -0.41,
+          "exit_reason": "거래량 감소"
+        },
+        {
+          "code": "424870",
+          "entry_price": 6900.0,
+          "exit_price": 6980.0,
+          "entry_time": "2025-11-17 11:40:00",
+          "exit_time": "2025-11-17 11:45:00",
+          "pnl": 13460.0,
+          "pnl_pct": 1.16,
+          "exit_reason": "RSI 과매수 (80.4)"
+        },
+        {
+          "code": "486990",
+          "entry_price": 36950.0,
+          "exit_price": 36395.75,
+          "entry_time": "2025-11-17 11:45:00",
+          "exit_time": "2025-11-17 11:50:00",
+          "pnl": -22388.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "081180",
+          "entry_price": 9430.0,
+          "exit_price": 9288.55,
+          "entry_time": "2025-11-17 12:05:00",
+          "exit_time": "2025-11-17 12:10:00",
+          "pnl": -22284.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "081180",
+          "entry_price": 9450.0,
+          "exit_price": 9686.25,
+          "entry_time": "2025-11-17 12:10:00",
+          "exit_time": "2025-11-17 12:15:00",
+          "pnl": 32940.0,
+          "pnl_pct": 2.5,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "494120",
+          "entry_price": 55700.0,
+          "exit_price": 54864.5,
+          "entry_time": "2025-11-17 12:15:00",
+          "exit_time": "2025-11-17 12:20:00",
+          "pnl": -21937.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "494120",
+          "entry_price": 55600.0,
+          "exit_price": 54766.0,
+          "entry_time": "2025-11-17 12:20:00",
+          "exit_time": "2025-11-17 12:25:00",
+          "pnl": -21898.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "376900",
+          "entry_price": 52800.0,
+          "exit_price": 52500.0,
+          "entry_time": "2025-11-17 12:30:00",
+          "exit_time": "2025-11-17 12:45:00",
+          "pnl": -8313.0,
+          "pnl_pct": -0.57,
+          "exit_reason": "모멘텀 약화 (연속 음봉)"
+        },
+        {
+          "code": "494120",
+          "entry_price": 56200.0,
+          "exit_price": 55357.0,
+          "entry_time": "2025-11-17 12:55:00",
+          "exit_time": "2025-11-17 13:00:00",
+          "pnl": -22134.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "226590",
+          "entry_price": 13960.0,
+          "exit_price": 13805.0,
+          "entry_time": "2025-11-17 12:50:00",
+          "exit_time": "2025-11-17 13:10:00",
+          "pnl": -16492.0,
+          "pnl_pct": -1.11,
+          "exit_reason": "모멘텀 약화 (연속 음봉)"
+        },
+        {
+          "code": "318060",
+          "entry_price": 12390.0,
+          "exit_price": 12204.15,
+          "entry_time": "2025-11-17 13:10:00",
+          "exit_time": "2025-11-17 13:15:00",
+          "pnl": -21959.0,
+          "pnl_pct": -1.5,
+          "exit_reason": "Stop loss"
+        }
+      ]
+    },
+    "Mean Reversion Scalper": {
+      "metrics": {
+        "total_trades": 248,
+        "winning_trades": 97,
+        "losing_trades": 151,
+        "win_rate": 39.11,
+        "total_pnl": -543637.0,
+        "total_return_pct": -10.87,
+        "avg_win": 1.16,
+        "avg_loss": -0.82,
+        "profit_factor": 0.68,
+        "max_drawdown": 13.6,
+        "avg_holding_time_minutes": 34.6,
+        "trades_per_day": 4.2,
+        "best_trade": 2.5,
+        "worst_trade": -2.0
+      },
+      "num_trades": 248,
+      "params": {
+        "bb_period": 20,
+        "bb_std": 2.0,
+        "min_squeeze": 0.02,
+        "rsi_oversold": 30,
+        "volume_min_ratio": 0.8,
+        "stop_loss": 0.02,
+        "take_profit": 0.025
+      },
+      "trades_sample": [
+        {
+          "code": "380550",
+          "entry_price": 22300.0,
+          "exit_price": 21854.0,
+          "entry_time": "2025-11-14 13:10:00",
+          "exit_time": "2025-11-14 13:25:00",
+          "pnl": -30102.0,
+          "pnl_pct": -2.0,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "005830",
+          "entry_price": 139200.0,
+          "exit_price": 136416.0,
+          "entry_time": "2025-11-14 13:20:00",
+          "exit_time": "2025-11-14 13:35:00",
+          "pnl": -28045.0,
+          "pnl_pct": -2.0,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "000810",
+          "entry_price": 498500.0,
+          "exit_price": 492500.0,
+          "entry_time": "2025-11-14 13:25:00",
+          "exit_time": "2025-11-14 13:45:00",
+          "pnl": -12148.0,
+          "pnl_pct": -1.2,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "488280",
+          "entry_price": 19830.0,
+          "exit_price": 20325.75,
+          "entry_time": "2025-11-14 13:35:00",
+          "exit_time": "2025-11-14 13:45:00",
+          "pnl": 33000.0,
+          "pnl_pct": 2.5,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "331740",
+          "entry_price": 11330.0,
+          "exit_price": 11310.0,
+          "entry_time": "2025-11-14 13:45:00",
+          "exit_time": "2025-11-14 13:50:00",
+          "pnl": -2842.0,
+          "pnl_pct": -0.18,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "019180",
+          "entry_price": 6290.0,
+          "exit_price": 6170.0,
+          "entry_time": "2025-11-14 13:05:00",
+          "exit_time": "2025-11-14 13:55:00",
+          "pnl": -28780.0,
+          "pnl_pct": -1.91,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "081180",
+          "entry_price": 7660.0,
+          "exit_price": 7650.0,
+          "entry_time": "2025-11-14 14:15:00",
+          "exit_time": "2025-11-14 14:35:00",
+          "pnl": -2151.0,
+          "pnl_pct": -0.13,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "001430",
+          "entry_price": 28200.0,
+          "exit_price": 28150.0,
+          "entry_time": "2025-11-14 14:30:00",
+          "exit_time": "2025-11-14 14:55:00",
+          "pnl": -2820.0,
+          "pnl_pct": -0.18,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "125020",
+          "entry_price": 3250.0,
+          "exit_price": 3210.0,
+          "entry_time": "2025-11-17 11:05:00",
+          "exit_time": "2025-11-17 11:15:00",
+          "pnl": -18379.0,
+          "pnl_pct": -1.23,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "125020",
+          "entry_price": 3200.0,
+          "exit_price": 3200.0,
+          "entry_time": "2025-11-17 11:20:00",
+          "exit_time": "2025-11-17 11:25:00",
+          "pnl": -220.0,
+          "pnl_pct": 0.0,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "066970",
+          "entry_price": 127300.0,
+          "exit_price": 126900.0,
+          "entry_time": "2025-11-17 13:45:00",
+          "exit_time": "2025-11-17 14:55:00",
+          "pnl": -4609.0,
+          "pnl_pct": -0.31,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "494120",
+          "entry_price": 50300.0,
+          "exit_price": 49294.0,
+          "entry_time": "2025-11-18 12:25:00",
+          "exit_time": "2025-11-18 12:30:00",
+          "pnl": -29388.0,
+          "pnl_pct": -2.0,
+          "exit_reason": "Stop loss"
+        },
+        {
+          "code": "009970",
+          "entry_price": 171000.0,
+          "exit_price": 170400.0,
+          "entry_time": "2025-11-18 12:40:00",
+          "exit_time": "2025-11-18 12:45:00",
+          "pnl": -5004.0,
+          "pnl_pct": -0.35,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "382150",
+          "entry_price": 11350.0,
+          "exit_price": 11220.0,
+          "entry_time": "2025-11-18 12:45:00",
+          "exit_time": "2025-11-18 13:00:00",
+          "pnl": -16855.0,
+          "pnl_pct": -1.15,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "075580",
+          "entry_price": 19850.0,
+          "exit_price": 19730.0,
+          "entry_time": "2025-11-18 12:35:00",
+          "exit_time": "2025-11-18 13:05:00",
+          "pnl": -8976.0,
+          "pnl_pct": -0.6,
+          "exit_reason": "연속 3음봉"
+        },
+        {
+          "code": "476060",
+          "entry_price": 13320.0,
+          "exit_price": 13490.0,
+          "entry_time": "2025-11-18 12:20:00",
+          "exit_time": "2025-11-18 13:30:00",
+          "pnl": 15064.0,
+          "pnl_pct": 1.28,
+          "exit_reason": "BB 중간선 도달"
+        },
+        {
+          "code": "340450",
+          "entry_price": 6510.0,
+          "exit_price": 6510.0,
+          "entry_time": "2025-11-18 13:20:00",
+          "exit_time": "2025-11-18 14:55:00",
+          "pnl": -218.0,
+          "pnl_pct": 0.0,
+          "exit_reason": "BB 중간선 도달"
+        },
+        {
+          "code": "019170",
+          "entry_price": 14040.0,
+          "exit_price": 14010.0,
+          "entry_time": "2025-11-18 13:30:00",
+          "exit_time": "2025-11-18 14:55:00",
+          "pnl": -3306.0,
+          "pnl_pct": -0.21,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "004170",
+          "entry_price": 223500.0,
+          "exit_price": 223000.0,
+          "entry_time": "2025-11-18 14:05:00",
+          "exit_time": "2025-11-18 14:55:00",
+          "pnl": -3201.0,
+          "pnl_pct": -0.22,
+          "exit_reason": "End of day"
+        },
+        {
+          "code": "015760",
+          "entry_price": 46500.0,
+          "exit_price": 47200.0,
+          "entry_time": "2025-11-19 12:55:00",
+          "exit_time": "2025-11-19 13:50:00",
+          "pnl": 18115.0,
+          "pnl_pct": 1.51,
+          "exit_reason": "BB 중간선 도달"
+        }
+      ]
+    },
+    "Volume Surge": {
+      "metrics": {
+        "total_trades": 1321,
+        "winning_trades": 235,
+        "losing_trades": 1086,
+        "win_rate": 17.79,
+        "total_pnl": -2366414.0,
+        "total_return_pct": -47.33,
+        "avg_win": 1.04,
+        "avg_loss": -0.34,
+        "profit_factor": 0.44,
+        "max_drawdown": 51.99,
+        "avg_holding_time_minutes": 13.7,
+        "trades_per_day": 22.39,
+        "best_trade": 2.8,
+        "worst_trade": -1.8
+      },
+      "num_trades": 1321,
+      "params": {
+        "volume_surge_ratio": 3.0,
+        "min_price_move": 0.005,
+        "lookback_period": 20,
+        "rsi_neutral_min": 35,
+        "rsi_neutral_max": 65,
+        "stop_loss": 0.018,
+        "take_profit": 0.028
+      },
+      "trades_sample": [
+        {
+          "code": "005180",
+          "entry_price": 76100.0,
+          "exit_price": 76100.0,
+          "entry_time": "2025-11-14 11:05:00",
+          "exit_time": "2025-11-14 11:10:00",
+          "pnl": -217.0,
+          "pnl_pct": 0.0,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "308430",
+          "entry_price": 19330.0,
+          "exit_price": 19430.0,
+          "entry_time": "2025-11-14 11:15:00",
+          "exit_time": "2025-11-14 11:25:00",
+          "pnl": 4035.0,
+          "pnl_pct": 0.52,
+          "exit_reason": "RSI 과매수 (76.2)"
+        },
+        {
+          "code": "004960",
+          "entry_price": 7780.0,
+          "exit_price": 7740.0,
+          "entry_time": "2025-11-14 11:30:00",
+          "exit_time": "2025-11-14 11:35:00",
+          "pnl": -7903.0,
+          "pnl_pct": -0.51,
+          "exit_reason": "하락 반전 캔들"
+        },
+        {
+          "code": "482630",
+          "entry_price": 18240.0,
+          "exit_price": 18170.0,
+          "entry_time": "2025-11-14 11:35:00",
+          "exit_time": "2025-11-14 11:45:00",
+          "pnl": -5963.0,
+          "pnl_pct": -0.38,
+          "exit_reason": "하락 반전 캔들"
+        },
+        {
+          "code": "000990",
+          "entry_price": 68200.0,
+          "exit_price": 68100.0,
+          "entry_time": "2025-11-14 13:15:00",
+          "exit_time": "2025-11-14 13:25:00",
+          "pnl": -2315.0,
+          "pnl_pct": -0.15,
+          "exit_reason": "하락 반전 캔들"
+        },
+        {
+          "code": "003090",
+          "entry_price": 25250.0,
+          "exit_price": 25150.0,
+          "entry_time": "2025-11-14 13:25:00",
+          "exit_time": "2025-11-14 13:30:00",
+          "pnl": -6123.0,
+          "pnl_pct": -0.4,
+          "exit_reason": "하락 반전 캔들"
+        },
+        {
+          "code": "389680",
+          "entry_price": 544.0,
+          "exit_price": 540.0,
+          "entry_time": "2025-11-14 14:00:00",
+          "exit_time": "2025-11-14 14:20:00",
+          "pnl": -11206.0,
+          "pnl_pct": -0.74,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "344820",
+          "entry_price": 26500.0,
+          "exit_price": 26400.0,
+          "entry_time": "2025-11-14 14:50:00",
+          "exit_time": "2025-11-14 14:55:00",
+          "pnl": -5822.0,
+          "pnl_pct": -0.38,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "047810",
+          "entry_price": 108200.0,
+          "exit_price": 108000.0,
+          "entry_time": "2025-11-17 11:40:00",
+          "exit_time": "2025-11-17 12:05:00",
+          "pnl": -2811.0,
+          "pnl_pct": -0.18,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "081180",
+          "entry_price": 9270.0,
+          "exit_price": 9529.56,
+          "entry_time": "2025-11-17 11:55:00",
+          "exit_time": "2025-11-17 12:05:00",
+          "pnl": 37794.0,
+          "pnl_pct": 2.8,
+          "exit_reason": "Take profit"
+        },
+        {
+          "code": "003090",
+          "entry_price": 24800.0,
+          "exit_price": 24700.0,
+          "entry_time": "2025-11-17 11:50:00",
+          "exit_time": "2025-11-17 12:10:00",
+          "pnl": -6222.0,
+          "pnl_pct": -0.4,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "079160",
+          "entry_price": 5370.0,
+          "exit_price": 5370.0,
+          "entry_time": "2025-11-17 12:15:00",
+          "exit_time": "2025-11-17 12:20:00",
+          "pnl": -224.0,
+          "pnl_pct": 0.0,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "006340",
+          "entry_price": 3650.0,
+          "exit_price": 3640.0,
+          "entry_time": "2025-11-17 12:15:00",
+          "exit_time": "2025-11-17 12:35:00",
+          "pnl": -4324.0,
+          "pnl_pct": -0.27,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "459510",
+          "entry_price": 21500.0,
+          "exit_price": 21350.0,
+          "entry_time": "2025-11-17 12:35:00",
+          "exit_time": "2025-11-17 12:45:00",
+          "pnl": -10571.0,
+          "pnl_pct": -0.7,
+          "exit_reason": "연속 음봉"
+        },
+        {
+          "code": "018880",
+          "entry_price": 3820.0,
+          "exit_price": 3805.0,
+          "entry_time": "2025-11-17 12:55:00",
+          "exit_time": "2025-11-17 13:00:00",
+          "pnl": -6073.0,
+          "pnl_pct": -0.39,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "006220",
+          "entry_price": 12630.0,
+          "exit_price": 12570.0,
+          "entry_time": "2025-11-17 13:05:00",
+          "exit_time": "2025-11-17 13:10:00",
+          "pnl": -7302.0,
+          "pnl_pct": -0.48,
+          "exit_reason": "거래량 급감"
+        },
+        {
+          "code": "111770",
+          "entry_price": 78100.0,
+          "exit_price": 77900.0,
+          "entry_time": "2025-11-17 13:05:00",
+          "exit_time": "2025-11-17 13:15:00",
+          "pnl": -4022.0,
+          "pnl_pct": -0.26,
+          "exit_reason": "연속 음봉"
+        },
+        {
+          "code": "484590",
+          "entry_price": 14080.0,
+          "exit_price": 14120.0,
+          "entry_time": "2025-11-17 13:25:00",
+          "exit_time": "2025-11-17 13:35:00",
+          "pnl": 568.0,
+          "pnl_pct": 0.28,
+          "exit_reason": "RSI 과매수 (77.5)"
+        },
+        {
+          "code": "009150",
+          "entry_price": 216000.0,
+          "exit_price": 214000.0,
+          "entry_time": "2025-11-17 12:55:00",
+          "exit_time": "2025-11-17 13:55:00",
+          "pnl": -12193.0,
+          "pnl_pct": -0.93,
+          "exit_reason": "연속 음봉"
+        },
+        {
+          "code": "004490",
+          "entry_price": 59300.0,
+          "exit_price": 59200.0,
+          "entry_time": "2025-11-17 13:40:00",
+          "exit_time": "2025-11-17 13:55:00",
+          "pnl": -2722.0,
+          "pnl_pct": -0.17,
+          "exit_reason": "거래량 급감"
+        }
+      ]
+    }
+  }
+}

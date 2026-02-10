@@ -250,29 +250,15 @@ class ParameterTester:
 
 
 def get_strategy_class(strategy_name: str):
-    """Get strategy class by name."""
-    from src.strategies.momentum.volume_breakout import VolumeBreakoutStrategy
-    from src.strategies.momentum.gap_up import GapUpStrategy
-    from src.strategies.momentum.top_volume_momentum import TopVolumeMomentumStrategy
-    from src.strategies.momentum.high_52week import High52WeekBreakoutStrategy
-    from src.strategies.mean_reversion.vwap_reversion import VWAPReversionStrategy
-    from src.strategies.mean_reversion.rsi_oversold import RSIOversoldStrategy
-    from src.strategies.mean_reversion.bb_squeeze import BBSqueezeStrategy
-    from src.strategies.breakout.ma_golden_cross import MAGoldenCrossStrategy
-    from src.strategies.breakout.institutional_flow import InstitutionalFlowStrategy
-    from src.strategies.breakout.sector_rotation import SectorRotationStrategy
+    """Get strategy class by name.
 
-    mapping = {
-        "VolumeBreakout": VolumeBreakoutStrategy,
-        "GapUp": GapUpStrategy,
-        "TopVolumeMomentum": TopVolumeMomentumStrategy,
-        "High52WeekBreakout": High52WeekBreakoutStrategy,
-        "VWAPReversion": VWAPReversionStrategy,
-        "RSIOversold": RSIOversoldStrategy,
-        "BBSqueeze": BBSqueezeStrategy,
-        "MAGoldenCross": MAGoldenCrossStrategy,
-        "InstitutionalFlow": InstitutionalFlowStrategy,
-        "SectorRotation": SectorRotationStrategy,
-    }
+    Dynamically looks up data-driven strategies from the package.
+    """
+    from src.strategies.data_driven import get_data_driven_strategies
+
+    mapping = {}
+    for strat in get_data_driven_strategies():
+        cls = type(strat)
+        mapping[cls.__name__.replace("Strategy", "")] = cls
 
     return mapping.get(strategy_name)

@@ -195,7 +195,7 @@ def calculate_metrics(
     if len(equity_curve) > 0:
         equity_df = equity_curve.to_frame(name="value")
         equity_df.index = pd.to_datetime(equity_df.index)
-        monthly = equity_df.resample("M").last()
+        monthly = equity_df.resample("ME").last()
         monthly_pct = monthly.pct_change().dropna()
         for idx, row in monthly_pct.iterrows():
             month_key = idx.strftime("%Y-%m")

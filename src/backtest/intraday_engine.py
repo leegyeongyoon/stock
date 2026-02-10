@@ -32,6 +32,7 @@ class IntradayPosition:
     stop_loss: float
     take_profit: float
     entry_reason: str = ""
+    entry_bar_idx: int = 0
 
 
 @dataclass

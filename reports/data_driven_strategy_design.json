@@ -1,0 +1,184 @@
+{
+  "timestamp": "2026-02-10T16:01:40.194905",
+  "model": "gpt-4o",
+  "deep_analysis": {
+    "pattern_interpretation": "데이터 분석을 통해 특정 시간대와 ATR, 거래량, VWAP 등의 지표가 주가 급등과 관련이 있음을 확인했습니다. 특히, 10시~11시 사이의 ATR과 거래량이 높은 경우, VWAP 아래에서의 매매가 유리한 것으로 나타났습니다.",
+    "price_path_insights": "MAE/MFE 분석 결과, SL=3%와 TP=5% 설정이 가장 안정적인 손익비를 제공하며, 승률이 40% 이상일 경우 수익성이 있는 것으로 확인되었습니다.",
+    "cost_adjusted_analysis": "거래 비용을 고려했을 때, TP=5%에서 순이익이 약 4.74%로, SL=3%에서 순손실이 약 3.03%로 계산됩니다. 따라서 승률이 39% 이상이면 손익분기점을 넘어서며, 45% 승률에서는 건당 EV가 +0.47%로 예상됩니다.",
+    "strategies": [
+      {
+        "name": "rsi_neutral_morning_strategy",
+        "description": "RSI가 중립 범위에 있을 때 아침 시간대에 ATR이 높은 종목을 매매하는 전략",
+        "mechanism": "RSI 중립 상태에서의 변동성 증가를 포착하여 단기 상승을 노림",
+        "entry_conditions": [
+          "시간대: 9시~11시",
+          "RSI(14) 범위: 40~60",
+          "ATR 상위 25%"
+        ],
+        "exit_conditions": [
+          "SL=3%",
+          "TP=5%"
+        ],
+        "stop_loss_pct": 0.03,
+        "take_profit_pct": 0.05,
+        "time_filter": "9시~11시",
+        "data_basis": "morning_rsi_neutral_atr 전략의 백테스트 결과를 기반으로 함",
+        "expected_win_rate": 45,
+        "expected_ev_pct": 0.4,
+        "confidence": 0.7
+      },
+      {
+        "name": "volume_based_midday_strategy",
+        "description": "거래량이 급증하는 종목을 점심 시간대에 매매하는 전략",
+        "mechanism": "거래량 급증을 통한 단기 모멘텀을 활용",
+        "entry_conditions": [
+          "시간대: 11시~13시",
+          "거래량 상위 25%",
+          "ATR 상위 25%"
+        ],
+        "exit_conditions": [
+          "SL=3%",
+          "TP=5%"
+        ],
+        "stop_loss_pct": 0.03,
+        "take_profit_pct": 0.05,
+        "time_filter": "11시~13시",
+        "data_basis": "거래량 급증과 ATR 상위 25% 조합의 백테스트 결과를 기반으로 함",
+        "expected_win_rate": 42,
+        "expected_ev_pct": 0.35,
+        "confidence": 0.65
+      },
+      {
+        "name": "vwap_momentum_afternoon_strategy",
+        "description": "VWAP 아래에서 모멘텀을 포착하여 오후 시간대에 매매하는 전략",
+        "mechanism": "VWAP 아래에서의 반등 모멘텀을 활용",
+        "entry_conditions": [
+          "시간대: 13시~14시",
+          "VWAP 아래",
+          "ATR 상위 25%"
+        ],
+        "exit_conditions": [
+          "SL=3%",
+          "TP=5%"
+        ],
+        "stop_loss_pct": 0.03,
+        "take_profit_pct": 0.05,
+        "time_filter": "13시~14시",
+        "data_basis": "below_vwap_high_atr 전략의 백테스트 결과를 기반으로 함",
+        "expected_win_rate": 44,
+        "expected_ev_pct": 0.38,
+        "confidence": 0.68
+      }
+    ]
+  },
+  "price_path_percentiles": {
+    "atr_10": {
+      "p50": 0.003689,
+      "p75": 0.005389,
+      "p80": 0.00597,
+      "p90": 0.008057
+    },
+    "vol_ratio_avg20": {
+      "p50": 0.714519,
+      "p75": 1.166119,
+      "p80": 1.323074,
+      "p90": 1.903984
+    },
+    "avg_bar_range_10": {
+      "p50": 0.003592,
+      "p75": 0.005285,
+      "p80": 0.005865,
+      "p90": 0.007964
+    },
+    "body_ratio": {
+      "p50": 0.5,
+      "p75": 0.75,
+      "p80": 0.833333,
+      "p90": 1.0
+    }
+  },
+  "strategies": {
+    "volume_based_midday_strategy": {
+      "accepted": false,
+      "iterations": 10,
+      "is_metrics": {
+        "total_trades": 145,
+        "winning_trades": 56,
+        "losing_trades": 89,
+        "win_rate": 38.62,
+        "total_pnl": -23913.0,
+        "total_return_pct": -0.48,
+        "avg_win": 2.34,
+        "avg_loss": -1.29,
+        "profit_factor": 0.99,
+        "max_drawdown": 5.59,
+        "avg_holding_time_minutes": 203.4,
+        "trades_per_day": 3.3,
+        "best_trade": 5.0,
+        "worst_trade": -3.0
+      },
+      "spec": {
+        "name": "volume_based_midday_strategy",
+        "description": "거래량이 급증하는 종목을 점심 시간대에 매매하는 전략",
+        "mechanism": "거래량 급증을 통한 단기 모멘텀을 활용",
+        "entry_conditions": [
+          "시간대: 11시~13시",
+          "거래량 상위 25%",
+          "ATR 상위 25%"
+        ],
+        "exit_conditions": [
+          "SL=3%",
+          "TP=5%"
+        ],
+        "stop_loss_pct": 0.03,
+        "take_profit_pct": 0.05,
+        "time_filter": "11시~13시",
+        "data_basis": "거래량 급증과 ATR 상위 25% 조합의 백테스트 결과를 기반으로 함",
+        "expected_win_rate": 42,
+        "expected_ev_pct": 0.35,
+        "confidence": 0.65
+      }
+    },
+    "vwap_momentum_afternoon_strategy": {
+      "accepted": false,
+      "iterations": 10,
+      "is_metrics": {
+        "total_trades": 138,
+        "winning_trades": 51,
+        "losing_trades": 87,
+        "win_rate": 36.96,
+        "total_pnl": -146464.0,
+        "total_return_pct": -2.93,
+        "avg_win": 1.87,
+        "avg_loss": -1.02,
+        "profit_factor": 0.89,
+        "max_drawdown": 5.18,
+        "avg_holding_time_minutes": 107.4,
+        "trades_per_day": 3.14,
+        "best_trade": 5.0,
+        "worst_trade": -3.0
+      },
+      "spec": {
+        "name": "vwap_momentum_afternoon_strategy",
+        "description": "VWAP 아래에서 모멘텀을 포착하여 오후 시간대에 매매하는 전략",
+        "mechanism": "VWAP 아래에서의 반등 모멘텀을 활용",
+        "entry_conditions": [
+          "시간대: 13시~14시",
+          "VWAP 아래",
+          "ATR 상위 25%"
+        ],
+        "exit_conditions": [
+          "SL=3%",
+          "TP=5%"
+        ],
+        "stop_loss_pct": 0.03,
+        "take_profit_pct": 0.05,
+        "time_filter": "13시~14시",
+        "data_basis": "below_vwap_high_atr 전략의 백테스트 결과를 기반으로 함",
+        "expected_win_rate": 44,
+        "expected_ev_pct": 0.38,
+        "confidence": 0.68
+      }
+    }
+  }
+}

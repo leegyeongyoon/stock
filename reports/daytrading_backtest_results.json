@@ -1,0 +1,82 @@
+{
+  "timestamp": "2026-02-10T11:27:34.545192",
+  "config": {
+    "sample_size": 500,
+    "start_date": "2022-01-01",
+    "end_date": "2025-01-31",
+    "initial_capital": 100000000
+  },
+  "strategies": {
+    "GapMomentum": {
+      "strategy_name": "GapMomentum",
+      "win_rate": 71.43,
+      "total_return": 0.66,
+      "total_trades": 7,
+      "winning_trades": 5,
+      "losing_trades": 2,
+      "avg_win": 6.18,
+      "avg_loss": -12.17,
+      "profit_factor": 1.27,
+      "max_drawdown": 1.99,
+      "sharpe_ratio": -1.6
+    },
+    "UpperLimitChaser": {
+      "strategy_name": "UpperLimitChaser",
+      "win_rate": 0.0,
+      "total_return": 0.0,
+      "total_trades": 0,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "avg_win": 0.0,
+      "avg_loss": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    "PowerBreakout": {
+      "strategy_name": "PowerBreakout",
+      "win_rate": 46.81,
+      "total_return": 1.16,
+      "total_trades": 47,
+      "winning_trades": 22,
+      "losing_trades": 25,
+      "avg_win": 2.83,
+      "avg_loss": -2.03,
+      "profit_factor": 1.23,
+      "max_drawdown": 2.58,
+      "sharpe_ratio": -1.61
+    },
+    "ConsecutiveBullish": {
+      "strategy_name": "ConsecutiveBullish",
+      "win_rate": 21.43,
+      "total_return": -1.04,
+      "total_trades": 14,
+      "winning_trades": 3,
+      "losing_trades": 11,
+      "avg_win": 3.75,
+      "avg_loss": -1.98,
+      "profit_factor": 0.52,
+      "max_drawdown": 1.33,
+      "sharpe_ratio": -5.88
+    },
+    "VolumeReversalSniper": {
+      "strategy_name": "VolumeReversalSniper",
+      "win_rate": 0.0,
+      "total_return": 0.0,
+      "total_trades": 0,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "avg_win": 0.0,
+      "avg_loss": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown": 0.0,
+      "sharpe_ratio": 0.0
+    }
+  },
+  "summary": {
+    "total_return": 0.78,
+    "avg_win_rate": 27.93,
+    "total_trades": 68,
+    "strategies_count": 5
+  }
+}

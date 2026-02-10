@@ -1,125 +1,100 @@
-# 한국 주식 자동매매 시스템
+# 한국 주식 분봉 단타 자동매매 시스템
 
-AI 기반 전략 최적화를 통한 한국 주식 자동매매 시스템입니다.
+5분봉 데이터 기반 AI 설계 인트라데이 트레이딩 시스템입니다.
 
 ## 개요
 
-이 프로젝트는 10개의 매매 전략을 구현하고, OpenAI GPT-4o를 활용하여 각 전략의 파라미터를 반복적으로 최적화합니다.
+462종목 60거래일 5분봉 데이터(~190만건)에서 패턴을 마이닝하고, OpenAI GPT-4o가 설계한 전략을 V2 백테스트 엔진으로 검증하여 최종 6개 수익 전략을 도출했습니다.
 
-## 구현된 전략
+## 전략 성과
 
-| 전략 | 설명 | 최종 수익률 |
-|-----|------|-----------|
-| **VolumeBreakout** | 거래량 급증 돌파 전략 | 9.79% |
-| **GapUp** | 갭상승 매매 전략 | -0.07% |
-| **VWAPReversion** | VWAP 회귀 전략 | 4.43% |
-| **RSIOversold** | RSI 과매도 반등 전략 | 3.19% |
-| **MAGoldenCross** | 이동평균 골든크로스 전략 | 12.94% |
-| **BBSqueeze** | 볼린저밴드 스퀴즈 전략 | 10.71% |
-| **TopVolumeMomentum** | 거래대금 상위 모멘텀 전략 | 8.46% |
-| **High52WeekBreakout** | 52주 신고가 돌파 전략 | -0.66% |
-| **InstitutionalFlow** | 기관 수급 추종 전략 | 1.40% |
-| **SectorRotation** | 섹터 로테이션 전략 | -2.37% |
+| # | 전략 | 시간대 | 수익률 | 승률 | 거래수 |
+|---|------|--------|--------|------|--------|
+| 1 | MorningRSINeutralATR | 9:30-11시 | +16.62% | 47.5% | 183 |
+| 2 | LunchRSINeutralATRVolume | 11-13시 | +9.18% | 41.8% | 196 |
+| 3 | ModifiedRSINeutralATR | 9-14시 | +10.84% | 44.7% | 217 |
+| 4 | AfternoonRSINeutralATR | 13-15시 | +3.87% | 42.2% | 204 |
+| 6 | AfternoonRSINeutralATRVolume | 13-14:30시 | +11.46% | 44.6% | 175 |
+| 8 | MorningWideRSINeutralATR | 9:30-12시 | +14.24% | 46.1% | 193 |
+| | **합계** | | **+66.21%** | | **1,168** |
 
-**총 수익률: 47.83%** (백테스트 기간: 2022-01-01 ~ 2025-01-31)
-
-## AI 최적화 시스템
-
-### 작동 방식
-
-1. **코드 분석**: GPT-4o가 전략 코드를 분석하고 개선점을 제안
-2. **파라미터 검증**: 각 제안을 백테스트로 검증
-3. **자동 적용**: 개선이 확인되면 전략 코드에 자동 반영
-4. **피드백 루프**: 실패한 시도를 기록하고 다음 반복에 피드백
-
-### 최적화 이력
-
-#### 1차 최적화 (5회 반복)
-- 초기: 19.03% → 최종: 42.89%
-- 개선: +23.86%
-
-#### 2차 최적화 (10회 반복)
-- 초기: 42.89% → 최종: 47.83%
-- 개선: +4.94%
-
-**총 개선: +28.80%**
+### 핵심 전략 원리
+- **RSI 40-60 중립 필터**: 과매수/과매도 회피, 모든 전략의 핵심
+- **ATR 변동성 필터**: 충분한 가격 변동이 있는 구간에서만 진입
+- **VWAP 상방 확인**: 일중 상승 추세 종목 선별
+- **연속 양봉 확인**: 단기 모멘텀 확인
+- **SL 3% / TP 5%**: 손익비 1:1.67, 거래비용 감안 손익분기 승률 39%
 
 ## 프로젝트 구조
 
 ```
 stock/
 ├── src/
-│   ├── strategies/          # 매매 전략
-│   │   ├── momentum/        # 모멘텀 전략들
-│   │   ├── mean_reversion/  # 평균회귀 전략들
-│   │   └── breakout/        # 돌파 전략들
-│   ├── backtest/            # 백테스트 엔진
-│   ├── analysis/            # AI 분석 및 최적화
-│   ├── api/                 # 데이터 API
-│   └── database/            # 데이터베이스
-├── scripts/                 # 실행 스크립트
-├── reports/                 # 분석 리포트
-├── tests/                   # 테스트 코드
-└── database/                # DB 덤프
+│   ├── strategies/
+│   │   ├── data_driven/           # 활성 전략 6개
+│   │   │   ├── intraday_strategy_1.py   # 오전 9:30-11시
+│   │   │   ├── intraday_strategy_2.py   # 점심 11-13시
+│   │   │   ├── intraday_strategy_3.py   # 와이드 9-14시
+│   │   │   ├── intraday_strategy_4.py   # 오후 13-15시
+│   │   │   ├── intraday_strategy_6.py   # 오후 13-14:30시
+│   │   │   └── intraday_strategy_8.py   # 오전 9:30-12시
+│   │   └── intraday/
+│   │       └── base.py            # IntradayStrategy ABC + numpy 헬퍼
+│   ├── backtest/
+│   │   ├── intraday_engine.py     # V1 엔진 + 데이터 클래스
+│   │   └── intraday_engine_v2.py  # V2 엔진 (~13초/462종목)
+│   ├── analysis/                  # OpenAI 분석/최적화 인프라
+│   ├── api/                       # 데이터 API
+│   ├── database/                  # PostgreSQL 연결
+│   └── utils/                     # 로깅 등 유틸리티
+├── scripts/
+│   ├── run_data_driven_backtest.py    # 백테스트 실행
+│   ├── optimize_round3.py             # Round 3 최적화
+│   ├── optimize_with_ai_rounds_v2.py  # AI 라운드 최적화
+│   ├── analyze_intraday_patterns.py   # 패턴 마이닝
+│   └── fetch_top_stocks_data.py       # 데이터 수집
+├── reports/                       # 분석/백테스트 리포트 (JSON)
+├── docs/                          # 문서
+│   ├── INTRADAY_STRATEGIES.md     # 전략 상세 문서
+│   └── OPTIMIZATION_HISTORY.md    # 최적화 이력
+├── database/                      # DB 덤프
+└── tests/                         # 테스트 코드
 ```
 
 ## 설치 및 실행
 
 ### 요구사항
-
 - Python 3.11+
 - PostgreSQL 15+
-- Docker (optional)
 
 ### 설치
-
 ```bash
-# 가상환경 생성
-python -m venv venv
-source venv/bin/activate
-
-# 의존성 설치
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# 환경변수 설정
 cp .env.example .env
-# .env 파일에 OPENAI_API_KEY 등 설정
+# .env 파일에 DB 접속 정보 및 OPENAI_API_KEY 설정
 ```
 
-### 데이터베이스 설정
-
+### 백테스트 실행
 ```bash
-# Docker로 PostgreSQL 실행
-docker-compose up -d
-
-# DB 복원 (선택사항)
-docker exec -i stock_postgres psql -U stock -d stock_trading < database/dump.sql
+source .venv/bin/activate
+python scripts/run_data_driven_backtest.py
 ```
 
-### 실행
-
+### 최적화 실행
 ```bash
-# 백테스트 실행
-python main.py
+# 파라미터 그리드서치 + 시간변형 최적화
+python scripts/optimize_round3.py
 
-# AI 최적화 실행
-python scripts/run_iterative_optimization.py
+# AI 기반 라운드 최적화
+python scripts/optimize_with_ai_rounds_v2.py
 ```
 
-## 주요 파일
+## 문서
 
-- `src/analysis/iterative_optimizer.py`: AI 반복 최적화 시스템
-- `src/analysis/code_analyzer.py`: GPT-4o 코드 분석기
-- `src/analysis/parameter_tester.py`: 파라미터 검증 테스터
-- `src/backtest/engine.py`: 백테스트 엔진
-
-## 리포트
-
-최적화 결과는 `reports/` 디렉토리에 JSON 형식으로 저장됩니다:
-
-- `iterative_optimization_final.json`: 최종 최적화 결과
-- `final_optimization_report.json`: 기본 최적화 결과
-- `backtest_results.json`: 백테스트 결과
+- [전략 상세 문서](docs/INTRADAY_STRATEGIES.md): 각 전략의 진입/청산 조건, 파라미터, 성과, 최적화 이력
+- [최적화 이력](docs/OPTIMIZATION_HISTORY.md): 전체 최적화 과정 기록
 
 ## 라이선스
 
