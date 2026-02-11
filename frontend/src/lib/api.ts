@@ -447,3 +447,405 @@ export interface StrategyDetail {
 export async function getStrategyDetail(name: string) {
   return fetchApi<StrategyDetail>(`/api/strategies/${name}/detail`);
 }
+
+// Theme Analysis Types
+export interface ThemeStock {
+  code: string;
+  name: string;
+  theme_name?: string;
+  score?: number;
+  total_score?: number;
+  change_rate: number;
+  volume: number;
+  foreign_change: number;
+  inst_change: number;
+  is_leader: boolean;
+  recommendation: string;
+  scores?: {
+    momentum: number;
+    volume: number;
+    foreign: number;
+    inst: number;
+    leader: number;
+  };
+}
+
+export interface Theme {
+  code: string;
+  name: string;
+  change_rate: number;
+  score: number;
+  momentum: string;
+  is_hot: boolean;
+  stock_count: number;
+  up_count: number;
+  down_count: number;
+  leader: string | null;
+  foreign_buying: boolean;
+  inst_buying: boolean;
+}
+
+export interface ThemeDetail extends Theme {
+  volume_surge: boolean;
+  analysis_comment: string;
+  stocks: ThemeStock[];
+  top_stocks?: ThemeStock[];
+}
+
+export interface NewsItem {
+  title: string;
+  source: string;
+  url: string;
+  summary: string;
+  sentiment: string;
+  relevance_score: number;
+}
+
+export interface NewsAnalysis {
+  theme_name: string;
+  news_count: number;
+  hot_score: number;
+  sentiment: string;
+  key_issues: string[];
+  supply_prediction: string;
+  confidence: number;
+}
+
+export interface SupplyFlow {
+  theme_name: string;
+  current_supply: string;
+  foreign_flow: string;
+  inst_flow: string;
+  volume_change: number;
+  is_surging: boolean;
+  alert_message: string;
+}
+
+export interface MarketAnalysis {
+  timestamp: string;
+  phase: string;
+  phase_label: string;
+  market_sentiment: string;
+  top_sectors: string[];
+  caution_message: string;
+  hot_themes: ThemeDetail[];
+  recommended_stocks: ThemeStock[];
+}
+
+export interface PremarketAnalysis {
+  analysis_time: string;
+  market_phase: string;
+  previous_hot_themes: string[];
+  previous_rising_themes: string[];
+  top_themes: Array<{ name: string; change_rate: number }>;
+  news_analysis: NewsAnalysis[];
+  predicted_hot_themes: string[];
+  recommendation: string;
+}
+
+export interface SupplyPrediction {
+  timestamp: string;
+  phase: string;
+  predictions: Array<{
+    rank: number;
+    theme: string;
+    hot_score: number;
+    sentiment: string;
+    supply_prediction: string;
+    confidence: number;
+    key_issues: string[];
+  }>;
+  summary: {
+    predicted_hot: string[];
+    buy_expected: string[];
+    caution: string[];
+  };
+}
+
+// Theme Analysis API
+export async function getMarketAnalysis(refresh = false) {
+  return fetchApi<MarketAnalysis>(`/api/themes/analysis?refresh=${refresh}`);
+}
+
+export async function getPremarketAnalysis() {
+  return fetchApi<PremarketAnalysis>("/api/themes/premarket");
+}
+
+export async function getMarketPhase() {
+  return fetchApi<{ phase: string; label: string; timestamp: string }>("/api/themes/phase");
+}
+
+export async function getTopStocks(limit = 10) {
+  return fetchApi<{
+    timestamp: string;
+    phase: string;
+    sentiment: string;
+    stocks: ThemeStock[];
+  }>(`/api/themes/top-stocks?limit=${limit}`);
+}
+
+export async function getThemesList() {
+  return fetchApi<{ timestamp: string; themes: Theme[] }>("/api/themes/themes");
+}
+
+export async function getThemeDetail(themeCode: string) {
+  return fetchApi<ThemeDetail>(`/api/themes/themes/${themeCode}`);
+}
+
+export async function getThemeNews(themeName: string) {
+  return fetchApi<NewsItem[]>(`/api/themes/news/${encodeURIComponent(themeName)}`);
+}
+
+export async function getNewsAnalysis(themes: string[] = ["AI", "반도체", "2차전지", "로봇", "바이오"]) {
+  return fetchApi<NewsAnalysis[]>(`/api/themes/news-analysis?themes=${themes.join(",")}`);
+}
+
+export async function getThemeSupply(themeName: string) {
+  return fetchApi<SupplyFlow>(`/api/themes/supply/${encodeURIComponent(themeName)}`);
+}
+
+export async function getAllSupply() {
+  return fetchApi<SupplyFlow[]>("/api/themes/supply-all");
+}
+
+export async function getSupplyPrediction() {
+  return fetchApi<SupplyPrediction>("/api/themes/prediction");
+}
+
+// 기간별 핫 테마
+export interface PeriodHotTheme {
+  rank: number;
+  theme_code: string;
+  theme_name: string;
+  period_days: number;
+  change_rate: number;
+  avg_change_rate: number;
+  stock_count: number;
+  up_count: number;
+  down_count: number;
+  up_ratio: number;
+  top_gainers: Array<{
+    code: string;
+    name: string;
+    change_rate: number;
+    start_price: number;
+    end_price: number;
+  }>;
+  leader_stock: string;
+  momentum: string;
+  strength: string;
+}
+
+export async function getHotThemesByPeriod(days: number = 1, topN: number = 20) {
+  return fetchApi<PeriodHotTheme[]>(`/api/themes/hot-themes/${days}?top_n=${topN}`);
+}
+
+// Stock Detail Types
+export interface CandleData {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface TechnicalIndicators {
+  ma5: number;
+  ma10: number;
+  ma20: number;
+  ma60: number;
+  ma120: number;
+  rsi14: number;
+  macd: number;
+  macd_signal: number;
+  macd_hist: number;
+  stoch_k: number;
+  stoch_d: number;
+}
+
+export interface MultiDaySupply {
+  days: number;
+  foreign_total: number;
+  inst_total: number;
+  foreign_avg: number;
+  inst_avg: number;
+  trend: string;
+}
+
+export interface VolumeAnalysis {
+  today: number;
+  avg_5d: number;
+  avg_20d: number;
+  ratio_vs_5d: number;
+  ratio_vs_20d: number;
+  trend: string;
+  comment: string;
+}
+
+export interface BollingerPosition {
+  upper: number;
+  middle: number;
+  lower: number;
+  current: number;
+  position_pct: number;
+  zone: string;
+  comment: string;
+}
+
+export interface PricePosition {
+  current: number;
+  high_52w: number;
+  low_52w: number;
+  from_high_pct: number;
+  from_low_pct: number;
+  ma_20: number;
+  ma_60: number;
+  ma_120: number;
+  above_ma20: boolean;
+  above_ma60: boolean;
+  above_ma120: boolean;
+  position_comment: string;
+}
+
+export interface Valuation {
+  market_cap: number;
+  per: number;
+  pbr: number;
+  eps: number;
+  bps: number;
+  dividend_yield: number;
+  comment: string;
+}
+
+export interface BuySignal {
+  score: number;
+  grade: string;
+  positives: string[];
+  negatives: string[];
+  recommendation: string;
+  risk_level: string;
+}
+
+export interface StockDetailFull {
+  code: string;
+  name: string;
+  current_price: number;
+  change_rate: number;
+  change_amount: number;
+  volume: number;
+  trading_value: number;
+  open_price: number;
+  high_price: number;
+  low_price: number;
+  prev_close: number;
+
+  // 다일간 수급 분석
+  supply_3d: MultiDaySupply;
+  supply_7d: MultiDaySupply;
+  supply_10d: MultiDaySupply;
+  supply_30d: MultiDaySupply;
+
+  // 거래량 분석
+  volume_analysis: VolumeAnalysis;
+
+  // 볼린저밴드 위치
+  bb_position: BollingerPosition;
+
+  // 가격 위치
+  price_position: PricePosition;
+
+  // 밸류에이션
+  valuation: Valuation;
+
+  // 기술적 지표
+  indicators: TechnicalIndicators;
+
+  // 분봉 데이터
+  candles_1m: CandleData[];
+  candles_5m: CandleData[];
+
+  // 매수 신호 분석
+  buy_signal: BuySignal;
+
+  // 종합 코멘트
+  summary: string;
+}
+
+export interface NewsDetailItem {
+  title: string;
+  source: string;
+  url: string;
+  summary: string;
+  sentiment: string;
+  relevance_score: number;
+  published_at: string | null;
+}
+
+export interface NewsDetailResponse {
+  theme_name: string;
+  keywords: string[];
+  analysis: {
+    news_count: number;
+    hot_score: number;
+    sentiment: string;
+    supply_prediction: string;
+    confidence: number;
+    key_issues: string[];
+  };
+  news_items: NewsDetailItem[];
+}
+
+export async function getStockDetail(code: string, name: string = "") {
+  return fetchApi<StockDetailFull>(`/api/themes/stock/${code}?name=${encodeURIComponent(name)}`);
+}
+
+export async function getNewsDetail(themeName: string) {
+  return fetchApi<NewsDetailResponse>(`/api/themes/news-detail/${encodeURIComponent(themeName)}`);
+}
+
+// Stock News Types
+export interface StockNewsResponse {
+  stock_code: string;
+  stock_name: string;
+  news_count: number;
+  hot_score: number;
+  sentiment: string;
+  key_issues: string[];
+  news_items: NewsDetailItem[];
+}
+
+export async function getStockNews(code: string, name: string = "", days: number = 14) {
+  return fetchApi<StockNewsResponse>(`/api/themes/stock-news/${code}?name=${encodeURIComponent(name)}&days=${days}`);
+}
+
+// Theme Ranking Types
+export interface ThemeRanking {
+  rank: number;
+  theme_name: string;
+  theme_code: string;
+  total_score: number;
+  grade: string;
+
+  // 세부 점수
+  momentum_score: number;
+  news_score: number;
+  sentiment_score: number;
+  supply_score: number;
+
+  // 원본 데이터
+  change_rate: number;
+  news_count: number;
+  news_hot_score: number;
+  sentiment: string;
+  supply_prediction: string;
+  confidence: number;
+
+  // 분석
+  key_issues: string[];
+  recommendation: string;
+}
+
+export async function getThemeRanking(topN: number = 30) {
+  return fetchApi<ThemeRanking[]>(`/api/themes/ranking?top_n=${topN}`);
+}

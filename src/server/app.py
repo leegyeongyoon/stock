@@ -8,7 +8,7 @@ from loguru import logger
 
 from src.engine.trading_engine import TradingEngine
 from src.server.dependencies import get_engine, set_engine
-from src.server.routes import analysis, dashboard, orders, positions, strategies, system
+from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes
 from src.server.websocket_hub import hub
 
 
@@ -71,6 +71,7 @@ app.include_router(orders.router)
 app.include_router(strategies.router)
 app.include_router(analysis.router)
 app.include_router(system.router)
+app.include_router(themes.router)
 
 
 # WebSocket endpoints
