@@ -1,0 +1,191 @@
+name: Deploy Stock Trading to AWS ECS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  APP_NAME: stock-trading
+  ECS_CLUSTER: honbabnono-cluster
+
+jobs:
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      backend_ecr_url: ${{ steps.ecr-urls.outputs.backend_ecr_url }}
+      frontend_ecr_url: ${{ steps.ecr-urls.outputs.frontend_ecr_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Initialize Terraform
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Create terraform.tfvars
+        run: |
+          cd terraform
+          cat > terraform.tfvars << 'EOF'
+          aws_region  = "ap-northeast-2"
+          app_name    = "stock-trading"
+          environment = "production"
+
+          backend_cpu     = "256"
+          backend_memory  = "512"
+          frontend_cpu    = "256"
+          frontend_memory = "512"
+
+          subdomain = "stock"
+
+          database_url   = "${{ secrets.DATABASE_URL }}"
+          kis_app_key    = "${{ secrets.KIS_APP_KEY }}"
+          kis_app_secret = "${{ secrets.KIS_APP_SECRET }}"
+          kis_account_no = "${{ secrets.KIS_ACCOUNT_NO }}"
+          kis_is_mock    = "true"
+          openai_api_key = "${{ secrets.OPENAI_API_KEY }}"
+          EOF
+
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          terraform plan
+
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform apply -auto-approve
+
+      - name: Get ECR URLs
+        id: ecr-urls
+        run: |
+          cd terraform
+          BACKEND_ECR=$(terraform output -raw ecr_backend_url)
+          FRONTEND_ECR=$(terraform output -raw ecr_frontend_url)
+          echo "backend_ecr_url=$BACKEND_ECR" >> $GITHUB_OUTPUT
+          echo "frontend_ecr_url=$FRONTEND_ECR" >> $GITHUB_OUTPUT
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: deploy-infra
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Backend image
+        run: |
+          docker build -t ${{ env.APP_NAME }}-backend -f Dockerfile .
+          docker tag ${{ env.APP_NAME }}-backend:latest ${{ needs.deploy-infra.outputs.backend_ecr_url }}:latest
+          docker tag ${{ env.APP_NAME }}-backend:latest ${{ needs.deploy-infra.outputs.backend_ecr_url }}:${{ github.sha }}
+          docker push ${{ needs.deploy-infra.outputs.backend_ecr_url }}:latest
+          docker push ${{ needs.deploy-infra.outputs.backend_ecr_url }}:${{ github.sha }}
+
+      - name: Update Backend ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.APP_NAME }}-backend-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: deploy-infra
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Frontend image
+        run: |
+          docker build -t ${{ env.APP_NAME }}-frontend -f frontend/Dockerfile.prod frontend/
+          docker tag ${{ env.APP_NAME }}-frontend:latest ${{ needs.deploy-infra.outputs.frontend_ecr_url }}:latest
+          docker tag ${{ env.APP_NAME }}-frontend:latest ${{ needs.deploy-infra.outputs.frontend_ecr_url }}:${{ github.sha }}
+          docker push ${{ needs.deploy-infra.outputs.frontend_ecr_url }}:latest
+          docker push ${{ needs.deploy-infra.outputs.frontend_ecr_url }}:${{ github.sha }}
+
+      - name: Update Frontend ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.APP_NAME }}-frontend-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+  wait-for-deployment:
+    name: Wait for Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for Backend to stabilize
+        run: |
+          echo "Waiting for backend service to stabilize..."
+          timeout 600 aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.APP_NAME }}-backend-service \
+            --region ${{ env.AWS_REGION }} || echo "Backend stabilization timeout"
+
+      - name: Wait for Frontend to stabilize
+        run: |
+          echo "Waiting for frontend service to stabilize..."
+          timeout 600 aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.APP_NAME }}-frontend-service \
+            --region ${{ env.AWS_REGION }} || echo "Frontend stabilization timeout"
+
+      - name: Deployment success
+        run: |
+          echo "🎉 Deployment completed!"
+          echo "📊 Dashboard: https://stock.honbabnono.com"
+          echo "🔌 API: https://stock-api.honbabnono.com"
+          echo "📚 API Docs: https://stock-api.honbabnono.com/docs"

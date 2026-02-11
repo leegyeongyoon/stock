@@ -1,0 +1,27 @@
+# Stock Trading Terraform Variables
+# 이 파일을 terraform.tfvars로 복사하고 값을 채워넣으세요
+
+aws_region  = "ap-northeast-2"
+app_name    = "stock-trading"
+environment = "production"
+
+# ECS 리소스 (최소 사양으로 시작)
+backend_cpu     = "256"
+backend_memory  = "512"
+frontend_cpu    = "256"
+frontend_memory = "512"
+
+# 서브도메인
+subdomain = "stock"
+
+# Database URL (RDS 사용)
+database_url = "postgresql://postgres:honbabnono@honbabnono.c3iokeig2kd8.ap-northeast-2.rds.amazonaws.com:5432/honbabnono?options=-csearch_path%3Dstock_trading,public"
+
+# KIS API (한국투자증권)
+kis_app_key    = "your-kis-app-key"
+kis_app_secret = "your-kis-app-secret"
+kis_account_no = "your-account-no"
+kis_is_mock    = "true"
+
+# OpenAI API
+openai_api_key = "your-openai-api-key"
