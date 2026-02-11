@@ -1,6 +1,7 @@
 """Repository layer for database operations."""
 
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 import pandas as pd
@@ -15,6 +16,12 @@ from src.database.models import (
     BacktestResult,
     Trade,
     Signal,
+    LiveOrder,
+    LivePosition,
+    LiveTrade,
+    PortfolioSnapshot,
+    SystemEvent,
+    StrategyPerformance,
 )
 
 
@@ -328,3 +335,200 @@ class SignalRepository:
         signal = self.session.get(Signal, signal_id)
         if signal:
             signal.executed = True
+
+
+# ── Live Trading Repositories ──────────────────────────────────
+
+
+class LiveOrderRepository:
+    """Repository for live order operations."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert(self, data: dict) -> None:
+        """Upsert a live order by order_id."""
+        stmt = insert(LiveOrder).values(data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["order_id"],
+            set_={
+                "status": stmt.excluded.status,
+                "filled_quantity": stmt.excluded.filled_quantity,
+                "filled_price": stmt.excluded.filled_price,
+                "updated_at": stmt.excluded.updated_at,
+            },
+        )
+        self.session.execute(stmt)
+
+    def update_status(
+        self,
+        order_id: str,
+        status: str,
+        filled_quantity: int = 0,
+        filled_price: float = 0.0,
+    ) -> None:
+        """Update order status and fill info."""
+        order = self.session.execute(
+            select(LiveOrder).where(LiveOrder.order_id == order_id)
+        ).scalar_one_or_none()
+        if order:
+            order.status = status
+            order.filled_quantity = filled_quantity
+            order.filled_price = Decimal(str(filled_price))
+            order.updated_at = datetime.now()
+
+    def get_open_orders(self) -> list[LiveOrder]:
+        """Get all open (non-terminal) orders."""
+        query = select(LiveOrder).where(
+            LiveOrder.status.in_(["PENDING", "SUBMITTED", "PARTIAL_FILL"])
+        )
+        return list(self.session.execute(query).scalars().all())
+
+    def get_by_order_id(self, order_id: str) -> Optional[LiveOrder]:
+        """Get order by order_id."""
+        return self.session.execute(
+            select(LiveOrder).where(LiveOrder.order_id == order_id)
+        ).scalar_one_or_none()
+
+
+class LivePositionRepository:
+    """Repository for live position operations."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert(self, data: dict) -> None:
+        """Upsert a live position by (stock_code, strategy_name)."""
+        stmt = insert(LivePosition).values(data)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_live_pos_code_strategy",
+            set_={
+                "quantity": stmt.excluded.quantity,
+                "avg_price": stmt.excluded.avg_price,
+                "current_price": stmt.excluded.current_price,
+                "unrealized_pnl": stmt.excluded.unrealized_pnl,
+                "stop_loss_price": stmt.excluded.stop_loss_price,
+                "take_profit_price": stmt.excluded.take_profit_price,
+            },
+        )
+        self.session.execute(stmt)
+
+    def delete_by_code(self, stock_code: str) -> None:
+        """Delete position by stock code."""
+        pos = self.session.execute(
+            select(LivePosition).where(LivePosition.stock_code == stock_code)
+        ).scalar_one_or_none()
+        if pos:
+            self.session.delete(pos)
+
+    def get_all(self) -> list[LivePosition]:
+        """Get all live positions."""
+        return list(
+            self.session.execute(select(LivePosition)).scalars().all()
+        )
+
+    def update_prices(self, updates: list[dict]) -> None:
+        """Batch update current prices for positions."""
+        for upd in updates:
+            pos = self.session.execute(
+                select(LivePosition).where(
+                    LivePosition.stock_code == upd["stock_code"]
+                )
+            ).scalar_one_or_none()
+            if pos:
+                pos.current_price = Decimal(str(upd["current_price"]))
+                pos.unrealized_pnl = Decimal(str(upd.get("unrealized_pnl", 0)))
+
+
+class LiveTradeRepository:
+    """Repository for live trade operations."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create(self, data: dict) -> None:
+        """Create a new trade record."""
+        trade = LiveTrade(**data)
+        self.session.add(trade)
+        self.session.flush()
+
+    def get_today(self) -> list[LiveTrade]:
+        """Get today's trades."""
+        today = date.today()
+        query = select(LiveTrade).where(
+            func.date(LiveTrade.traded_at) == today
+        ).order_by(LiveTrade.traded_at)
+        return list(self.session.execute(query).scalars().all())
+
+
+class PortfolioSnapshotRepository:
+    """Repository for portfolio snapshots."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert(self, data: dict) -> None:
+        """Upsert daily portfolio snapshot."""
+        stmt = insert(PortfolioSnapshot).values(data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["date"],
+            set_={
+                "total_equity": stmt.excluded.total_equity,
+                "daily_pnl": stmt.excluded.daily_pnl,
+                "daily_return": stmt.excluded.daily_return,
+                "total_trades": stmt.excluded.total_trades,
+                "win_rate": stmt.excluded.win_rate,
+            },
+        )
+        self.session.execute(stmt)
+
+    def get_recent(self, days: int = 30) -> list[PortfolioSnapshot]:
+        """Get recent snapshots."""
+        query = (
+            select(PortfolioSnapshot)
+            .order_by(PortfolioSnapshot.date.desc())
+            .limit(days)
+        )
+        return list(self.session.execute(query).scalars().all())
+
+
+class SystemEventRepository:
+    """Repository for system events."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create(self, data: dict) -> None:
+        """Log a system event."""
+        event = SystemEvent(**data)
+        self.session.add(event)
+        self.session.flush()
+
+    def get_recent(self, limit: int = 100) -> list[SystemEvent]:
+        """Get recent events."""
+        query = (
+            select(SystemEvent)
+            .order_by(SystemEvent.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.execute(query).scalars().all())
+
+
+class StrategyPerformanceRepository:
+    """Repository for strategy performance."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert(self, data: dict) -> None:
+        """Upsert daily strategy performance."""
+        stmt = insert(StrategyPerformance).values(data)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_strategy_perf_date_name",
+            set_={
+                "trades": stmt.excluded.trades,
+                "wins": stmt.excluded.wins,
+                "pnl": stmt.excluded.pnl,
+            },
+        )
+        self.session.execute(stmt)

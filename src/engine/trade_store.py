@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 
 from loguru import logger
@@ -10,16 +11,18 @@ STORE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "trades"
 
 
 class TradeStore:
-    """Saves/loads completed trades as daily JSON files."""
+    """Saves/loads completed trades as daily JSON files + DB dual storage."""
 
-    def __init__(self, base_dir: Path = STORE_DIR):
+    def __init__(self, base_dir: Path = STORE_DIR, enable_db: bool = True):
         self._dir = base_dir
         self._dir.mkdir(parents=True, exist_ok=True)
+        self._enable_db = enable_db
 
     def _path_for_date(self, date_str: str) -> Path:
         return self._dir / f"{date_str}.json"
 
     def save_trade(self, trade: dict) -> None:
+        # 1. JSON backup (always)
         date_str = datetime.now().strftime("%Y-%m-%d")
         path = self._path_for_date(date_str)
 
@@ -32,6 +35,9 @@ class TradeStore:
 
         trades.append(trade)
         path.write_text(json.dumps(trades, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # 2. DB primary storage
+        self._save_to_db(trade)
 
     def load_trades(self, date_str: str) -> list[dict]:
         path = self._path_for_date(date_str)
@@ -100,3 +106,31 @@ class TradeStore:
                 r["losses"] += 1
                 r["max_loss"] = min(r["max_loss"], pnl)
         return result
+
+    def _save_to_db(self, trade: dict) -> None:
+        """Save trade to live_trades DB table (best-effort)."""
+        if not self._enable_db:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LiveTradeRepository
+
+            exit_time = trade.get("exit_time", "")
+            if isinstance(exit_time, str) and exit_time:
+                traded_at = datetime.fromisoformat(exit_time)
+            else:
+                traded_at = datetime.now()
+
+            with get_session() as session:
+                repo = LiveTradeRepository(session)
+                repo.create({
+                    "stock_code": trade.get("stock_code", ""),
+                    "strategy_name": trade.get("strategy_name", ""),
+                    "side": trade.get("side", "BUY"),
+                    "quantity": trade.get("quantity", 0),
+                    "price": Decimal(str(trade.get("exit_price", 0))),
+                    "pnl": Decimal(str(trade.get("pnl", 0))),
+                    "traded_at": traded_at,
+                })
+        except Exception as e:
+            logger.warning(f"거래 DB 저장 실패 (JSON 백업은 완료): {e}")

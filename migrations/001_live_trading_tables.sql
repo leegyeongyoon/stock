@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS live_positions (
     unrealized_pnl NUMERIC(12,2),
     stop_loss_price NUMERIC(12,2),
     take_profit_price NUMERIC(12,2),
-    entry_time TIMESTAMPTZ NOT NULL
+    entry_time TIMESTAMPTZ NOT NULL,
+    CONSTRAINT uq_live_pos_code_strategy UNIQUE(stock_code, strategy_name)
 );
 
 CREATE TABLE IF NOT EXISTS live_trades (
@@ -67,7 +68,7 @@ CREATE TABLE IF NOT EXISTS strategy_performance (
     trades INTEGER DEFAULT 0,
     wins INTEGER DEFAULT 0,
     pnl NUMERIC(12,2) DEFAULT 0,
-    UNIQUE(date, strategy_name)
+    CONSTRAINT uq_strategy_perf_date_name UNIQUE(date, strategy_name)
 );
 
 -- Indexes

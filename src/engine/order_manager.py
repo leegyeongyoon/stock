@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
@@ -26,11 +27,12 @@ class OrderManager:
                             CANCELLED / FAILED
     """
 
-    def __init__(self, client: KISClient):
+    def __init__(self, client: KISClient, enable_db: bool = True):
         self.client = client
         self._orders: dict[str, OrderInfo] = {}
         self._callbacks: list = []
         self._lock = asyncio.Lock()
+        self._enable_db = enable_db
 
     @property
     def open_orders(self) -> list[OrderInfo]:
@@ -101,6 +103,7 @@ class OrderManager:
                     f"주문 거부: {stock_code} {side.value} - {resp.message}"
                 )
 
+            self._save_order_to_db(order)
             await self._notify(order)
             return order
 
@@ -157,6 +160,8 @@ class OrderManager:
             f"체결 업데이트: {order.stock_code} {order.side.value} "
             f"{filled_qty}/{order.quantity}주 @{filled_price}"
         )
+
+        self._update_order_in_db(order)
         return order
 
     async def _notify(self, order: OrderInfo) -> None:
@@ -168,3 +173,48 @@ class OrderManager:
                     cb(order)
             except Exception as e:
                 logger.error(f"주문 콜백 오류: {e}")
+
+    # ── DB Persistence Helpers ─────────────────────────────
+
+    def _save_order_to_db(self, order: OrderInfo) -> None:
+        if not self._enable_db:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LiveOrderRepository
+
+            with get_session() as session:
+                repo = LiveOrderRepository(session)
+                repo.upsert({
+                    "order_id": order.order_id,
+                    "stock_code": order.stock_code,
+                    "strategy_name": order.strategy_name,
+                    "side": order.side.value,
+                    "quantity": order.quantity,
+                    "price": Decimal(str(order.price)),
+                    "status": order.status.value,
+                    "filled_quantity": order.filled_quantity,
+                    "filled_price": Decimal(str(order.filled_price)),
+                    "created_at": order.created_at or datetime.now(),
+                    "updated_at": datetime.now(),
+                })
+        except Exception as e:
+            logger.warning(f"주문 DB 저장 실패 (주문 실행은 계속): {e}")
+
+    def _update_order_in_db(self, order: OrderInfo) -> None:
+        if not self._enable_db:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LiveOrderRepository
+
+            with get_session() as session:
+                repo = LiveOrderRepository(session)
+                repo.update_status(
+                    order_id=order.order_id,
+                    status=order.status.value,
+                    filled_quantity=order.filled_quantity,
+                    filled_price=order.filled_price,
+                )
+        except Exception as e:
+            logger.warning(f"주문 상태 DB 업데이트 실패: {e}")

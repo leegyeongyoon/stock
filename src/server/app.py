@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
         "reason": s.reason,
         "timestamp": s.timestamp.isoformat(),
     }))
+    engine.on_order(lambda data: hub.broadcast_order(data))
     engine.on_position(lambda data: hub.broadcast_position(data))
     engine.on_system(lambda data: hub.broadcast_system(data))
 

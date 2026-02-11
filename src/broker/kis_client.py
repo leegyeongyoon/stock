@@ -105,6 +105,26 @@ class KISClient:
             resp.raise_for_status()
             return resp.json()
 
+    # ── WebSocket Approval Key ──────────────────────────────
+
+    async def get_ws_approval_key(self) -> str:
+        """Get WebSocket approval key from KIS API."""
+        path = "/oauth2/Approval"
+        body = {
+            "grant_type": "client_credentials",
+            "appkey": self.auth.app_key,
+            "secretkey": self.auth.app_secret,
+        }
+        async with self._semaphore:
+            resp = await self._client.post(path, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+        key = data.get("approval_key", "")
+        if not key:
+            raise RuntimeError(f"WS approval key 발급 실패: {data}")
+        logger.info("KIS WebSocket approval key 발급 완료")
+        return key
+
     # ── Quotation APIs ─────────────────────────────────────
 
     async def get_current_price(self, stock_code: str) -> StockPrice:

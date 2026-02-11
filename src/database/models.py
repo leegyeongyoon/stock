@@ -231,3 +231,145 @@ class Signal(Base):
 
     def __repr__(self) -> str:
         return f"<Signal(strategy={self.strategy_name}, code={self.code}, type={self.signal_type})>"
+
+
+# ── Live Trading Models ────────────────────────────────────────
+
+
+class LiveOrder(Base):
+    """Live order history."""
+
+    __tablename__ = "live_orders"
+    __table_args__ = (
+        Index("idx_live_orders_status", "status"),
+        Index("idx_live_orders_stock", "stock_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    stock_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    strategy_name: Mapped[Optional[str]] = mapped_column(String(50))
+    side: Mapped[str] = mapped_column(String(4), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    filled_quantity: Mapped[int] = mapped_column(Integer, default=0)
+    filled_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.now, onupdate=datetime.now
+    )
+
+    # Relationships
+    live_trades: Mapped[list["LiveTrade"]] = relationship(back_populates="order")
+
+    def __repr__(self) -> str:
+        return f"<LiveOrder(order_id={self.order_id}, stock={self.stock_code}, status={self.status})>"
+
+
+class LivePosition(Base):
+    """Live position tracking."""
+
+    __tablename__ = "live_positions"
+    __table_args__ = (
+        UniqueConstraint("stock_code", "strategy_name", name="uq_live_pos_code_strategy"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stock_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    strategy_name: Mapped[Optional[str]] = mapped_column(String(50))
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    avg_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    current_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    unrealized_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    stop_loss_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    take_profit_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    entry_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<LivePosition(stock={self.stock_code}, qty={self.quantity}, strategy={self.strategy_name})>"
+
+
+class LiveTrade(Base):
+    """Completed live trade record."""
+
+    __tablename__ = "live_trades"
+    __table_args__ = (
+        Index("idx_live_trades_stock", "stock_code"),
+        Index("idx_live_trades_date", "traded_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[Optional[str]] = mapped_column(
+        String(50), ForeignKey("live_orders.order_id")
+    )
+    stock_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    strategy_name: Mapped[Optional[str]] = mapped_column(String(50))
+    side: Mapped[str] = mapped_column(String(4), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    traded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Relationships
+    order: Mapped[Optional["LiveOrder"]] = relationship(back_populates="live_trades")
+
+    def __repr__(self) -> str:
+        return f"<LiveTrade(stock={self.stock_code}, side={self.side}, pnl={self.pnl})>"
+
+
+class PortfolioSnapshot(Base):
+    """Daily portfolio snapshot."""
+
+    __tablename__ = "portfolio_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, unique=True, nullable=False)
+    total_equity: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    daily_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    daily_return: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 4))
+    total_trades: Mapped[Optional[int]] = mapped_column(Integer)
+    win_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))
+
+    def __repr__(self) -> str:
+        return f"<PortfolioSnapshot(date={self.date}, equity={self.total_equity})>"
+
+
+class SystemEvent(Base):
+    """System event log with JSONB metadata."""
+
+    __tablename__ = "system_events"
+    __table_args__ = (
+        Index("idx_system_events_type", "event_type"),
+        Index("idx_system_events_date", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), default="INFO")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    meta: Mapped[Optional[dict]] = mapped_column("metadata", JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<SystemEvent(type={self.event_type}, severity={self.severity})>"
+
+
+class StrategyPerformance(Base):
+    """Daily strategy performance summary."""
+
+    __tablename__ = "strategy_performance"
+    __table_args__ = (
+        UniqueConstraint("date", "strategy_name", name="uq_strategy_perf_date_name"),
+        Index("idx_strategy_perf_date", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    strategy_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    trades: Mapped[int] = mapped_column(Integer, default=0)
+    wins: Mapped[int] = mapped_column(Integer, default=0)
+    pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), default=0)
+
+    def __repr__(self) -> str:
+        return f"<StrategyPerformance(date={self.date}, strategy={self.strategy_name}, pnl={self.pnl})>"

@@ -1,7 +1,8 @@
 """Main trading engine - orchestrates all components."""
 
 import asyncio
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from enum import Enum
 
 from loguru import logger
@@ -73,6 +74,7 @@ class TradingEngine:
         # Tasks
         self._main_loop_task: asyncio.Task | None = None
         self._monitor_task: asyncio.Task | None = None
+        self._close_done: bool = False
 
         # Event log (in-memory, 최근 200개)
         self._event_log: list[dict] = []
@@ -154,21 +156,33 @@ class TradingEngine:
             # 4. Order Manager
             self.order_manager = OrderManager(self.client)
 
-            # 5. WebSocket (optional)
+            # 5. WebSocket (optional) with execution callback
             self.ws = KISWebSocket(
                 app_key=settings.kis_app_key,
                 app_secret=settings.kis_app_secret,
                 is_mock=settings.kis_is_mock,
                 on_tick=self.data_manager.on_tick,
+                on_execution=self._on_execution_received,
             )
 
             # 6. Sync balance
             await self._sync_balance()
 
-            # 7. Start main loop
+            # 7. Recover state from DB
+            await self._recover_state_from_db()
+
+            # 8. Start main loop
             self.state = EngineState.RUNNING
             self._main_loop_task = asyncio.create_task(self._main_loop())
             self._monitor_task = asyncio.create_task(self._position_monitor_loop())
+
+            # 9. Subscribe to execution notices (after WS start)
+            try:
+                approval_key = await self.client.get_ws_approval_key()
+                await self.ws.start(approval_key)
+                await self.ws.subscribe_my_executions()
+            except Exception as e:
+                logger.warning(f"WS 체결통보 구독 실패 (시세만 사용): {e}")
 
             await self._emit_system("ENGINE_STARTED", "트레이딩 엔진 시작")
             logger.info("=== 트레이딩 엔진 시작 완료 ===")
@@ -252,8 +266,9 @@ class TradingEngine:
                 now = datetime.now()
                 current_time = now.time()
 
-                # Before market open: wait
+                # Before market open: reset close flag for new day
                 if current_time < MARKET_OPEN:
+                    self._close_done = False
                     await asyncio.sleep(10)
                     continue
 
@@ -283,22 +298,36 @@ class TradingEngine:
                 await asyncio.sleep(5)
 
     async def _scan_and_trade(self) -> None:
-        """Scan for signals and execute trades."""
+        """Scan for signals and execute trades.
+
+        Uses real-time current price API for:
+        - Accurate position sizing (vs stale 5-min bar close)
+        - Better fill price estimation
+        """
         if self.risk_manager.check_circuit_breaker():
             return
 
         held = self.position_manager.get_held_codes()
         codes = self.universe.codes
 
-        # Run all strategies
+        # Update priority codes: held positions + near-entry candidates
+        await self._update_priority_codes(held)
+
+        # Run all strategies (uses 5-min bar data for indicator calculation)
         signals = self.strategy_runner.scan_for_signals(codes, held)
 
         for signal in signals:
-            # Risk check
-            price_data = self.data_manager.get_today_df(signal.stock_code)
-            if price_data.empty:
-                continue
-            current_price = int(price_data.iloc[-1]["close"])
+            # Get real-time current price (fallback to last bar close)
+            real_price = await self.data_manager.fetch_current_price(
+                signal.stock_code
+            )
+            if real_price <= 0:
+                price_data = self.data_manager.get_today_df(signal.stock_code)
+                if price_data.empty:
+                    continue
+                real_price = int(price_data.iloc[-1]["close"])
+
+            current_price = real_price
 
             qty = self.risk_manager.calculate_position_size(
                 current_price, signal.stop_loss
@@ -324,7 +353,7 @@ class TradingEngine:
             )
 
             if order.status == OrderStatus.SUBMITTED:
-                # Assume market order fills immediately at current price
+                # Use real-time price for position entry
                 self.position_manager.open_position(
                     stock_code=signal.stock_code,
                     stock_name=self.universe.get_name(signal.stock_code),
@@ -336,7 +365,11 @@ class TradingEngine:
                     order_id=order.order_id,
                 )
 
+                # Add to priority polling
+                self.data_manager.add_priority_codes({signal.stock_code})
+
                 await self._emit_signal(signal)
+                await self._emit_order(order)
                 await self._emit_position_update()
 
                 # Update WS subscriptions
@@ -344,15 +377,29 @@ class TradingEngine:
                     await self.ws.subscribe_trade(signal.stock_code)
 
     async def _position_monitor_loop(self) -> None:
-        """Monitor positions for SL/TP triggers every 5 seconds."""
+        """Monitor positions for SL/TP triggers every 5 seconds.
+
+        Uses real-time current price API for held positions (most accurate).
+        Falls back to last bar close if API fails.
+        """
         while self.state == EngineState.RUNNING:
             try:
-                # Update prices
-                for code in list(self.position_manager.get_held_codes()):
-                    df = self.data_manager.get_today_df(code)
-                    if not df.empty:
-                        current_price = float(df.iloc[-1]["close"])
-                        self.position_manager.update_price(code, current_price)
+                # Update prices with real-time current price API
+                held_codes = list(self.position_manager.get_held_codes())
+                if held_codes:
+                    live_prices = await self.data_manager.fetch_current_prices(
+                        held_codes
+                    )
+                    # Update from API results
+                    for code, price in live_prices.items():
+                        self.position_manager.update_price(code, float(price))
+                    # Fallback for codes that failed API call
+                    for code in held_codes:
+                        if code not in live_prices:
+                            df = self.data_manager.get_today_df(code)
+                            if not df.empty:
+                                fallback = float(df.iloc[-1]["close"])
+                                self.position_manager.update_price(code, fallback)
 
                 # Check SL/TP
                 to_close = self.risk_manager.check_stop_loss_tp()
@@ -362,7 +409,7 @@ class TradingEngine:
                         continue
 
                     # Submit sell order
-                    await self.order_manager.submit_order(
+                    sell_order = await self.order_manager.submit_order(
                         stock_code=code,
                         side=OrderSide.SELL,
                         quantity=pos.quantity,
@@ -371,14 +418,33 @@ class TradingEngine:
                     )
 
                     # Close position
-                    self.position_manager.close_position(
+                    trade = self.position_manager.close_position(
                         code, pos.current_price, reason
                     )
+                    await self._emit_order(sell_order)
                     await self._emit_position_update()
 
-                    # Unsubscribe WS
+                    # Save to trade store
+                    if trade:
+                        self.trade_store.save_trade({
+                            "stock_code": trade.stock_code,
+                            "stock_name": trade.stock_name,
+                            "strategy_name": trade.strategy_name,
+                            "side": trade.side,
+                            "quantity": trade.quantity,
+                            "entry_price": trade.entry_price,
+                            "exit_price": trade.exit_price,
+                            "entry_time": trade.entry_time.isoformat(),
+                            "exit_time": trade.exit_time.isoformat(),
+                            "pnl": trade.pnl,
+                            "pnl_pct": trade.pnl_pct,
+                            "exit_reason": trade.exit_reason,
+                        })
+
+                    # Unsubscribe WS + remove from priority
                     if self.ws:
                         await self.ws.unsubscribe_trade(code)
+                    self.data_manager.remove_priority_codes({code})
 
                 # Check circuit breaker
                 self.risk_manager.check_circuit_breaker()
@@ -392,7 +458,11 @@ class TradingEngine:
                 await asyncio.sleep(5)
 
     async def _market_close_routine(self) -> None:
-        """End-of-day: cancel orders, force close positions."""
+        """End-of-day: cancel orders, force close positions, save snapshots."""
+        if self._close_done:
+            return
+        self._close_done = True
+
         # Cancel all open orders
         await self.order_manager.cancel_all_open()
 
@@ -405,7 +475,25 @@ class TradingEngine:
                 order_type=OrderType.MARKET,
                 strategy_name=pos.strategy_name,
             )
-            self.position_manager.close_position(code, pos.current_price, "CLOSE")
+            trade = self.position_manager.close_position(code, pos.current_price, "CLOSE")
+            if trade:
+                self.trade_store.save_trade({
+                    "stock_code": trade.stock_code,
+                    "stock_name": trade.stock_name,
+                    "strategy_name": trade.strategy_name,
+                    "side": trade.side,
+                    "quantity": trade.quantity,
+                    "entry_price": trade.entry_price,
+                    "exit_price": trade.exit_price,
+                    "entry_time": trade.entry_time.isoformat(),
+                    "exit_time": trade.exit_time.isoformat(),
+                    "pnl": trade.pnl,
+                    "pnl_pct": trade.pnl_pct,
+                    "exit_reason": trade.exit_reason,
+                })
+
+        # Save daily portfolio snapshot
+        self._save_daily_snapshot()
 
         await self._emit_system("MARKET_CLOSE", "장 마감 처리 완료")
 
@@ -445,6 +533,235 @@ class TradingEngine:
             self.add_log("INIT", f"계좌 동기화 실패: {e}", severity="WARNING")
             logger.warning(f"계좌 동기화 실패: {e}")
 
+    # ── Recovery & Execution ────────────────────────────────
+
+    async def _recover_state_from_db(self) -> None:
+        """Recover positions from DB on server restart, verify against broker."""
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import (
+                LivePositionRepository,
+                SystemEventRepository,
+            )
+
+            with get_session() as session:
+                repo = LivePositionRepository(session)
+                db_positions = repo.get_all()
+
+            if not db_positions:
+                logger.info("DB에 복구할 포지션 없음")
+                return
+
+            # Load broker balance for verification
+            balance = await self.client.get_balance()
+            broker_codes = {h.stock_code for h in balance.holdings}
+
+            recovered = 0
+            for db_pos in db_positions:
+                code = db_pos.stock_code
+                if self.position_manager.has_position(code):
+                    continue  # Already loaded from _sync_balance
+
+                if code in broker_codes:
+                    self.position_manager.open_position(
+                        stock_code=code,
+                        stock_name=self.universe.get_name(code) or code,
+                        strategy_name=db_pos.strategy_name or "복구",
+                        quantity=db_pos.quantity,
+                        price=float(db_pos.avg_price),
+                        order_id="",
+                    )
+                    # Restore cash (open_position deducts it, _sync_balance already set correct cash)
+                    self.position_manager.cash = balance.total_deposit
+                    recovered += 1
+                else:
+                    # DB has position but broker doesn't - log mismatch
+                    logger.warning(
+                        f"불일치 발견: DB에 {code} 포지션 있지만 브로커에 없음 - DB에서 제거"
+                    )
+                    try:
+                        with get_session() as session:
+                            repo = LivePositionRepository(session)
+                            repo.delete_by_code(code)
+                    except Exception:
+                        pass
+
+                    try:
+                        with get_session() as session:
+                            event_repo = SystemEventRepository(session)
+                            event_repo.create({
+                                "event_type": "POSITION_MISMATCH",
+                                "severity": "WARNING",
+                                "message": f"DB 포지션 {code} 브로커에 없음 - 자동 제거",
+                                "meta": {
+                                    "stock_code": code,
+                                    "db_quantity": db_pos.quantity,
+                                },
+                            })
+                    except Exception:
+                        pass
+
+            # Always trust broker cash
+            self.position_manager.cash = balance.total_deposit
+
+            if recovered > 0:
+                self.add_log("RECOVERY", f"DB에서 {recovered}개 포지션 복구")
+                logger.info(f"DB에서 {recovered}개 포지션 복구 완료")
+
+        except Exception as e:
+            logger.warning(f"DB 복구 실패 (브로커 잔고만 사용): {e}")
+
+    async def _update_priority_codes(self, held: set[str]) -> None:
+        """Update priority polling set: held positions + near-entry candidates.
+
+        Called every scan cycle (~30sec) to keep priority list fresh.
+        Near-entry: stocks where ≥3 out of 5 strategy conditions are met.
+        """
+        priority = set(held)
+
+        # Add near-entry candidates from strategy runner
+        try:
+            codes = self.universe.codes[:200]  # Top 200 for performance
+            for strategy in self.strategy_runner.strategies:
+                if not self.strategy_runner.is_enabled(strategy.name):
+                    continue
+                near = self.strategy_runner.scan_near_entry(
+                    strategy.name, codes, held, top_k=10
+                )
+                for item in near:
+                    priority.add(item["stock_code"])
+        except Exception as e:
+            logger.debug(f"근접 종목 스캔 오류: {e}")
+
+        self.data_manager.set_priority_codes(priority)
+
+    def _on_execution_received(self, execution: dict) -> None:
+        """Handle execution notice from KIS WebSocket."""
+        try:
+            order_id = execution.get("order_id", "")
+            stock_code = execution.get("stock_code", "")
+            filled_qty = execution.get("quantity", 0)
+            filled_price = execution.get("price", 0)
+
+            logger.info(
+                f"체결 통보 수신: {stock_code} order={order_id} "
+                f"{filled_qty}주 @{filled_price:,}"
+            )
+
+            # Update order state
+            if self.order_manager and order_id:
+                order = self.order_manager.update_from_execution(
+                    order_id, filled_qty, float(filled_price)
+                )
+                if order:
+                    asyncio.create_task(self._emit_order(order))
+
+            # Update position avg price if buy
+            side = execution.get("side", "")
+            if side in ("매수", "BUY", "02"):
+                pos = self.position_manager.get_position(stock_code)
+                if pos and filled_price > 0:
+                    pos.avg_price = float(filled_price)
+                    pos.current_price = float(filled_price)
+
+            # Log to system events
+            self._log_event_to_db(
+                "EXECUTION",
+                f"체결: {stock_code} {filled_qty}주 @{filled_price:,}",
+                metadata=execution,
+            )
+
+        except Exception as e:
+            logger.error(f"체결통보 처리 오류: {e}")
+
+    def _save_daily_snapshot(self) -> None:
+        """Save daily portfolio snapshot and strategy performance to DB."""
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import (
+                PortfolioSnapshotRepository,
+                StrategyPerformanceRepository,
+                SystemEventRepository,
+            )
+
+            today = date.today()
+            summary = self.position_manager.get_summary()
+            initial = self.position_manager.initial_capital
+
+            daily_return = Decimal("0")
+            if initial > 0:
+                daily_return = Decimal(str(summary["daily_pnl"])) / Decimal(str(initial)) * 100
+
+            with get_session() as session:
+                # Portfolio snapshot
+                snap_repo = PortfolioSnapshotRepository(session)
+                snap_repo.upsert({
+                    "date": today,
+                    "total_equity": Decimal(str(summary["total_equity"])),
+                    "daily_pnl": Decimal(str(summary["daily_pnl"])),
+                    "daily_return": daily_return,
+                    "total_trades": summary["trades_today"],
+                    "win_rate": Decimal(str(summary["win_rate"])),
+                })
+
+                # Strategy performance
+                perf_repo = StrategyPerformanceRepository(session)
+                strategy_trades: dict[str, dict] = {}
+                for t in self.position_manager.trades_today:
+                    sn = t.strategy_name
+                    if sn not in strategy_trades:
+                        strategy_trades[sn] = {"trades": 0, "wins": 0, "pnl": 0.0}
+                    strategy_trades[sn]["trades"] += 1
+                    strategy_trades[sn]["pnl"] += t.pnl
+                    if t.pnl > 0:
+                        strategy_trades[sn]["wins"] += 1
+
+                for sn, stats in strategy_trades.items():
+                    perf_repo.upsert({
+                        "date": today,
+                        "strategy_name": sn,
+                        "trades": stats["trades"],
+                        "wins": stats["wins"],
+                        "pnl": Decimal(str(stats["pnl"])),
+                    })
+
+                # System event
+                event_repo = SystemEventRepository(session)
+                event_repo.create({
+                    "event_type": "DAILY_CLOSE",
+                    "severity": "INFO",
+                    "message": (
+                        f"일일 마감: 총자산 {summary['total_equity']:,.0f}원, "
+                        f"일일PnL {summary['daily_pnl']:,.0f}원, "
+                        f"거래 {summary['trades_today']}건"
+                    ),
+                    "meta": summary,
+                })
+
+            logger.info(f"일일 스냅샷 저장 완료: {today}")
+
+        except Exception as e:
+            logger.warning(f"일일 스냅샷 저장 실패: {e}")
+
+    def _log_event_to_db(
+        self, event_type: str, message: str, severity: str = "INFO", metadata: dict = None
+    ) -> None:
+        """Log event to system_events table (fire-and-forget)."""
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import SystemEventRepository
+
+            with get_session() as session:
+                repo = SystemEventRepository(session)
+                repo.create({
+                    "event_type": event_type,
+                    "severity": severity,
+                    "message": message,
+                    "meta": metadata,
+                })
+        except Exception as e:
+            logger.debug(f"시스템 이벤트 DB 저장 실패: {e}")
+
     # ── Event Emitters ─────────────────────────────────────
 
     def on_signal(self, callback) -> None:
@@ -479,6 +796,27 @@ class TradingEngine:
                     cb(data)
             except Exception as e:
                 logger.error(f"포지션 콜백 오류: {e}")
+
+    async def _emit_order(self, order) -> None:
+        """Broadcast order event to WebSocket clients."""
+        data = {
+            "order_id": order.order_id,
+            "stock_code": order.stock_code,
+            "side": order.side.value if hasattr(order.side, "value") else str(order.side),
+            "quantity": order.quantity,
+            "price": order.price,
+            "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+            "strategy_name": order.strategy_name,
+            "timestamp": datetime.now().isoformat(),
+        }
+        for cb in self._on_order_callbacks:
+            try:
+                if asyncio.iscoroutinefunction(cb):
+                    await cb(data)
+                else:
+                    cb(data)
+            except Exception as e:
+                logger.error(f"주문 콜백 오류: {e}")
 
     async def _emit_system(
         self, event_type: str, message: str, severity: str = "INFO"

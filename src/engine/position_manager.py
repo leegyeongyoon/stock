@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
@@ -77,12 +78,14 @@ class ClosedTrade:
 class PositionManager:
     """Tracks all live positions and completed trades."""
 
-    def __init__(self, initial_capital: float):
+    def __init__(self, initial_capital: float, enable_db: bool = True):
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self._positions: dict[str, LivePosition] = {}
         self._trades: list[ClosedTrade] = []
         self._daily_pnl: float = 0.0
+        self._enable_db = enable_db
+        self._db_update_counter: int = 0
 
     # ── Commission constants ──────────────────────────────
     COMMISSION_RATE = 0.00015   # 0.015%
@@ -170,6 +173,8 @@ class PositionManager:
             f"SL={pos.stop_loss_price:,.0f} TP={pos.take_profit_price:,.0f} "
             f"[{strategy_name}]"
         )
+
+        self._save_position_to_db(pos)
         return pos
 
     def close_position(
@@ -213,6 +218,9 @@ class PositionManager:
             f"PnL={emoji}{pnl:,.0f} ({emoji}{pnl_pct:.2f}%) "
             f"사유={exit_reason} [{pos.strategy_name}]"
         )
+
+        self._delete_position_from_db(code)
+        self._save_trade_to_db(trade)
         return trade
 
     def update_price(self, code: str, price: float) -> None:
@@ -225,6 +233,11 @@ class PositionManager:
         """Batch update prices for all positions."""
         for code, price in prices.items():
             self.update_price(code, price)
+
+        self._db_update_counter += 1
+        if self._db_update_counter >= 1:  # Every call (called every 5s from monitor)
+            self._db_update_counter = 0
+            self._sync_prices_to_db()
 
     def reset_daily(self) -> None:
         """Reset daily counters for a new trading day."""
@@ -241,3 +254,84 @@ class PositionManager:
             "trades_today": len(self._trades),
             "win_rate": self.win_rate,
         }
+
+    # ── DB Persistence Helpers ─────────────────────────────
+
+    def _save_position_to_db(self, pos: LivePosition) -> None:
+        if not self._enable_db:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LivePositionRepository
+
+            with get_session() as session:
+                repo = LivePositionRepository(session)
+                repo.upsert({
+                    "stock_code": pos.stock_code,
+                    "strategy_name": pos.strategy_name,
+                    "quantity": pos.quantity,
+                    "avg_price": Decimal(str(pos.avg_price)),
+                    "current_price": Decimal(str(pos.current_price)),
+                    "unrealized_pnl": Decimal(str(pos.unrealized_pnl)),
+                    "stop_loss_price": Decimal(str(pos.stop_loss_price)),
+                    "take_profit_price": Decimal(str(pos.take_profit_price)),
+                    "entry_time": pos.entry_time,
+                })
+        except Exception as e:
+            logger.warning(f"포지션 DB 저장 실패 (메모리 상태 유지): {e}")
+
+    def _delete_position_from_db(self, code: str) -> None:
+        if not self._enable_db:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LivePositionRepository
+
+            with get_session() as session:
+                repo = LivePositionRepository(session)
+                repo.delete_by_code(code)
+        except Exception as e:
+            logger.warning(f"포지션 DB 삭제 실패: {e}")
+
+    def _save_trade_to_db(self, trade: ClosedTrade) -> None:
+        if not self._enable_db:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LiveTradeRepository
+
+            with get_session() as session:
+                repo = LiveTradeRepository(session)
+                repo.create({
+                    "order_id": trade.order_id if trade.order_id else None,
+                    "stock_code": trade.stock_code,
+                    "strategy_name": trade.strategy_name,
+                    "side": trade.side,
+                    "quantity": trade.quantity,
+                    "price": Decimal(str(trade.exit_price)),
+                    "pnl": Decimal(str(trade.pnl)),
+                    "traded_at": trade.exit_time,
+                })
+        except Exception as e:
+            logger.warning(f"거래 DB 저장 실패: {e}")
+
+    def _sync_prices_to_db(self) -> None:
+        if not self._enable_db or not self._positions:
+            return
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LivePositionRepository
+
+            updates = [
+                {
+                    "stock_code": pos.stock_code,
+                    "current_price": pos.current_price,
+                    "unrealized_pnl": pos.unrealized_pnl,
+                }
+                for pos in self._positions.values()
+            ]
+            with get_session() as session:
+                repo = LivePositionRepository(session)
+                repo.update_prices(updates)
+        except Exception as e:
+            logger.debug(f"포지션 가격 DB 동기화 실패: {e}")
