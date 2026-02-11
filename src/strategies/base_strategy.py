@@ -6,7 +6,10 @@ from datetime import date, datetime
 from typing import Optional
 
 import pandas as pd
-import pandas_ta as ta
+import ta as ta_lib
+from ta.trend import SMAIndicator, EMAIndicator, MACD
+from ta.momentum import RSIIndicator, StochasticOscillator
+from ta.volatility import BollingerBands, AverageTrueRange
 
 from src.config.constants import SignalType, DEFAULT_STOP_LOSS, DEFAULT_TAKE_PROFIT
 
@@ -115,34 +118,27 @@ class BaseStrategy(ABC):
         """Add common technical indicators to DataFrame."""
         df = df.copy()
 
-        # Moving Averages
-        df["ma5"] = ta.sma(df["close"], length=5)
-        df["ma10"] = ta.sma(df["close"], length=10)
-        df["ma20"] = ta.sma(df["close"], length=20)
-        df["ma60"] = ta.sma(df["close"], length=60)
-        df["ma120"] = ta.sma(df["close"], length=120)
+        # Moving Averages (using ta library)
+        df["ma5"] = SMAIndicator(close=df["close"], window=5).sma_indicator()
+        df["ma10"] = SMAIndicator(close=df["close"], window=10).sma_indicator()
+        df["ma20"] = SMAIndicator(close=df["close"], window=20).sma_indicator()
+        df["ma60"] = SMAIndicator(close=df["close"], window=60).sma_indicator()
+        df["ma120"] = SMAIndicator(close=df["close"], window=120).sma_indicator()
 
         # Exponential Moving Averages
-        df["ema5"] = ta.ema(df["close"], length=5)
-        df["ema20"] = ta.ema(df["close"], length=20)
+        df["ema5"] = EMAIndicator(close=df["close"], window=5).ema_indicator()
+        df["ema20"] = EMAIndicator(close=df["close"], window=20).ema_indicator()
 
         # RSI
-        df["rsi"] = ta.rsi(df["close"], length=14)
+        df["rsi"] = RSIIndicator(close=df["close"], window=14).rsi()
 
         # Bollinger Bands
         try:
-            bbands = ta.bbands(df["close"], length=20, std=2)
-            if bbands is not None and not bbands.empty:
-                # Handle different column naming conventions
-                upper_cols = [c for c in bbands.columns if "BBU" in c or "upper" in c.lower()]
-                middle_cols = [c for c in bbands.columns if "BBM" in c or "middle" in c.lower()]
-                lower_cols = [c for c in bbands.columns if "BBL" in c or "lower" in c.lower()]
-
-                if upper_cols and middle_cols and lower_cols:
-                    df["bb_upper"] = bbands[upper_cols[0]]
-                    df["bb_middle"] = bbands[middle_cols[0]]
-                    df["bb_lower"] = bbands[lower_cols[0]]
-                    df["bb_width"] = (df["bb_upper"] - df["bb_lower"]) / df["bb_middle"]
+            bb = BollingerBands(close=df["close"], window=20, window_dev=2)
+            df["bb_upper"] = bb.bollinger_hband()
+            df["bb_middle"] = bb.bollinger_mavg()
+            df["bb_lower"] = bb.bollinger_lband()
+            df["bb_width"] = bb.bollinger_wband()
         except Exception:
             # Fallback: calculate manually
             df["bb_middle"] = df["close"].rolling(window=20).mean()
@@ -152,24 +148,26 @@ class BaseStrategy(ABC):
             df["bb_width"] = (df["bb_upper"] - df["bb_lower"]) / df["bb_middle"]
 
         # MACD
-        macd = ta.macd(df["close"])
-        if macd is not None:
-            df["macd"] = macd["MACD_12_26_9"]
-            df["macd_signal"] = macd["MACDs_12_26_9"]
-            df["macd_hist"] = macd["MACDh_12_26_9"]
+        macd_indicator = MACD(close=df["close"])
+        df["macd"] = macd_indicator.macd()
+        df["macd_signal"] = macd_indicator.macd_signal()
+        df["macd_hist"] = macd_indicator.macd_diff()
 
         # Volume indicators
-        df["volume_ma20"] = ta.sma(df["volume"], length=20)
+        df["volume_ma20"] = SMAIndicator(close=df["volume"], window=20).sma_indicator()
         df["volume_ratio"] = df["volume"] / df["volume_ma20"]
 
         # ATR (Average True Range)
-        df["atr"] = ta.atr(df["high"], df["low"], df["close"], length=14)
+        df["atr"] = AverageTrueRange(
+            high=df["high"], low=df["low"], close=df["close"], window=14
+        ).average_true_range()
 
         # Stochastic
-        stoch = ta.stoch(df["high"], df["low"], df["close"])
-        if stoch is not None:
-            df["stoch_k"] = stoch["STOCHk_14_3_3"]
-            df["stoch_d"] = stoch["STOCHd_14_3_3"]
+        stoch = StochasticOscillator(
+            high=df["high"], low=df["low"], close=df["close"], window=14, smooth_window=3
+        )
+        df["stoch_k"] = stoch.stoch()
+        df["stoch_d"] = stoch.stoch_signal()
 
         # Price change
         df["change"] = df["close"].pct_change()

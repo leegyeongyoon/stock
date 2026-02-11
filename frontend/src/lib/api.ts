@@ -47,6 +47,22 @@ export interface Strategy {
   win_rate: number;
 }
 
+export interface DashboardStrategy {
+  name: string;
+  status: string;
+  signals_today: number;
+  enabled?: boolean;
+  display_name?: string;
+  time_window?: string;
+  backtest_return?: string;
+  backtest_wr?: string;
+  backtest_trades?: number;
+  description?: string;
+  sl?: string;
+  tp?: string;
+  conditions?: string[];
+}
+
 async function fetchApi<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) {
@@ -189,6 +205,7 @@ export async function emergencyStop() {
 export async function getStrategies() {
   return fetchApi<{
     strategies: Array<{
+      name: string;
       strategy_name: string;
       display_name: string;
       backtest_return: string;
@@ -241,4 +258,48 @@ export async function getPnLByDayOfWeek() {
       win_rate: number;
     }>;
   }>("/api/analysis/by-day-of-week");
+}
+
+// Trade History
+export interface TradeHistoryItem {
+  id: number;
+  stock_code: string;
+  stock_name: string;
+  strategy_name: string;
+  side: string;
+  entry_price: number;
+  exit_price: number;
+  quantity: number;
+  pnl: number;
+  pnl_pct: number;
+  entry_time: string;
+  exit_time: string;
+  hold_days: number;
+  exit_reason: string;
+}
+
+export async function getTradeHistory(params?: {
+  strategy?: string;
+  sort_by?: string;
+  order?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params?.strategy) searchParams.set("strategy", params.strategy);
+  if (params?.sort_by) searchParams.set("sort_by", params.sort_by);
+  if (params?.order) searchParams.set("order", params.order);
+  if (params?.limit) searchParams.set("limit", String(params.limit));
+  if (params?.offset) searchParams.set("offset", String(params.offset));
+
+  const query = searchParams.toString();
+  return fetchApi<{
+    trades: TradeHistoryItem[];
+    total: number;
+  }>(`/api/trades/history${query ? `?${query}` : ""}`);
+}
+
+// Strategy toggle
+export async function toggleStrategy(strategyName: string) {
+  return postApi<{ message: string }>(`/api/strategies/${strategyName}/toggle`);
 }
