@@ -2664,6 +2664,553 @@ function ThemeDashboardWidget({
 }
 
 // ============================================================================
+// 실시간 테마 알림 배너
+// ============================================================================
+function ThemeAlertBanner({ themes }: { themes?: ThemeRanking[] }) {
+  const [alerts, setAlerts] = useState<{ theme: string; change: number; type: "surge" | "drop" }[]>([]);
+  const [currentAlert, setCurrentAlert] = useState(0);
+
+  useEffect(() => {
+    if (!themes) return;
+
+    // 급등/급락 테마 필터링 (3% 이상)
+    const newAlerts = themes
+      .filter(t => Math.abs(t.change_rate) >= 3)
+      .map(t => ({
+        theme: t.theme_name,
+        change: t.change_rate,
+        type: t.change_rate > 0 ? "surge" as const : "drop" as const,
+      }))
+      .slice(0, 5);
+
+    setAlerts(newAlerts);
+  }, [themes]);
+
+  useEffect(() => {
+    if (alerts.length === 0) return;
+    const timer = setInterval(() => {
+      setCurrentAlert(prev => (prev + 1) % alerts.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [alerts.length]);
+
+  if (alerts.length === 0) return null;
+
+  const alert = alerts[currentAlert];
+
+  return (
+    <div className={`px-4 py-2 rounded-lg flex items-center justify-between ${
+      alert.type === "surge"
+        ? "bg-gradient-to-r from-emerald-900/50 to-emerald-800/30 border border-emerald-500/30"
+        : "bg-gradient-to-r from-red-900/50 to-red-800/30 border border-red-500/30"
+    }`}>
+      <div className="flex items-center gap-3">
+        <span className="text-lg">{alert.type === "surge" ? "🚀" : "📉"}</span>
+        <div>
+          <span className="text-sm font-medium text-white">{alert.theme}</span>
+          <span className={`ml-2 text-sm font-bold ${
+            alert.type === "surge" ? "text-emerald-400" : "text-red-400"
+          }`}>
+            {alert.change > 0 ? "+" : ""}{alert.change.toFixed(2)}%
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {alerts.map((_, i) => (
+          <div
+            key={i}
+            className={`w-1.5 h-1.5 rounded-full transition-all ${
+              i === currentAlert ? "bg-white" : "bg-white/30"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 스크리너 (고급 필터)
+// ============================================================================
+type ScreenerFilter = {
+  minChangeRate: number;
+  maxChangeRate: number;
+  minScore: number;
+  grades: string[];
+  sentiments: string[];
+  supplySignal: "all" | "buy" | "sell";
+};
+
+function ThemeScreener({
+  themes,
+  onApply
+}: {
+  themes: ThemeRanking[];
+  onApply: (filtered: ThemeRanking[]) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filters, setFilters] = useState<ScreenerFilter>({
+    minChangeRate: -10,
+    maxChangeRate: 30,
+    minScore: 0,
+    grades: ["A", "B", "C", "D", "F"],
+    sentiments: ["positive", "neutral", "negative"],
+    supplySignal: "all",
+  });
+
+  const applyFilters = () => {
+    const filtered = themes.filter(t => {
+      if (t.change_rate < filters.minChangeRate || t.change_rate > filters.maxChangeRate) return false;
+      if (t.total_score < filters.minScore) return false;
+      if (!filters.grades.includes(t.grade)) return false;
+
+      const sentiment = t.sentiment.includes("positive") ? "positive" :
+                       t.sentiment.includes("negative") ? "negative" : "neutral";
+      if (!filters.sentiments.includes(sentiment)) return false;
+
+      if (filters.supplySignal === "buy" && !t.supply_prediction.includes("매수세")) return false;
+      if (filters.supplySignal === "sell" && !t.supply_prediction.includes("매도세")) return false;
+
+      return true;
+    });
+    onApply(filtered);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-colors"
+      >
+        <span>🔬</span>
+        <span>스크리너</span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full right-0 mt-2 w-80 p-4 bg-slate-800 rounded-xl border border-slate-700 shadow-xl z-50">
+          <h4 className="font-bold text-white mb-4">고급 필터</h4>
+
+          {/* 등락률 범위 */}
+          <div className="mb-4">
+            <label className="text-xs text-slate-500 block mb-2">등락률 범위</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={filters.minChangeRate}
+                onChange={e => setFilters({...filters, minChangeRate: Number(e.target.value)})}
+                className="w-20 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+              />
+              <span className="text-slate-500">~</span>
+              <input
+                type="number"
+                value={filters.maxChangeRate}
+                onChange={e => setFilters({...filters, maxChangeRate: Number(e.target.value)})}
+                className="w-20 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+              />
+              <span className="text-slate-500 text-sm">%</span>
+            </div>
+          </div>
+
+          {/* 최소 점수 */}
+          <div className="mb-4">
+            <label className="text-xs text-slate-500 block mb-2">최소 종합점수: {filters.minScore}</label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={filters.minScore}
+              onChange={e => setFilters({...filters, minScore: Number(e.target.value)})}
+              className="w-full"
+            />
+          </div>
+
+          {/* 수급 신호 */}
+          <div className="mb-4">
+            <label className="text-xs text-slate-500 block mb-2">수급 신호</label>
+            <div className="flex gap-2">
+              {[
+                { id: "all", label: "전체" },
+                { id: "buy", label: "매수세" },
+                { id: "sell", label: "매도세" },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setFilters({...filters, supplySignal: opt.id as any})}
+                  className={`px-3 py-1 rounded text-xs ${
+                    filters.supplySignal === opt.id
+                      ? "bg-blue-500 text-white"
+                      : "bg-slate-700 text-slate-400"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 적용 버튼 */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsOpen(false)}
+              className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-sm"
+            >
+              취소
+            </button>
+            <button
+              onClick={applyFilters}
+              className="flex-1 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium"
+            >
+              적용
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// 뉴스 키워드 클라우드
+// ============================================================================
+function NewsKeywordCloud({ newsAnalysis }: { newsAnalysis?: NewsAnalysis[] }) {
+  const keywords = useMemo(() => {
+    if (!newsAnalysis) return [];
+
+    // 키 이슈에서 키워드 추출
+    const wordCount: Record<string, number> = {};
+    newsAnalysis.forEach(news => {
+      news.key_issues.forEach(issue => {
+        // 간단한 키워드 추출 (2글자 이상 단어)
+        const words = issue.split(/[\s,·\-]+/).filter(w => w.length >= 2 && w.length <= 10);
+        words.forEach(word => {
+          wordCount[word] = (wordCount[word] || 0) + 1;
+        });
+      });
+    });
+
+    return Object.entries(wordCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([word, count]) => ({ word, count }));
+  }, [newsAnalysis]);
+
+  if (keywords.length === 0) return null;
+
+  const maxCount = Math.max(...keywords.map(k => k.count));
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>☁️</span>
+        뉴스 키워드
+      </h3>
+      <div className="flex flex-wrap gap-2">
+        {keywords.map((kw, i) => {
+          const size = 0.7 + (kw.count / maxCount) * 0.6;
+          const opacity = 0.5 + (kw.count / maxCount) * 0.5;
+          return (
+            <span
+              key={i}
+              className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded transition-transform hover:scale-110"
+              style={{
+                fontSize: `${size}rem`,
+                opacity,
+              }}
+            >
+              {kw.word}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 포트폴리오 빌더
+// ============================================================================
+function ThemePortfolioBuilder({
+  themes,
+  onThemeClick
+}: {
+  themes: ThemeRanking[];
+  onThemeClick: (code: string, name: string) => void;
+}) {
+  const [portfolio, setPortfolio] = useState<{ code: string; name: string; weight: number }[]>([]);
+  const [totalInvestment, setTotalInvestment] = useState(10000000);
+
+  const addToPortfolio = (theme: ThemeRanking) => {
+    if (portfolio.length >= 5) return;
+    if (portfolio.find(p => p.code === theme.theme_code)) return;
+
+    const newWeight = Math.floor(100 / (portfolio.length + 1));
+    const updated = portfolio.map(p => ({ ...p, weight: newWeight }));
+    updated.push({ code: theme.theme_code, name: theme.theme_name, weight: newWeight });
+    setPortfolio(updated);
+  };
+
+  const removeFromPortfolio = (code: string) => {
+    const filtered = portfolio.filter(p => p.code !== code);
+    if (filtered.length > 0) {
+      const newWeight = Math.floor(100 / filtered.length);
+      setPortfolio(filtered.map(p => ({ ...p, weight: newWeight })));
+    } else {
+      setPortfolio([]);
+    }
+  };
+
+  const updateWeight = (code: string, weight: number) => {
+    setPortfolio(portfolio.map(p =>
+      p.code === code ? { ...p, weight: Math.min(100, Math.max(0, weight)) } : p
+    ));
+  };
+
+  const totalWeight = portfolio.reduce((sum, p) => sum + p.weight, 0);
+
+  const expectedReturn = useMemo(() => {
+    let totalReturn = 0;
+    portfolio.forEach(p => {
+      const theme = themes.find(t => t.theme_code === p.code);
+      if (theme) {
+        totalReturn += (theme.change_rate * p.weight) / 100;
+      }
+    });
+    return totalReturn;
+  }, [portfolio, themes]);
+
+  return (
+    <div className="p-5 bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>📦</span>
+        테마 포트폴리오 빌더
+        <span className="text-xs text-slate-500 ml-auto">{portfolio.length}/5</span>
+      </h3>
+
+      {/* 투자금액 */}
+      <div className="mb-4">
+        <label className="text-xs text-slate-500 block mb-1">총 투자금액</label>
+        <input
+          type="number"
+          value={totalInvestment}
+          onChange={e => setTotalInvestment(Number(e.target.value))}
+          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+          step={1000000}
+        />
+      </div>
+
+      {/* 포트폴리오 목록 */}
+      {portfolio.length > 0 ? (
+        <div className="space-y-2 mb-4">
+          {portfolio.map(p => {
+            const theme = themes.find(t => t.theme_code === p.code);
+            return (
+              <div key={p.code} className="flex items-center gap-2 p-2 bg-slate-800/50 rounded-lg">
+                <span className="text-sm text-white flex-1 truncate">{p.name}</span>
+                <input
+                  type="number"
+                  value={p.weight}
+                  onChange={e => updateWeight(p.code, Number(e.target.value))}
+                  className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm text-center"
+                />
+                <span className="text-xs text-slate-500">%</span>
+                <span className="text-xs text-slate-400 w-20 text-right">
+                  {((totalInvestment * p.weight) / 100).toLocaleString()}원
+                </span>
+                <button
+                  onClick={() => removeFromPortfolio(p.code)}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500 text-center py-4 mb-4">
+          아래 테마를 클릭하여 포트폴리오에 추가하세요
+        </p>
+      )}
+
+      {/* 요약 */}
+      {portfolio.length > 0 && (
+        <div className="p-3 bg-slate-900/50 rounded-lg mb-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">총 비중</span>
+            <span className={totalWeight === 100 ? "text-emerald-400" : "text-amber-400"}>
+              {totalWeight}%
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-slate-400">예상 수익률</span>
+            <span className={expectedReturn > 0 ? "text-emerald-400" : "text-red-400"}>
+              {expectedReturn > 0 ? "+" : ""}{expectedReturn.toFixed(2)}%
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-slate-400">예상 수익금</span>
+            <span className={expectedReturn > 0 ? "text-emerald-400" : "text-red-400"}>
+              {(totalInvestment * expectedReturn / 100).toLocaleString()}원
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 추가 가능한 테마 */}
+      <div className="flex flex-wrap gap-1">
+        {themes.slice(0, 8).map(theme => (
+          <button
+            key={theme.theme_code}
+            onClick={() => addToPortfolio(theme)}
+            disabled={portfolio.length >= 5 || portfolio.find(p => p.code === theme.theme_code) !== undefined}
+            className={`px-2 py-1 rounded text-xs transition-colors ${
+              portfolio.find(p => p.code === theme.theme_code)
+                ? "bg-blue-500/20 text-blue-400"
+                : "bg-slate-700 text-slate-400 hover:bg-slate-600 disabled:opacity-50"
+            }`}
+          >
+            {theme.theme_name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 메모/노트
+// ============================================================================
+function useThemeMemos() {
+  const [memos, setMemos] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const stored = localStorage.getItem("themeMemos");
+    if (stored) {
+      try {
+        setMemos(JSON.parse(stored));
+      } catch {
+        setMemos({});
+      }
+    }
+  }, []);
+
+  const setMemo = (themeCode: string, memo: string) => {
+    const updated = { ...memos, [themeCode]: memo };
+    if (!memo) delete updated[themeCode];
+    setMemos(updated);
+    localStorage.setItem("themeMemos", JSON.stringify(updated));
+  };
+
+  const getMemo = (themeCode: string) => memos[themeCode] || "";
+
+  return { memos, setMemo, getMemo };
+}
+
+// ============================================================================
+// AI 테마 추천 위젯
+// ============================================================================
+function AIThemeRecommendation({
+  themes,
+  newsAnalysis,
+  onThemeClick
+}: {
+  themes: ThemeRanking[];
+  newsAnalysis?: NewsAnalysis[];
+  onThemeClick: (code: string, name: string) => void;
+}) {
+  const recommendations = useMemo(() => {
+    if (!themes || themes.length === 0) return [];
+
+    // AI 추천 로직 (점수 기반)
+    const scored = themes.map(theme => {
+      let score = 0;
+
+      // 등급 점수
+      if (theme.grade === "A") score += 30;
+      else if (theme.grade === "B") score += 20;
+      else if (theme.grade === "C") score += 10;
+
+      // 모멘텀 점수
+      score += theme.momentum_score;
+
+      // 감성 점수
+      if (theme.sentiment.includes("positive")) score += 15;
+      if (theme.sentiment.includes("very_positive")) score += 10;
+
+      // 수급 점수
+      if (theme.supply_prediction.includes("매수세")) score += 20;
+
+      // 뉴스 점수
+      score += theme.news_score * 0.5;
+
+      // 적당한 등락률 보너스 (너무 높지 않은)
+      if (theme.change_rate > 0 && theme.change_rate < 5) score += 10;
+
+      return { theme, score };
+    });
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(s => s.theme);
+  }, [themes]);
+
+  if (recommendations.length === 0) return null;
+
+  return (
+    <div className="p-5 bg-gradient-to-br from-violet-900/30 to-indigo-900/30 rounded-2xl border border-violet-500/20">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>🤖</span>
+        AI 추천 테마
+        <span className="px-2 py-0.5 bg-violet-500/20 text-violet-400 text-xs rounded-full ml-auto">AI</span>
+      </h3>
+
+      <div className="space-y-3">
+        {recommendations.map((theme, i) => (
+          <div
+            key={theme.theme_code}
+            onClick={() => onThemeClick(theme.theme_code, theme.theme_name)}
+            className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors group"
+          >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white ${
+              i === 0 ? "bg-gradient-to-br from-amber-400 to-orange-500" :
+              i === 1 ? "bg-gradient-to-br from-slate-300 to-slate-400" :
+              "bg-gradient-to-br from-amber-600 to-amber-700"
+            }`}>
+              {i + 1}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-white group-hover:text-violet-300 truncate">{theme.theme_name}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  theme.grade === "A" ? "bg-emerald-500/20 text-emerald-400" :
+                  theme.grade === "B" ? "bg-blue-500/20 text-blue-400" :
+                  "bg-amber-500/20 text-amber-400"
+                }`}>{theme.grade}</span>
+                <span className="text-xs text-slate-500">{theme.total_score.toFixed(0)}점</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className={`font-bold ${
+                theme.change_rate > 0 ? "text-emerald-400" : "text-red-400"
+              }`}>
+                {theme.change_rate > 0 ? "+" : ""}{theme.change_rate.toFixed(2)}%
+              </p>
+              <p className="text-xs text-slate-500">{theme.supply_prediction}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs text-slate-500 mt-3 text-center">
+        * 등급, 모멘텀, 감성, 수급을 종합 분석한 AI 추천입니다
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
 // 메인 페이지
 // ============================================================================
 export default function ThemesPage() {
@@ -2681,11 +3228,17 @@ export default function ThemesPage() {
   // 비교 상태
   const [compareThemes, setCompareThemes] = useState<string[]>([]);
 
+  // 스크리너 필터 결과
+  const [screenerThemes, setScreenerThemes] = useState<ThemeRanking[] | null>(null);
+
   // 업데이트 시간
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   // 관심 테마
   const { favorites, toggleFavorite, isFavorite } = useFavoriteThemes();
+
+  // 테마 메모
+  const { memos, setMemo, getMemo } = useThemeMemos();
 
   // API 쿼리들
   const { data: analysis, isLoading, dataUpdatedAt } = useQuery({
@@ -2733,9 +3286,11 @@ export default function ThemesPage() {
 
   // 필터링된 테마 목록
   const filteredThemes = useMemo(() => {
-    if (!themeRanking) return [];
+    // 스크리너 결과가 있으면 우선 사용
+    const baseThemes = screenerThemes || themeRanking;
+    if (!baseThemes) return [];
 
-    return themeRanking.filter(theme => {
+    return baseThemes.filter(theme => {
       // 검색어 필터
       if (searchQuery && !theme.theme_name.toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
@@ -2756,7 +3311,7 @@ export default function ThemesPage() {
       }
       return true;
     });
-  }, [themeRanking, searchQuery, gradeFilter, sentimentFilter]);
+  }, [themeRanking, screenerThemes, searchQuery, gradeFilter, sentimentFilter]);
 
   // 비교 토글
   const toggleCompare = (themeCode: string) => {
@@ -2795,6 +3350,9 @@ export default function ThemesPage() {
           <UpdateIndicator lastUpdate={lastUpdate} isLoading={isLoading} />
         </div>
       )}
+
+      {/* 실시간 테마 알림 배너 */}
+      {themeRanking && <ThemeAlertBanner themes={themeRanking} />}
 
       {/* 탭 네비게이션 */}
       <TabNav active={activeTab} onChange={setActiveTab} />
@@ -2836,6 +3394,22 @@ export default function ThemesPage() {
             newsAnalysis={newsAnalysis}
             sentiment={analysis?.market_sentiment}
           />
+
+          {/* AI 추천 & 키워드 클라우드 & 포트폴리오 빌더 */}
+          {themeRanking && themeRanking.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <AIThemeRecommendation
+                themes={themeRanking}
+                newsAnalysis={newsAnalysis}
+                onThemeClick={(code, name) => setThemeModal({ code, name })}
+              />
+              <NewsKeywordCloud newsAnalysis={newsAnalysis} />
+              <ThemePortfolioBuilder
+                themes={themeRanking}
+                onThemeClick={(code, name) => setThemeModal({ code, name })}
+              />
+            </div>
+          )}
 
           {/* TOP 테마 위젯 & 뉴스 감성 분포 */}
           {themeRanking && themeRanking.length > 0 && (
@@ -3005,14 +3579,40 @@ export default function ThemesPage() {
           </div>
 
           {/* 검색 및 필터 */}
-          <ThemeSearchFilter
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            gradeFilter={gradeFilter}
-            setGradeFilter={setGradeFilter}
-            sentimentFilter={sentimentFilter}
-            setSentimentFilter={setSentimentFilter}
-          />
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <ThemeSearchFilter
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                gradeFilter={gradeFilter}
+                setGradeFilter={setGradeFilter}
+                sentimentFilter={sentimentFilter}
+                setSentimentFilter={setSentimentFilter}
+              />
+            </div>
+            {themeRanking && (
+              <div className="flex items-center gap-2">
+                <ThemeScreener
+                  themes={themeRanking}
+                  onApply={(filtered) => {
+                    // 스크리너 필터 적용 시 검색/필터 초기화 후 결과 표시
+                    setScreenerThemes(filtered);
+                    setSearchQuery("");
+                    setGradeFilter("all");
+                    setSentimentFilter("all");
+                  }}
+                />
+                {screenerThemes && (
+                  <button
+                    onClick={() => setScreenerThemes(null)}
+                    className="px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-xs text-white"
+                  >
+                    필터 초기화
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* 히트맵 & 비교 */}
           {themeRanking && themeRanking.length > 0 && (
