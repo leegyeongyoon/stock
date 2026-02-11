@@ -201,6 +201,10 @@ export async function emergencyStop() {
   return postApi<{ message: string; state: string }>("/api/system/emergency-stop");
 }
 
+// Aliases for Header component
+export const startEngine = startTrading;
+export const stopEngine = stopTrading;
+
 // Analysis
 export async function getStrategies() {
   return fetchApi<{
@@ -332,4 +336,50 @@ export async function getPnLByStrategy() {
 
 export async function getPnLAnalysis() {
   return fetchApi<PnLAnalysisData>("/api/analysis/pnl-analysis");
+}
+
+// Strategy detail
+export interface StrategyMeta {
+  name: string;
+  display_name: string;
+  time_window: string;
+  description: string;
+  sl: string;
+  tp: string;
+  conditions: string[];
+  backtest_return: string;
+  backtest_wr: string;
+  backtest_trades: number;
+}
+
+export interface StrategyTrade {
+  stock_code: string;
+  stock_name: string;
+  side: string;
+  price: number;
+  quantity: number;
+  pnl: number;
+  timestamp: string;
+}
+
+export interface NearEntryStock {
+  stock_code: string;
+  stock_name: string;
+  current_price: number;
+  rsi: number;
+  distance_pct: number;
+  reason: string;
+}
+
+export interface StrategyDetail {
+  meta: StrategyMeta;
+  enabled: boolean;
+  is_active_time: boolean;
+  signals_today: number;
+  trades: StrategyTrade[];
+  near_entry: NearEntryStock[];
+}
+
+export async function getStrategyDetail(name: string) {
+  return fetchApi<StrategyDetail>(`/api/strategies/${name}/detail`);
 }
