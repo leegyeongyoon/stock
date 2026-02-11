@@ -1,0 +1,228 @@
+{
+  "timestamp": "2026-02-11T15:31:18.059805",
+  "model": "gpt-5.2",
+  "max_rounds": 5,
+  "base_combined_return": 69.63,
+  "final_combined_return": 74.63,
+  "improvement": 5.0,
+  "strategies": {
+    "1": {
+      "strategy": 1,
+      "name": "MorningRSINeutralATR",
+      "base_return": 20.04,
+      "base_win_rate": 48.94,
+      "base_trades": 188,
+      "final_return": 20.04,
+      "final_win_rate": 48.94,
+      "final_trades": 188,
+      "improved": false,
+      "rounds": [
+        {
+          "round": 1,
+          "ret": 15.78,
+          "wr": 46.41,
+          "accepted": false,
+          "reason": "수익 미개선(+20.04→+15.78)"
+        },
+        {
+          "round": 2,
+          "ret": 2.85,
+          "wr": 40.45,
+          "accepted": false,
+          "reason": "수익 미개선(+20.04→+2.85)"
+        },
+        {
+          "round": 3,
+          "ret": 15.78,
+          "wr": 46.41,
+          "accepted": false,
+          "reason": "수익 미개선(+20.04→+15.78)"
+        }
+      ]
+    },
+    "2": {
+      "strategy": 2,
+      "name": "LunchRSINeutralATRVolume",
+      "base_return": 9.18,
+      "base_win_rate": 41.84,
+      "base_trades": 196,
+      "final_return": 9.18,
+      "final_win_rate": 41.84,
+      "final_trades": 196,
+      "improved": false,
+      "rounds": [
+        {
+          "round": 1,
+          "ret": 2.67,
+          "wr": 40.4,
+          "accepted": false,
+          "reason": "수익 미개선(+9.18→+2.67)"
+        },
+        {
+          "round": 2,
+          "ret": 1.16,
+          "wr": 40.1,
+          "accepted": false,
+          "reason": "수익 미개선(+9.18→+1.16)"
+        },
+        {
+          "round": 3,
+          "ret": 8.81,
+          "wr": 45.92,
+          "accepted": false,
+          "reason": "OOS 악화(+6.25→+2.56)"
+        }
+      ]
+    },
+    "3": {
+      "strategy": 3,
+      "name": "ModifiedRSINeutralATR",
+      "base_return": 10.84,
+      "base_win_rate": 44.7,
+      "base_trades": 217,
+      "final_return": 10.84,
+      "final_win_rate": 44.7,
+      "final_trades": 217,
+      "improved": false,
+      "rounds": [
+        {
+          "round": 1,
+          "ret": -12.03,
+          "wr": 35.5,
+          "accepted": false,
+          "reason": "수익 미개선(+10.84→-12.03)"
+        },
+        {
+          "round": 2,
+          "ret": 5.73,
+          "wr": 43.27,
+          "accepted": false,
+          "reason": "수익 미개선(+10.84→+5.73)"
+        },
+        {
+          "round": 3,
+          "ret": -4.92,
+          "wr": 43.44,
+          "accepted": false,
+          "reason": "수익 미개선(+10.84→-4.92)"
+        }
+      ]
+    },
+    "4": {
+      "strategy": 4,
+      "name": "AfternoonRSINeutralATR",
+      "base_return": 3.87,
+      "base_win_rate": 42.16,
+      "base_trades": 204,
+      "final_return": 3.87,
+      "final_win_rate": 42.16,
+      "final_trades": 204,
+      "improved": false,
+      "rounds": [
+        {
+          "round": 1,
+          "ret": -2.49,
+          "wr": 37.16,
+          "accepted": false,
+          "reason": "수익 미개선(+3.87→-2.49)"
+        },
+        {
+          "round": 2,
+          "ret": -0.22,
+          "wr": 42.62,
+          "accepted": false,
+          "reason": "수익 미개선(+3.87→-0.22)"
+        },
+        {
+          "round": 3,
+          "ret": -8.01,
+          "wr": 35.91,
+          "accepted": false,
+          "reason": "수익 미개선(+3.87→-8.01)"
+        }
+      ]
+    },
+    "6": {
+      "strategy": 6,
+      "name": "AfternoonRSINeutralATRVolume",
+      "base_return": 11.46,
+      "base_win_rate": 44.57,
+      "base_trades": 175,
+      "final_return": 11.46,
+      "final_win_rate": 44.57,
+      "final_trades": 175,
+      "improved": false,
+      "rounds": [
+        {
+          "round": 1,
+          "ret": 11.73,
+          "wr": 44.25,
+          "accepted": false,
+          "reason": "승률 하락(44.6→44.2)"
+        },
+        {
+          "round": 2,
+          "ret": 0.94,
+          "wr": 41.72,
+          "accepted": false,
+          "reason": "수익 미개선(+11.46→+0.94)"
+        },
+        {
+          "round": 3,
+          "ret": 6.05,
+          "wr": 43.93,
+          "accepted": false,
+          "reason": "수익 미개선(+11.46→+6.05)"
+        }
+      ]
+    },
+    "8": {
+      "strategy": 8,
+      "name": "MorningWideRSINeutralATR",
+      "base_return": 14.24,
+      "base_win_rate": 46.11,
+      "base_trades": 193,
+      "final_return": 19.24,
+      "final_win_rate": 49.0,
+      "final_trades": 200,
+      "improved": true,
+      "rounds": [
+        {
+          "round": 1,
+          "ret": -9.85,
+          "wr": 39.55,
+          "accepted": false,
+          "reason": "수익 미개선(+14.24→-9.85)"
+        },
+        {
+          "round": 2,
+          "ret": 19.24,
+          "wr": 49.0,
+          "accepted": true,
+          "reason": "채택"
+        },
+        {
+          "round": 3,
+          "ret": -9.24,
+          "wr": 39.88,
+          "accepted": false,
+          "reason": "수익 미개선(+19.24→-9.24)"
+        },
+        {
+          "round": 4,
+          "ret": -6.62,
+          "wr": 22.55,
+          "accepted": false,
+          "reason": "수익 미개선(+19.24→-6.62)"
+        },
+        {
+          "round": 5,
+          "ret": -4.47,
+          "wr": 39.67,
+          "accepted": false,
+          "reason": "수익 미개선(+19.24→-4.47)"
+        }
+      ]
+    }
+  }
+}

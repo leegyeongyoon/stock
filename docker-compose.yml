@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -12,7 +12,42 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stock"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+
+  trading-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock_engine
+    ports:
+      - "8088:8088"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: stock_frontend
+    ports:
+      - "3007:3007"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8088
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8088
+    depends_on:
+      - trading-engine
 
 volumes:
   postgres_data:

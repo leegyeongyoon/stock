@@ -7,7 +7,7 @@ class MorningRSINeutralATRStrategy(IntradayStrategy):
     def __init__(self):
         super().__init__(name="morning_rsi_neutral_atr")
         self.min_bars = 15
-        self.atr_threshold = 0.0050  # ATR 임계값을 약간 하향 조정
+        self.atr_threshold = 0.0045  # ATR 임계값 미세 조정
         self.stop_loss_pct = 0.03
         self.take_profit_pct = 0.05
 
@@ -50,6 +50,10 @@ class MorningRSINeutralATRStrategy(IntradayStrategy):
         vwap = np.divide(cum_vwap, cum_volume, out=np.zeros_like(cum_vwap), where=cum_volume != 0)
         ind["vwap"] = vwap
 
+        # 거래량 평균 계산
+        avg_volume = rolling_mean_np(ind["volume"], window=10)
+        ind["avg_volume"] = avg_volume
+
         return ind
 
     def check_entry_fast(self, code, bar_idx, indicators):
@@ -67,6 +71,8 @@ class MorningRSINeutralATRStrategy(IntradayStrategy):
         bullish_candle = indicators["bullish_candle"]
         vwap = indicators["vwap"]
         closes = indicators["close"]
+        volumes = indicators["volume"]
+        avg_volume = indicators["avg_volume"]
 
         # 시간 필터: 9시 30분~11시
         hour = hours[bar_idx]
@@ -97,6 +103,10 @@ class MorningRSINeutralATRStrategy(IntradayStrategy):
 
         # 조건 4: 현재가가 VWAP 위에 있을 때
         if closes[bar_idx] < vwap[bar_idx]:
+            return None
+
+        # 거래량 조건 추가: 현재 거래량이 평균 거래량의 1.2배 이상
+        if volumes[bar_idx] < avg_volume[bar_idx] * 1.2:
             return None
 
         return {

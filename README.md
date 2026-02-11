@@ -10,13 +10,13 @@
 
 | # | 전략 | 시간대 | 수익률 | 승률 | 거래수 |
 |---|------|--------|--------|------|--------|
-| 1 | MorningRSINeutralATR | 9:30-11시 | +16.62% | 47.5% | 183 |
+| 1 | MorningRSINeutralATR | 9:30-11시 | +20.04% | 48.9% | 188 |
 | 2 | LunchRSINeutralATRVolume | 11-13시 | +9.18% | 41.8% | 196 |
 | 3 | ModifiedRSINeutralATR | 9-14시 | +10.84% | 44.7% | 217 |
 | 4 | AfternoonRSINeutralATR | 13-15시 | +3.87% | 42.2% | 204 |
 | 6 | AfternoonRSINeutralATRVolume | 13-14:30시 | +11.46% | 44.6% | 175 |
 | 8 | MorningWideRSINeutralATR | 9:30-12시 | +14.24% | 46.1% | 193 |
-| | **합계** | | **+66.21%** | | **1,168** |
+| | **합계** | | **+69.63%** | | **1,173** |
 
 ### 핵심 전략 원리
 - **RSI 40-60 중립 필터**: 과매수/과매도 회피, 모든 전략의 핵심
@@ -50,6 +50,7 @@ stock/
 ├── scripts/
 │   ├── run_data_driven_backtest.py    # 백테스트 실행
 │   ├── optimize_round3.py             # Round 3 최적화
+│   ├── optimize_round4.py               # Round 4 GPT 최적화
 │   ├── optimize_with_ai_rounds_v2.py  # AI 라운드 최적화
 │   ├── analyze_intraday_patterns.py   # 패턴 마이닝
 │   └── fetch_top_stocks_data.py       # 데이터 수집
@@ -86,6 +87,9 @@ python scripts/run_data_driven_backtest.py
 ```bash
 # 파라미터 그리드서치 + 시간변형 최적화
 python scripts/optimize_round3.py
+
+# Round 4 GPT 최적화 (수익률+승률 동시 개선)
+python scripts/optimize_round4.py
 
 # AI 기반 라운드 최적화
 python scripts/optimize_with_ai_rounds_v2.py

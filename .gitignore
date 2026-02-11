@@ -72,3 +72,16 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# PID files
+.backend.pid
+.frontend.pid
+
+# Trade data (runtime)
+data/trades/
