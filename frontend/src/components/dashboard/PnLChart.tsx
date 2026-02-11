@@ -19,11 +19,14 @@ export default function PnLChart({ trades }: Props) {
   const chartData = trades.reduce<{ time: string; pnl: number }[]>(
     (acc, trade) => {
       const prev = acc.length > 0 ? acc[acc.length - 1].pnl : 0;
+      const tradeTime = trade.exit_time || trade.timestamp;
       acc.push({
-        time: new Date(trade.exit_time).toLocaleTimeString("ko-KR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        time: tradeTime
+          ? new Date(tradeTime).toLocaleTimeString("ko-KR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "-",
         pnl: prev + trade.pnl,
       });
       return acc;

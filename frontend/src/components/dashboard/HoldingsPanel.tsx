@@ -85,9 +85,9 @@ export default function HoldingsPanel({ holdings, summary }: Props) {
                     {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%
                   </td>
                   <td className="px-4 py-2.5 text-center text-xs">
-                    <span className="text-red-400">{h.stop_loss_price.toLocaleString()}</span>
+                    <span className="text-red-400">{h.stop_loss_price?.toLocaleString() || "-"}</span>
                     {" / "}
-                    <span className="text-green-400">{h.take_profit_price.toLocaleString()}</span>
+                    <span className="text-green-400">{h.take_profit_price?.toLocaleString() || "-"}</span>
                   </td>
                 </tr>
               );

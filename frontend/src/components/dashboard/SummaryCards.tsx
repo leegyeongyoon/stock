@@ -42,15 +42,14 @@ export default function SummaryCards({ data }: Props) {
     );
   }
 
-  const p = data.portfolio;
   const portfolio = {
-    daily_pnl: p.daily_pnl ?? 0,
-    total_pnl_pct: p.total_pnl_pct ?? 0,
-    trades_today: p.trades_today ?? 0,
-    positions: p.positions ?? 0,
-    win_rate: p.win_rate ?? 0,
-    total_equity: p.total_equity ?? 0,
-    cash: p.cash ?? 0,
+    daily_pnl: data.portfolio?.daily_pnl ?? data.today_pnl ?? 0,
+    total_pnl_pct: data.portfolio?.total_pnl_pct ?? data.today_pnl_pct ?? 0,
+    trades_today: data.portfolio?.trades_today ?? data.total_trades ?? 0,
+    positions: data.portfolio?.positions ?? 0,
+    win_rate: data.portfolio?.win_rate ?? data.win_rate ?? 0,
+    total_equity: data.portfolio?.total_equity ?? 0,
+    cash: data.portfolio?.cash ?? 0,
   };
   const pnlColor =
     portfolio.daily_pnl >= 0 ? "text-green-400" : "text-red-400";

@@ -11,6 +11,13 @@ export interface Holding {
   market_value: number;
   unrealized_pnl: number;
   unrealized_pnl_pct: number;
+  pnl_amount?: number;
+  pnl_pct?: number;
+  strategy_name?: string;
+  sl_price?: number;
+  tp_price?: number;
+  stop_loss_price?: number;
+  take_profit_price?: number;
 }
 
 export interface HoldingsSummary {
@@ -30,6 +37,7 @@ export interface Trade {
   price: number;
   pnl: number;
   timestamp: string;
+  exit_time?: string;
 }
 
 export interface Strategy {
@@ -81,6 +89,15 @@ export interface DashboardSummary {
     circuit_breaker: boolean;
     daily_loss_pct: number;
   };
+  portfolio?: {
+    daily_pnl: number;
+    total_pnl_pct: number;
+    trades_today: number;
+    positions: number;
+    win_rate: number;
+    total_equity: number;
+    cash: number;
+  };
 }
 
 export interface Position {
@@ -93,6 +110,8 @@ export interface Position {
   unrealized_pnl: number;
   unrealized_pnl_pct: number;
   strategy_name: string;
+  stop_loss_price?: number;
+  take_profit_price?: number;
 }
 
 export interface DayOfWeekPnL {
@@ -125,22 +144,7 @@ async function postApi<T>(path: string, body?: unknown): Promise<T> {
 
 // Dashboard
 export async function getDashboardSummary() {
-  return fetchApi<{
-    state: string;
-    today_pnl: number;
-    today_pnl_pct: number;
-    total_trades: number;
-    win_rate: number;
-    strategies: Array<{
-      name: string;
-      status: string;
-      signals_today: number;
-    }>;
-    risk?: {
-      circuit_breaker: boolean;
-      daily_loss_pct: number;
-    };
-  }>("/api/dashboard/summary");
+  return fetchApi<DashboardSummary>("/api/dashboard/summary");
 }
 
 export async function getPnL() {
@@ -351,6 +355,7 @@ export async function toggleStrategy(strategyName: string) {
 // Performance types
 export interface StrategyPnL {
   name: string;
+  strategy_name: string;
   display_name: string;
   total_pnl: number;
   trades: number;
@@ -359,6 +364,7 @@ export interface StrategyPnL {
   win_rate: number;
   avg_pnl: number;
   backtest_return: string;
+  backtest_wr: string;
 }
 
 export interface PnLAnalysisData {
@@ -366,6 +372,9 @@ export interface PnLAnalysisData {
   winning_factors: string[];
   losing_factors: string[];
   recommendations: string[];
+  recommendation: string;
+  best_strategy: string;
+  worst_strategy: string;
 }
 
 export async function getPnLByStrategy() {
@@ -409,6 +418,20 @@ export interface NearEntryStock {
   rsi: number;
   distance_pct: number;
   reason: string;
+  score: number;
+  max_score: number;
+  conditions_met: string[];
+  conditions_unmet: string[];
+}
+
+export interface StrategyPosition {
+  stock_code: string;
+  stock_name: string;
+  quantity: number;
+  avg_price: number;
+  current_price: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
 }
 
 export interface StrategyDetail {
@@ -418,6 +441,7 @@ export interface StrategyDetail {
   signals_today: number;
   trades: StrategyTrade[];
   near_entry: NearEntryStock[];
+  positions: StrategyPosition[];
 }
 
 export async function getStrategyDetail(name: string) {

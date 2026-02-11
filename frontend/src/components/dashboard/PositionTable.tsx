@@ -67,8 +67,8 @@ export default function PositionTable({ positions }: Props) {
                     {pos.unrealized_pnl_pct.toFixed(2)}%
                   </td>
                   <td className="px-4 py-2 text-right text-xs text-slate-500">
-                    {pos.stop_loss_price.toLocaleString()} /{" "}
-                    {pos.take_profit_price.toLocaleString()}
+                    {pos.stop_loss_price?.toLocaleString() || "-"} /{" "}
+                    {pos.take_profit_price?.toLocaleString() || "-"}
                   </td>
                 </tr>
               );
