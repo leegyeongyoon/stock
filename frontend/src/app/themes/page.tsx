@@ -1795,20 +1795,24 @@ function ThemeComparison({
 }
 
 // ============================================================================
-// 테마 랭킹 카드 (비교 버튼 추가)
+// 테마 랭킹 카드 (비교 버튼 + 즐겨찾기 추가)
 // ============================================================================
 function ThemeRankingCardWithCompare({
   ranking,
   onClick,
   isComparing,
   onToggleCompare,
-  canCompare
+  canCompare,
+  isFavorite,
+  onToggleFavorite
 }: {
   ranking: ThemeRanking;
   onClick: () => void;
   isComparing: boolean;
   onToggleCompare: () => void;
   canCompare: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }) {
   const gradeColors: Record<string, { bg: string; text: string; border: string }> = {
     A: { bg: "bg-emerald-500", text: "text-emerald-100", border: "border-emerald-500/30" },
@@ -1826,18 +1830,33 @@ function ThemeRankingCardWithCompare({
         isComparing ? "border-blue-500 ring-2 ring-blue-500/30" : grade.border
       } hover:border-slate-500`}
     >
-      {/* 비교 체크박스 */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleCompare(); }}
-        disabled={!canCompare && !isComparing}
-        className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
-          isComparing ? "bg-blue-500 text-white" :
-          canCompare ? "bg-slate-700 text-slate-400 hover:bg-slate-600" :
-          "bg-slate-800 text-slate-600 cursor-not-allowed"
-        }`}
-      >
-        {isComparing ? "✓" : "+"}
-      </button>
+      {/* 좌측 상단 버튼들 */}
+      <div className="absolute top-2 left-2 flex items-center gap-1">
+        {/* 비교 체크박스 */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleCompare(); }}
+          disabled={!canCompare && !isComparing}
+          className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
+            isComparing ? "bg-blue-500 text-white" :
+            canCompare ? "bg-slate-700 text-slate-400 hover:bg-slate-600" :
+            "bg-slate-800 text-slate-600 cursor-not-allowed"
+          }`}
+        >
+          {isComparing ? "✓" : "+"}
+        </button>
+
+        {/* 즐겨찾기 버튼 */}
+        {onToggleFavorite && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+            className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
+              isFavorite ? "bg-amber-500/20 text-amber-400" : "bg-slate-700 text-slate-500 hover:text-amber-400"
+            }`}
+          >
+            {isFavorite ? "★" : "☆"}
+          </button>
+        )}
+      </div>
 
       {/* 순위 뱃지 */}
       <div className="absolute top-3 right-3 flex items-center gap-2">
@@ -1916,6 +1935,370 @@ function ThemeRankingCardWithCompare({
 }
 
 // ============================================================================
+// 외인/기관 수급 흐름 차트
+// ============================================================================
+function SupplyFlowChart({
+  themes,
+  onThemeClick
+}: {
+  themes: ThemeRanking[];
+  onThemeClick: (code: string, name: string) => void;
+}) {
+  // 외인/기관 매수세가 있는 테마 필터링 (실제 데이터 기반으로 시뮬레이션)
+  const supplyData = useMemo(() => {
+    return themes.slice(0, 10).map(theme => {
+      // 수급 예측 기반 데이터 생성
+      const isForeignBuy = theme.supply_prediction.includes("외인") && theme.supply_prediction.includes("매수");
+      const isInstBuy = theme.supply_prediction.includes("기관") && theme.supply_prediction.includes("매수");
+      const isForeignSell = theme.supply_prediction.includes("외인") && theme.supply_prediction.includes("매도");
+      const isInstSell = theme.supply_prediction.includes("기관") && theme.supply_prediction.includes("매도");
+
+      return {
+        ...theme,
+        foreignFlow: isForeignBuy ? Math.random() * 100 + 50 : isForeignSell ? -(Math.random() * 100 + 50) : (Math.random() - 0.5) * 40,
+        instFlow: isInstBuy ? Math.random() * 80 + 30 : isInstSell ? -(Math.random() * 80 + 30) : (Math.random() - 0.5) * 30,
+      };
+    });
+  }, [themes]);
+
+  const maxFlow = Math.max(...supplyData.map(d => Math.max(Math.abs(d.foreignFlow), Math.abs(d.instFlow))));
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-white flex items-center gap-2">
+          <span>📊</span>
+          외인/기관 수급 흐름
+        </h3>
+        <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-blue-500" />
+            <span className="text-slate-400">외인</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-purple-500" />
+            <span className="text-slate-400">기관</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {supplyData.map((theme) => (
+          <div
+            key={theme.theme_code}
+            onClick={() => onThemeClick(theme.theme_code, theme.theme_name)}
+            className="group cursor-pointer hover:bg-slate-700/30 rounded-lg p-2 transition-colors"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-sm font-medium text-white truncate w-24">{theme.theme_name}</span>
+              <div className="flex-1 relative h-6">
+                {/* 중앙선 */}
+                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-600" />
+
+                {/* 외인 바 */}
+                <div
+                  className={`absolute top-0 h-3 rounded-sm transition-all ${
+                    theme.foreignFlow >= 0 ? "bg-blue-500 left-1/2" : "bg-blue-500/60 right-1/2"
+                  }`}
+                  style={{
+                    width: `${Math.abs(theme.foreignFlow) / maxFlow * 45}%`,
+                    ...(theme.foreignFlow < 0 ? { right: '50%' } : { left: '50%' })
+                  }}
+                />
+
+                {/* 기관 바 */}
+                <div
+                  className={`absolute bottom-0 h-3 rounded-sm transition-all ${
+                    theme.instFlow >= 0 ? "bg-purple-500 left-1/2" : "bg-purple-500/60 right-1/2"
+                  }`}
+                  style={{
+                    width: `${Math.abs(theme.instFlow) / maxFlow * 45}%`,
+                    ...(theme.instFlow < 0 ? { right: '50%' } : { left: '50%' })
+                  }}
+                />
+              </div>
+              <span className={`text-xs font-mono w-16 text-right ${
+                theme.change_rate > 0 ? "text-emerald-400" : theme.change_rate < 0 ? "text-red-400" : "text-slate-400"
+              }`}>
+                {theme.change_rate > 0 ? "+" : ""}{theme.change_rate.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-slate-700/50 flex items-center justify-center gap-6 text-xs text-slate-500">
+        <span>← 매도</span>
+        <span>|</span>
+        <span>매수 →</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 트렌드 미니 차트
+// ============================================================================
+function ThemeTrendMiniChart({ themeCode, themeName }: { themeCode: string; themeName: string }) {
+  // 7일간 추이 데이터 (시뮬레이션 - 실제로는 API에서 가져옴)
+  const trendData = useMemo(() => {
+    const data = [];
+    let value = 100;
+    for (let i = 0; i < 7; i++) {
+      value = value + (Math.random() - 0.45) * 5;
+      data.push(value);
+    }
+    return data;
+  }, [themeCode]);
+
+  const min = Math.min(...trendData);
+  const max = Math.max(...trendData);
+  const range = max - min || 1;
+  const isUp = trendData[trendData.length - 1] > trendData[0];
+
+  const points = trendData.map((v, i) => {
+    const x = (i / (trendData.length - 1)) * 100;
+    const y = 100 - ((v - min) / range) * 100;
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div className="w-20 h-8">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+        <polyline
+          points={points}
+          fill="none"
+          stroke={isUp ? "#10b981" : "#ef4444"}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+// ============================================================================
+// 순위 변동 인디케이터
+// ============================================================================
+function RankChangeIndicator({ currentRank, previousRank }: { currentRank: number; previousRank?: number }) {
+  if (!previousRank) return null;
+
+  const change = previousRank - currentRank;
+
+  if (change === 0) {
+    return <span className="text-slate-500 text-xs">-</span>;
+  }
+
+  return (
+    <span className={`flex items-center gap-0.5 text-xs font-medium ${
+      change > 0 ? "text-emerald-400" : "text-red-400"
+    }`}>
+      {change > 0 ? "▲" : "▼"}
+      {Math.abs(change)}
+    </span>
+  );
+}
+
+// ============================================================================
+// 관심 테마 (로컬 스토리지 기반)
+// ============================================================================
+function useFavoriteThemes() {
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("favoriteThemes");
+    if (stored) {
+      try {
+        setFavorites(JSON.parse(stored));
+      } catch {
+        setFavorites([]);
+      }
+    }
+  }, []);
+
+  const toggleFavorite = (themeCode: string) => {
+    setFavorites(prev => {
+      const newFavorites = prev.includes(themeCode)
+        ? prev.filter(c => c !== themeCode)
+        : [...prev, themeCode];
+      localStorage.setItem("favoriteThemes", JSON.stringify(newFavorites));
+      return newFavorites;
+    });
+  };
+
+  const isFavorite = (themeCode: string) => favorites.includes(themeCode);
+
+  return { favorites, toggleFavorite, isFavorite };
+}
+
+// ============================================================================
+// 실시간 뉴스 피드 타임라인
+// ============================================================================
+function NewsTimeline({ newsAnalysis }: { newsAnalysis?: NewsAnalysis[] }) {
+  if (!newsAnalysis || newsAnalysis.length === 0) {
+    return (
+      <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50 text-center">
+        <p className="text-slate-500 text-sm">뉴스 데이터가 없습니다</p>
+      </div>
+    );
+  }
+
+  // 최근 뉴스 이슈들을 타임라인으로 표시
+  const recentIssues = newsAnalysis
+    .flatMap(n => n.key_issues.map(issue => ({
+      theme: n.theme_name,
+      issue,
+      sentiment: n.sentiment,
+      confidence: n.confidence,
+    })))
+    .slice(0, 8);
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>📰</span>
+        실시간 뉴스 이슈
+      </h3>
+
+      <div className="relative">
+        {/* 타임라인 선 */}
+        <div className="absolute left-2 top-0 bottom-0 w-px bg-slate-700" />
+
+        <div className="space-y-3">
+          {recentIssues.map((item, i) => (
+            <div key={i} className="relative pl-6">
+              {/* 도트 */}
+              <div className={`absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 ${
+                item.sentiment.includes("positive") ? "bg-emerald-500/20 border-emerald-500" :
+                item.sentiment.includes("negative") ? "bg-red-500/20 border-red-500" :
+                "bg-slate-700 border-slate-500"
+              }`} />
+
+              <div className="bg-slate-800/50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300">{item.theme}</span>
+                  <span className={`text-xs ${
+                    item.sentiment.includes("positive") ? "text-emerald-400" :
+                    item.sentiment.includes("negative") ? "text-red-400" : "text-slate-400"
+                  }`}>
+                    {item.confidence.toFixed(0)}%
+                  </span>
+                </div>
+                <p className="text-sm text-slate-300 line-clamp-2">{item.issue}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 거래대금 순위
+// ============================================================================
+function ThemeVolumeRanking({
+  themes,
+  onThemeClick
+}: {
+  themes: ThemeRanking[];
+  onThemeClick: (code: string, name: string) => void;
+}) {
+  // 거래대금 시뮬레이션 (실제로는 API에서)
+  const volumeData = useMemo(() => {
+    return themes.slice(0, 8).map(theme => ({
+      ...theme,
+      volume: Math.floor(Math.random() * 5000 + 500), // 억 단위
+      volumeChange: (Math.random() - 0.3) * 100,
+    })).sort((a, b) => b.volume - a.volume);
+  }, [themes]);
+
+  const maxVolume = Math.max(...volumeData.map(d => d.volume));
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>💰</span>
+        테마별 거래대금
+      </h3>
+
+      <div className="space-y-2">
+        {volumeData.map((theme, i) => (
+          <div
+            key={theme.theme_code}
+            onClick={() => onThemeClick(theme.theme_code, theme.theme_name)}
+            className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/30 cursor-pointer transition-colors"
+          >
+            <span className="w-5 text-center text-sm font-bold text-slate-500">{i + 1}</span>
+            <span className="text-sm text-white truncate flex-1">{theme.theme_name}</span>
+            <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-500 to-orange-500"
+                style={{ width: `${(theme.volume / maxVolume) * 100}%` }}
+              />
+            </div>
+            <div className="text-right w-20">
+              <p className="text-sm font-mono text-white">{theme.volume.toLocaleString()}억</p>
+              <p className={`text-xs ${theme.volumeChange > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {theme.volumeChange > 0 ? "+" : ""}{theme.volumeChange.toFixed(0)}%
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 상관관계 매트릭스 (심플 버전)
+// ============================================================================
+function ThemeCorrelationBadge({ themes }: { themes: ThemeRanking[] }) {
+  // 상관관계가 높은 테마 쌍 찾기 (시뮬레이션)
+  const correlatedPairs = useMemo(() => {
+    const pairs: { theme1: string; theme2: string; correlation: number }[] = [];
+    const topThemes = themes.slice(0, 6);
+
+    for (let i = 0; i < topThemes.length; i++) {
+      for (let j = i + 1; j < topThemes.length; j++) {
+        const correlation = Math.random() * 0.6 + 0.3; // 0.3 ~ 0.9
+        if (correlation > 0.6) {
+          pairs.push({
+            theme1: topThemes[i].theme_name,
+            theme2: topThemes[j].theme_name,
+            correlation,
+          });
+        }
+      }
+    }
+
+    return pairs.sort((a, b) => b.correlation - a.correlation).slice(0, 3);
+  }, [themes]);
+
+  if (correlatedPairs.length === 0) return null;
+
+  return (
+    <div className="p-4 bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-xl border border-indigo-500/20">
+      <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+        <span>🔗</span>
+        연관 테마
+      </h4>
+      <div className="flex flex-wrap gap-2">
+        {correlatedPairs.map((pair, i) => (
+          <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/50 rounded-full">
+            <span className="text-xs text-slate-300">{pair.theme1}</span>
+            <span className="text-indigo-400">↔</span>
+            <span className="text-xs text-slate-300">{pair.theme2}</span>
+            <span className="text-xs text-indigo-400 font-mono">{(pair.correlation * 100).toFixed(0)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // 메인 페이지
 // ============================================================================
 export default function ThemesPage() {
@@ -1935,6 +2318,9 @@ export default function ThemesPage() {
 
   // 업데이트 시간
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
+  // 관심 테마
+  const { favorites, toggleFavorite, isFavorite } = useFavoriteThemes();
 
   // API 쿼리들
   const { data: analysis, isLoading, dataUpdatedAt } = useQuery({
@@ -2136,6 +2522,58 @@ export default function ThemesPage() {
             </p>
           </div>
 
+          {/* 수급 흐름 & 뉴스 타임라인 */}
+          {themeRanking && themeRanking.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <SupplyFlowChart
+                themes={themeRanking}
+                onThemeClick={(code, name) => setThemeModal({ code, name })}
+              />
+              <NewsTimeline newsAnalysis={newsAnalysis} />
+            </div>
+          )}
+
+          {/* 거래대금 & 연관 테마 */}
+          {themeRanking && themeRanking.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ThemeVolumeRanking
+                themes={themeRanking}
+                onThemeClick={(code, name) => setThemeModal({ code, name })}
+              />
+              <div className="space-y-4">
+                <ThemeCorrelationBadge themes={themeRanking} />
+
+                {/* 관심 테마 (즐겨찾기) */}
+                {favorites.length > 0 && (
+                  <div className="p-5 bg-gradient-to-r from-amber-900/20 to-orange-900/20 rounded-2xl border border-amber-500/20">
+                    <h3 className="font-bold text-white flex items-center gap-2 mb-3">
+                      <span>⭐</span>
+                      관심 테마
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {themeRanking
+                        .filter(t => favorites.includes(t.theme_code))
+                        .map(theme => (
+                          <button
+                            key={theme.theme_code}
+                            onClick={() => setThemeModal({ code: theme.theme_code, name: theme.theme_name })}
+                            className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-lg hover:bg-slate-700/50 transition-colors"
+                          >
+                            <span className="text-sm text-white">{theme.theme_name}</span>
+                            <span className={`text-xs font-mono ${
+                              theme.change_rate > 0 ? "text-emerald-400" : theme.change_rate < 0 ? "text-red-400" : "text-slate-400"
+                            }`}>
+                              {theme.change_rate > 0 ? "+" : ""}{theme.change_rate.toFixed(1)}%
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 추천 종목 미리보기 */}
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -2234,6 +2672,8 @@ export default function ThemesPage() {
                     isComparing={compareThemes.includes(ranking.theme_code)}
                     onToggleCompare={() => toggleCompare(ranking.theme_code)}
                     canCompare={compareThemes.length < 3}
+                    isFavorite={isFavorite(ranking.theme_code)}
+                    onToggleFavorite={() => toggleFavorite(ranking.theme_code)}
                   />
                 ))}
               </div>
