@@ -11,11 +11,12 @@ from src.database.models import Base
 
 
 _engine = None
+_backtest_engine = None
 _SessionLocal = None
 
 
 def get_engine():
-    """Get or create database engine."""
+    """Get or create database engine (RDS - 라이브 서버용)."""
     global _engine
     if _engine is None:
         _engine = create_engine(
@@ -26,6 +27,25 @@ def get_engine():
             echo=False,
         )
     return _engine
+
+
+def get_backtest_engine():
+    """Get or create backtest database engine (로컬 DB - 빠름).
+
+    BACKTEST_DATABASE_URL이 설정되어 있으면 로컬 DB 사용,
+    없으면 기본 DATABASE_URL(RDS) 사용.
+    """
+    global _backtest_engine
+    if _backtest_engine is None:
+        url = settings.backtest_database_url or settings.database_url
+        _backtest_engine = create_engine(
+            url,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+            echo=False,
+        )
+    return _backtest_engine
 
 
 def get_session_factory():

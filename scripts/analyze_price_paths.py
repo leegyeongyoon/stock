@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
-from src.database.connection import get_engine
+from src.database.connection import get_backtest_engine as get_engine
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

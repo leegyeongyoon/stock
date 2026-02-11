@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql://localhost:5432/stock_trading"
+    backtest_database_url: str = ""  # 비어있으면 database_url 사용
 
     # Kiwoom API (legacy)
     kiwoom_account: str = ""

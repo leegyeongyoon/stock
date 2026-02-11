@@ -21,7 +21,7 @@ from sqlalchemy import text
 
 from src.backtest.intraday_engine import IntradayBacktestConfig
 from src.backtest.intraday_engine_v2 import IntradayBacktestEngineV2
-from src.database.connection import get_engine
+from src.database.connection import get_backtest_engine as get_engine
 from src.strategies.intraday import (
     VWAPScalperStrategy,
     OpeningRangeBreakoutStrategy,
