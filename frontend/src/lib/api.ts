@@ -63,6 +63,46 @@ export interface DashboardStrategy {
   conditions?: string[];
 }
 
+export interface SystemEvent {
+  timestamp: string;
+  event_type: string;
+  message: string;
+  severity: string;
+}
+
+export interface DashboardSummary {
+  state: string;
+  today_pnl: number;
+  today_pnl_pct: number;
+  total_trades: number;
+  win_rate: number;
+  strategies: DashboardStrategy[];
+  risk?: {
+    circuit_breaker: boolean;
+    daily_loss_pct: number;
+  };
+}
+
+export interface Position {
+  stock_code: string;
+  stock_name: string;
+  quantity: number;
+  avg_price: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  strategy_name: string;
+}
+
+export interface DayOfWeekPnL {
+  day: string;
+  trades: number;
+  wins: number;
+  total_pnl: number;
+  win_rate: number;
+}
+
 async function fetchApi<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) {
