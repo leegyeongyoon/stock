@@ -1124,14 +1124,19 @@ function ThemeDetailModal({
   themeCode,
   themeName,
   onClose,
-  onStockClick
+  onStockClick,
+  memo,
+  onMemoChange
 }: {
   themeCode: string;
   themeName: string;
   onClose: () => void;
   onStockClick: (code: string, name: string) => void;
+  memo?: string;
+  onMemoChange?: (memo: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"stocks" | "news">("stocks");
+  const [activeTab, setActiveTab] = useState<"stocks" | "news" | "memo">("stocks");
+  const [memoText, setMemoText] = useState(memo || "");
 
   // 테마 상세 정보
   const { data: themeDetail, isLoading: detailLoading } = useQuery({
@@ -1245,10 +1250,11 @@ function ThemeDetailModal({
               {[
                 { id: "stocks", label: "종목 목록", icon: "📊" },
                 { id: "news", label: "테마 뉴스", icon: "📰" },
+                { id: "memo", label: "메모", icon: "📝", badge: memo ? true : false },
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id as "stocks" | "news" | "memo")}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? "bg-blue-500 text-white"
@@ -1257,6 +1263,7 @@ function ThemeDetailModal({
                 >
                   <span>{tab.icon}</span>
                   <span>{tab.label}</span>
+                  {tab.badge && <span className="w-2 h-2 rounded-full bg-amber-400" />}
                 </button>
               ))}
             </div>
@@ -1357,6 +1364,47 @@ function ThemeDetailModal({
                       뉴스 데이터가 없습니다
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === "memo" && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/30">
+                    <label className="block text-sm font-medium text-white mb-2">
+                      테마 메모
+                    </label>
+                    <textarea
+                      value={memoText}
+                      onChange={(e) => setMemoText(e.target.value)}
+                      placeholder="이 테마에 대한 메모를 입력하세요..."
+                      className="w-full h-48 px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
+                    />
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs text-slate-500">
+                        {memoText.length}자 입력됨
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (onMemoChange) {
+                            onMemoChange(memoText);
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/30">
+                    <h4 className="text-sm font-medium text-amber-400 mb-2">💡 메모 활용 팁</h4>
+                    <ul className="text-xs text-slate-400 space-y-1">
+                      <li>• 테마에 대한 투자 아이디어 기록</li>
+                      <li>• 주요 이벤트나 뉴스 메모</li>
+                      <li>• 매수/매도 시점 체크</li>
+                      <li>• 관련 종목 분석 노트</li>
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -3211,6 +3259,337 @@ function AIThemeRecommendation({
 }
 
 // ============================================================================
+// 테마 수급 히트맵 (시간대별)
+// ============================================================================
+function SupplyHeatmap({
+  themes,
+  onThemeClick
+}: {
+  themes: ThemeRanking[];
+  onThemeClick: (code: string, name: string) => void;
+}) {
+  // 시간대별 수급 데이터 시뮬레이션 (실제로는 API에서)
+  const heatmapData = useMemo(() => {
+    const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"];
+    return themes.slice(0, 8).map(theme => ({
+      ...theme,
+      hourlyFlow: hours.map(() => {
+        const isBuy = theme.supply_prediction.includes("매수세");
+        const base = isBuy ? 30 : -30;
+        return base + (Math.random() - 0.5) * 60;
+      }),
+    }));
+  }, [themes]);
+
+  const getHeatColor = (value: number) => {
+    if (value > 40) return "bg-emerald-500";
+    if (value > 20) return "bg-emerald-500/70";
+    if (value > 0) return "bg-emerald-500/40";
+    if (value > -20) return "bg-red-500/40";
+    if (value > -40) return "bg-red-500/70";
+    return "bg-red-500";
+  };
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>🗺️</span>
+        시간대별 수급 히트맵
+      </h3>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="text-left text-xs text-slate-500 pb-2 w-24">테마</th>
+              {["09", "10", "11", "12", "13", "14", "15"].map(h => (
+                <th key={h} className="text-center text-xs text-slate-500 pb-2 w-10">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {heatmapData.map(theme => (
+              <tr
+                key={theme.theme_code}
+                onClick={() => onThemeClick(theme.theme_code, theme.theme_name)}
+                className="cursor-pointer hover:bg-slate-700/20"
+              >
+                <td className="py-1 pr-2">
+                  <span className="text-xs text-white truncate block w-20">{theme.theme_name}</span>
+                </td>
+                {theme.hourlyFlow.map((flow, i) => (
+                  <td key={i} className="p-0.5">
+                    <div
+                      className={`w-8 h-6 rounded ${getHeatColor(flow)} flex items-center justify-center`}
+                      title={`${flow > 0 ? '+' : ''}${flow.toFixed(0)}`}
+                    >
+                      <span className="text-[9px] text-white/80">{flow > 0 ? '+' : ''}{flow.toFixed(0)}</span>
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-500">
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded bg-emerald-500" />
+          <span>강한 매수</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded bg-slate-600" />
+          <span>중립</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded bg-red-500" />
+          <span>강한 매도</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 변동성 지표
+// ============================================================================
+function ThemeVolatilityIndicator({ themes }: { themes: ThemeRanking[] }) {
+  const volatilityData = useMemo(() => {
+    return themes.slice(0, 10).map(theme => {
+      // 변동성 계산 (등락률 기반 시뮬레이션)
+      const volatility = Math.abs(theme.change_rate) * (1 + Math.random() * 0.5);
+      const avgVolatility = 3.5; // 평균 변동성
+      const ratio = volatility / avgVolatility;
+
+      return {
+        ...theme,
+        volatility,
+        ratio,
+        level: ratio > 2 ? "extreme" : ratio > 1.5 ? "high" : ratio > 1 ? "moderate" : "low",
+      };
+    }).sort((a, b) => b.volatility - a.volatility);
+  }, [themes]);
+
+  const getLevelStyle = (level: string) => {
+    switch (level) {
+      case "extreme": return { bg: "bg-red-500", text: "text-red-400", label: "극심" };
+      case "high": return { bg: "bg-orange-500", text: "text-orange-400", label: "높음" };
+      case "moderate": return { bg: "bg-amber-500", text: "text-amber-400", label: "보통" };
+      default: return { bg: "bg-emerald-500", text: "text-emerald-400", label: "낮음" };
+    }
+  };
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>📈</span>
+        테마 변동성 순위
+      </h3>
+
+      <div className="space-y-2">
+        {volatilityData.slice(0, 6).map((theme, i) => {
+          const style = getLevelStyle(theme.level);
+          return (
+            <div key={theme.theme_code} className="flex items-center gap-3">
+              <span className="w-5 text-center text-sm font-bold text-slate-500">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-white truncate">{theme.theme_name}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${style.bg}/20 ${style.text}`}>
+                    {style.label}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${style.bg} transition-all`}
+                    style={{ width: `${Math.min(theme.ratio * 50, 100)}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-mono text-slate-400 w-12 text-right">
+                {theme.volatility.toFixed(1)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-xs text-slate-500 mt-3 text-center">
+        * 당일 등락률 기반 변동성 추정
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 실시간 순위 변동 트래커
+// ============================================================================
+function ThemeRankTracker({ themes }: { themes: ThemeRanking[] }) {
+  // 순위 변동 데이터 시뮬레이션
+  const rankChanges = useMemo(() => {
+    return themes.slice(0, 10).map((theme, i) => {
+      const prevRank = i + 1 + Math.floor((Math.random() - 0.5) * 6);
+      const change = prevRank - (i + 1);
+      return {
+        ...theme,
+        currentRank: i + 1,
+        prevRank,
+        change,
+        type: change > 0 ? "up" : change < 0 ? "down" : "same",
+      };
+    });
+  }, [themes]);
+
+  const movers = rankChanges.filter(t => Math.abs(t.change) >= 2);
+
+  if (movers.length === 0) return null;
+
+  return (
+    <div className="p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-2xl border border-blue-500/20">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>🔄</span>
+        순위 급변동 테마
+      </h3>
+
+      <div className="grid grid-cols-2 gap-3">
+        {movers.slice(0, 4).map(theme => (
+          <div
+            key={theme.theme_code}
+            className={`p-3 rounded-xl border ${
+              theme.type === "up"
+                ? "bg-emerald-500/10 border-emerald-500/30"
+                : "bg-red-500/10 border-red-500/30"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-white truncate flex-1">{theme.theme_name}</span>
+              <span className={`text-lg font-bold ${
+                theme.type === "up" ? "text-emerald-400" : "text-red-400"
+              }`}>
+                {theme.type === "up" ? "▲" : "▼"}{Math.abs(theme.change)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>{theme.prevRank}위</span>
+              <span>→</span>
+              <span className="text-white font-medium">{theme.currentRank}위</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 섹터별 비중 파이 차트
+// ============================================================================
+function ThemeSectorDistribution({ themes }: { themes: ThemeRanking[] }) {
+  // 섹터별 분류 (테마명 기반 시뮬레이션)
+  const sectorData = useMemo(() => {
+    const sectors: Record<string, { count: number; change: number; themes: string[] }> = {
+      "IT/반도체": { count: 0, change: 0, themes: [] },
+      "바이오/제약": { count: 0, change: 0, themes: [] },
+      "2차전지/친환경": { count: 0, change: 0, themes: [] },
+      "금융/보험": { count: 0, change: 0, themes: [] },
+      "기타": { count: 0, change: 0, themes: [] },
+    };
+
+    themes.forEach(theme => {
+      const name = theme.theme_name.toLowerCase();
+      let sector = "기타";
+
+      if (name.includes("반도체") || name.includes("ai") || name.includes("it") || name.includes("소프트웨어")) {
+        sector = "IT/반도체";
+      } else if (name.includes("바이오") || name.includes("제약") || name.includes("헬스")) {
+        sector = "바이오/제약";
+      } else if (name.includes("전지") || name.includes("친환경") || name.includes("태양광") || name.includes("수소")) {
+        sector = "2차전지/친환경";
+      } else if (name.includes("금융") || name.includes("은행") || name.includes("보험") || name.includes("증권")) {
+        sector = "금융/보험";
+      }
+
+      sectors[sector].count++;
+      sectors[sector].change += theme.change_rate;
+      sectors[sector].themes.push(theme.theme_name);
+    });
+
+    return Object.entries(sectors)
+      .filter(([, data]) => data.count > 0)
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        avgChange: data.change / data.count,
+        themes: data.themes,
+        percent: (data.count / themes.length) * 100,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [themes]);
+
+  const colors = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-purple-500", "bg-slate-500"];
+
+  // 파이 차트 계산
+  let cumulativePercent = 0;
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>🥧</span>
+        섹터별 테마 분포
+      </h3>
+
+      <div className="flex items-center gap-6">
+        {/* 파이 차트 */}
+        <div className="relative w-28 h-28">
+          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+            {sectorData.map((sector, i) => {
+              const startPercent = cumulativePercent;
+              cumulativePercent += sector.percent;
+              const strokeColor = colors[i % colors.length].replace("bg-", "");
+
+              return (
+                <circle
+                  key={sector.name}
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke={`var(--color-${strokeColor})`}
+                  strokeWidth="20"
+                  strokeDasharray={`${(sector.percent / 100) * 251.2} 251.2`}
+                  strokeDashoffset={-(startPercent / 100) * 251.2}
+                  className={colors[i % colors.length].replace("bg", "stroke")}
+                />
+              );
+            })}
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-sm font-bold text-white">{themes.length}</span>
+          </div>
+        </div>
+
+        {/* 범례 */}
+        <div className="flex-1 space-y-2">
+          {sectorData.slice(0, 4).map((sector, i) => (
+            <div key={sector.name} className="flex items-center gap-2">
+              <div className={`w-3 h-3 rounded-full ${colors[i % colors.length]}`} />
+              <span className="text-sm text-slate-300 flex-1 truncate">{sector.name}</span>
+              <span className="text-xs text-slate-500">{sector.count}개</span>
+              <span className={`text-xs font-mono ${
+                sector.avgChange > 0 ? "text-emerald-400" : "text-red-400"
+              }`}>
+                {sector.avgChange > 0 ? "+" : ""}{sector.avgChange.toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // 메인 페이지
 // ============================================================================
 export default function ThemesPage() {
@@ -3528,6 +3907,21 @@ export default function ThemesPage() {
             </div>
           )}
 
+          {/* 수급 히트맵 & 변동성 & 순위 변동 */}
+          {themeRanking && themeRanking.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <SupplyHeatmap
+                themes={themeRanking}
+                onThemeClick={(code, name) => setThemeModal({ code, name })}
+              />
+              <ThemeVolatilityIndicator themes={themeRanking} />
+              <div className="space-y-4">
+                <ThemeRankTracker themes={themeRanking} />
+                <ThemeSectorDistribution themes={themeRanking} />
+              </div>
+            </div>
+          )}
+
           {/* 추천 종목 미리보기 */}
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -3714,6 +4108,8 @@ export default function ThemesPage() {
             setThemeModal(null);
             setStockModal({ code, name });
           }}
+          memo={getMemo(themeModal.code)}
+          onMemoChange={(memo) => setMemo(themeModal.code, memo)}
         />
       )}
 
