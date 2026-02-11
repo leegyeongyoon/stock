@@ -25,6 +25,10 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+# Timezone 설정 (한국 시간)
+ENV TZ=Asia/Seoul
+RUN apk add --no-cache tzdata
+
 ENV NODE_ENV=production
 ENV PORT=3000
 
