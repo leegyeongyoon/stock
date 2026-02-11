@@ -303,3 +303,33 @@ export async function getTradeHistory(params?: {
 export async function toggleStrategy(strategyName: string) {
   return postApi<{ message: string }>(`/api/strategies/${strategyName}/toggle`);
 }
+
+// Performance types
+export interface StrategyPnL {
+  name: string;
+  display_name: string;
+  total_pnl: number;
+  trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  avg_pnl: number;
+  backtest_return: string;
+}
+
+export interface PnLAnalysisData {
+  summary: string;
+  winning_factors: string[];
+  losing_factors: string[];
+  recommendations: string[];
+}
+
+export async function getPnLByStrategy() {
+  return fetchApi<{
+    strategies: StrategyPnL[];
+  }>("/api/analysis/by-strategy");
+}
+
+export async function getPnLAnalysis() {
+  return fetchApi<PnLAnalysisData>("/api/analysis/pnl-analysis");
+}
