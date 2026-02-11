@@ -2299,6 +2299,371 @@ function ThemeCorrelationBadge({ themes }: { themes: ThemeRanking[] }) {
 }
 
 // ============================================================================
+// 테마 강도 게이지
+// ============================================================================
+function ThemeStrengthGauge({ theme }: { theme: ThemeRanking }) {
+  const strength = theme.total_score;
+  const angle = (strength / 100) * 180 - 90; // -90 to 90 degrees
+
+  const getStrengthLabel = (score: number) => {
+    if (score >= 80) return { label: "매우 강함", color: "text-emerald-400" };
+    if (score >= 60) return { label: "강함", color: "text-green-400" };
+    if (score >= 40) return { label: "보통", color: "text-amber-400" };
+    if (score >= 20) return { label: "약함", color: "text-orange-400" };
+    return { label: "매우 약함", color: "text-red-400" };
+  };
+
+  const { label, color } = getStrengthLabel(strength);
+
+  return (
+    <div className="relative w-32 h-20">
+      {/* 반원 배경 */}
+      <svg viewBox="0 0 100 60" className="w-full h-full">
+        {/* 배경 호 */}
+        <path
+          d="M 10 50 A 40 40 0 0 1 90 50"
+          fill="none"
+          stroke="#334155"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        {/* 게이지 호 */}
+        <path
+          d="M 10 50 A 40 40 0 0 1 90 50"
+          fill="none"
+          stroke="url(#gaugeGradient)"
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={`${(strength / 100) * 125.6} 125.6`}
+        />
+        {/* 그라데이션 정의 */}
+        <defs>
+          <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#ef4444" />
+            <stop offset="50%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+        </defs>
+        {/* 바늘 */}
+        <line
+          x1="50"
+          y1="50"
+          x2={50 + 30 * Math.cos((angle * Math.PI) / 180)}
+          y2={50 - 30 * Math.sin((angle * Math.PI) / 180)}
+          stroke="white"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        {/* 중앙점 */}
+        <circle cx="50" cy="50" r="4" fill="white" />
+      </svg>
+      {/* 점수 & 라벨 */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
+        <p className="text-lg font-bold text-white">{strength.toFixed(0)}</p>
+        <p className={`text-xs ${color}`}>{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마별 뉴스 감성 분포 (도넛 차트)
+// ============================================================================
+function NewsSentimentDonut({ newsAnalysis }: { newsAnalysis?: NewsAnalysis[] }) {
+  const sentimentData = useMemo(() => {
+    if (!newsAnalysis) return { positive: 0, neutral: 0, negative: 0, total: 0 };
+
+    const positive = newsAnalysis.filter(n => n.sentiment.includes("positive")).length;
+    const negative = newsAnalysis.filter(n => n.sentiment.includes("negative")).length;
+    const neutral = newsAnalysis.length - positive - negative;
+
+    return { positive, neutral, negative, total: newsAnalysis.length };
+  }, [newsAnalysis]);
+
+  if (sentimentData.total === 0) return null;
+
+  const { positive, neutral, negative, total } = sentimentData;
+  const positivePercent = (positive / total) * 100;
+  const neutralPercent = (neutral / total) * 100;
+  const negativePercent = (negative / total) * 100;
+
+  // SVG 도넛 차트 계산
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+
+  const positiveOffset = 0;
+  const neutralOffset = (positivePercent / 100) * circumference;
+  const negativeOffset = ((positivePercent + neutralPercent) / 100) * circumference;
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>📊</span>
+        뉴스 감성 분포
+      </h3>
+
+      <div className="flex items-center gap-6">
+        {/* 도넛 차트 */}
+        <div className="relative w-24 h-24">
+          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+            {/* 긍정 */}
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="12"
+              strokeDasharray={`${(positivePercent / 100) * circumference} ${circumference}`}
+              strokeDashoffset={-positiveOffset}
+            />
+            {/* 중립 */}
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke="#64748b"
+              strokeWidth="12"
+              strokeDasharray={`${(neutralPercent / 100) * circumference} ${circumference}`}
+              strokeDashoffset={-neutralOffset}
+            />
+            {/* 부정 */}
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="12"
+              strokeDasharray={`${(negativePercent / 100) * circumference} ${circumference}`}
+              strokeDashoffset={-negativeOffset}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-lg font-bold text-white">{total}</span>
+          </div>
+        </div>
+
+        {/* 범례 */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-emerald-500" />
+            <span className="text-sm text-slate-300">긍정</span>
+            <span className="text-sm font-mono text-emerald-400">{positive} ({positivePercent.toFixed(0)}%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-slate-500" />
+            <span className="text-sm text-slate-300">중립</span>
+            <span className="text-sm font-mono text-slate-400">{neutral} ({neutralPercent.toFixed(0)}%)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <span className="text-sm text-slate-300">부정</span>
+            <span className="text-sm font-mono text-red-400">{negative} ({negativePercent.toFixed(0)}%)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 시간대별 테마 활성도
+// ============================================================================
+function ThemeActivityTimeline() {
+  // 시간대별 활성도 시뮬레이션
+  const activityData = useMemo(() => {
+    const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"];
+    return hours.map(hour => ({
+      hour,
+      activity: Math.floor(Math.random() * 100),
+      themes: Math.floor(Math.random() * 20 + 5),
+    }));
+  }, []);
+
+  const maxActivity = Math.max(...activityData.map(d => d.activity));
+
+  return (
+    <div className="p-5 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+      <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+        <span>⏰</span>
+        시간대별 테마 활성도
+      </h3>
+
+      <div className="flex items-end gap-2 h-24">
+        {activityData.map((data, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+            <div
+              className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t transition-all hover:from-blue-500 hover:to-blue-300"
+              style={{ height: `${(data.activity / maxActivity) * 100}%` }}
+              title={`${data.themes}개 테마 활성`}
+            />
+            <span className="text-xs text-slate-500">{data.hour.split(":")[0]}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+        <span>장 시작</span>
+        <span>현재 시각</span>
+        <span>장 마감</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 투자 시뮬레이터 (간단 버전)
+// ============================================================================
+function ThemeSimulator({ theme }: { theme: ThemeRanking }) {
+  const [investment, setInvestment] = useState(1000000);
+
+  const simulatedReturn = useMemo(() => {
+    // 테마 점수 기반 예상 수익률 시뮬레이션
+    const baseReturn = theme.change_rate;
+    const momentumBonus = (theme.momentum_score / 30) * 2;
+    const sentimentBonus = theme.sentiment.includes("positive") ? 1 : theme.sentiment.includes("negative") ? -1 : 0;
+
+    const expectedDaily = baseReturn + momentumBonus + sentimentBonus;
+    const expectedWeekly = expectedDaily * 5 * 0.8; // 5일, 변동성 감소
+    const expectedMonthly = expectedDaily * 22 * 0.6; // 22일, 변동성 더 감소
+
+    return {
+      daily: expectedDaily,
+      weekly: expectedWeekly,
+      monthly: expectedMonthly,
+    };
+  }, [theme]);
+
+  return (
+    <div className="p-4 bg-gradient-to-br from-emerald-900/20 to-blue-900/20 rounded-xl border border-emerald-500/20">
+      <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+        <span>🎯</span>
+        투자 시뮬레이터
+      </h4>
+
+      <div className="mb-3">
+        <label className="text-xs text-slate-500 block mb-1">투자금액</label>
+        <input
+          type="number"
+          value={investment}
+          onChange={(e) => setInvestment(Number(e.target.value))}
+          className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
+          step={100000}
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="text-center p-2 bg-slate-800/50 rounded-lg">
+          <p className="text-xs text-slate-500">1일 예상</p>
+          <p className={`text-sm font-bold ${simulatedReturn.daily > 0 ? "text-emerald-400" : "text-red-400"}`}>
+            {(investment * simulatedReturn.daily / 100).toLocaleString()}원
+          </p>
+        </div>
+        <div className="text-center p-2 bg-slate-800/50 rounded-lg">
+          <p className="text-xs text-slate-500">1주 예상</p>
+          <p className={`text-sm font-bold ${simulatedReturn.weekly > 0 ? "text-emerald-400" : "text-red-400"}`}>
+            {(investment * simulatedReturn.weekly / 100).toLocaleString()}원
+          </p>
+        </div>
+        <div className="text-center p-2 bg-slate-800/50 rounded-lg">
+          <p className="text-xs text-slate-500">1달 예상</p>
+          <p className={`text-sm font-bold ${simulatedReturn.monthly > 0 ? "text-emerald-400" : "text-red-400"}`}>
+            {(investment * simulatedReturn.monthly / 100).toLocaleString()}원
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-500 mt-2 text-center">* 시뮬레이션 결과이며 실제 수익을 보장하지 않습니다</p>
+    </div>
+  );
+}
+
+// ============================================================================
+// 테마 종합 대시보드 위젯
+// ============================================================================
+function ThemeDashboardWidget({
+  themes,
+  newsAnalysis,
+  onThemeClick
+}: {
+  themes: ThemeRanking[];
+  newsAnalysis?: NewsAnalysis[];
+  onThemeClick: (code: string, name: string) => void;
+}) {
+  const topTheme = themes[0];
+
+  if (!topTheme) return null;
+
+  return (
+    <div className="p-5 bg-gradient-to-br from-purple-900/30 via-blue-900/20 to-slate-900/30 rounded-2xl border border-purple-500/20">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-white flex items-center gap-2">
+          <span>🏆</span>
+          오늘의 TOP 테마
+        </h3>
+        <span className={`px-2 py-1 rounded text-xs font-bold ${
+          topTheme.grade === "A" ? "bg-emerald-500 text-white" :
+          topTheme.grade === "B" ? "bg-blue-500 text-white" :
+          "bg-amber-500 text-white"
+        }`}>{topTheme.grade}등급</span>
+      </div>
+
+      <div
+        onClick={() => onThemeClick(topTheme.theme_code, topTheme.theme_name)}
+        className="cursor-pointer group"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-2xl font-bold text-white group-hover:text-blue-400 transition-colors">
+            {topTheme.theme_name}
+          </h4>
+          <span className={`text-2xl font-bold font-mono ${
+            topTheme.change_rate > 0 ? "text-emerald-400" : "text-red-400"
+          }`}>
+            {topTheme.change_rate > 0 ? "+" : ""}{topTheme.change_rate.toFixed(2)}%
+          </span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3 mb-3">
+          <div className="text-center">
+            <p className="text-xs text-slate-500">종합점수</p>
+            <p className="text-lg font-bold text-white">{topTheme.total_score.toFixed(0)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-slate-500">모멘텀</p>
+            <p className="text-lg font-bold text-emerald-400">{topTheme.momentum_score.toFixed(0)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-slate-500">뉴스</p>
+            <p className="text-lg font-bold text-blue-400">{topTheme.news_score.toFixed(0)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-slate-500">수급</p>
+            <p className="text-lg font-bold text-amber-400">{topTheme.supply_score.toFixed(0)}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 rounded text-xs ${
+            topTheme.sentiment.includes("positive") ? "bg-emerald-500/20 text-emerald-400" :
+            topTheme.sentiment.includes("negative") ? "bg-red-500/20 text-red-400" :
+            "bg-slate-700 text-slate-400"
+          }`}>
+            {topTheme.sentiment.includes("positive") ? "긍정적" : topTheme.sentiment.includes("negative") ? "부정적" : "중립"}
+          </span>
+          <span className={`px-2 py-1 rounded text-xs ${
+            topTheme.supply_prediction.includes("매수세") ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700 text-slate-400"
+          }`}>
+            {topTheme.supply_prediction}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // 메인 페이지
 // ============================================================================
 export default function ThemesPage() {
@@ -2342,11 +2707,11 @@ export default function ThemesPage() {
     refetchInterval: 300000,
   });
 
-  // 테마 종합 순위
+  // 테마 종합 순위 (overview와 themes 탭 모두에서 사용)
   const { data: themeRanking, isLoading: rankingLoading } = useQuery({
     queryKey: ["theme-ranking"],
     queryFn: () => getThemeRanking(30),
-    enabled: activeTab === "themes",
+    enabled: activeTab === "themes" || activeTab === "overview",
     refetchInterval: 300000,
   });
 
@@ -2471,6 +2836,21 @@ export default function ThemesPage() {
             newsAnalysis={newsAnalysis}
             sentiment={analysis?.market_sentiment}
           />
+
+          {/* TOP 테마 위젯 & 뉴스 감성 분포 */}
+          {themeRanking && themeRanking.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ThemeDashboardWidget
+                themes={themeRanking}
+                newsAnalysis={newsAnalysis}
+                onThemeClick={(code, name) => setThemeModal({ code, name })}
+              />
+              <div className="grid grid-cols-1 gap-4">
+                <NewsSentimentDonut newsAnalysis={newsAnalysis} />
+                <ThemeActivityTimeline />
+              </div>
+            </div>
+          )}
 
           {/* 핫 테마 */}
           <div>
