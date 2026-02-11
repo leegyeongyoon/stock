@@ -115,7 +115,8 @@ class BarAggregator:
 
         df = pd.DataFrame(records)
         df["datetime"] = pd.to_datetime(df["datetime"])
-        df = df.sort_values("datetime").reset_index(drop=True)
+        df = df.sort_values("datetime")
+        df = df.set_index("datetime")
         return df
 
     def clear_day(self) -> None:
