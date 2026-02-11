@@ -1,5 +1,6 @@
 """FastAPI application - main entry point for the web server."""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -10,6 +11,16 @@ from src.engine.trading_engine import TradingEngine
 from src.server.dependencies import get_engine, set_engine
 from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes
 from src.server.websocket_hub import hub
+
+
+async def _init_balance_background(engine):
+    """백그라운드에서 초기 잔고 조회 (서버 시작 차단 방지)"""
+    try:
+        await asyncio.wait_for(engine.init_balance(), timeout=30.0)
+    except asyncio.TimeoutError:
+        logger.warning("초기 잔고 조회 타임아웃 (30초) - 기본값 사용")
+    except Exception as e:
+        logger.warning(f"초기 잔고 조회 실패: {e}")
 
 
 @asynccontextmanager
@@ -32,8 +43,8 @@ async def lifespan(app: FastAPI):
     # Start periodic PnL push
     hub.start_pnl_push(lambda: engine.position_manager.get_summary() if engine.position_manager else {})
 
-    # 서버 시작 시 KIS 잔고 조회 (IDLE 상태에서도 실제 자산 표시)
-    await engine.init_balance()
+    # 서버 시작 시 KIS 잔고 조회 - 백그라운드에서 실행 (서버 시작 차단 방지)
+    asyncio.create_task(_init_balance_background(engine))
 
     logger.info("FastAPI 서버 시작")
     yield
@@ -56,6 +67,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3007",
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:5173",
         "https://stock.honbabnono.com",
     ],
