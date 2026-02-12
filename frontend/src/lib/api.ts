@@ -867,3 +867,138 @@ export interface ThemeRanking {
 export async function getThemeRanking(topN: number = 30) {
   return fetchApi<ThemeRanking[]>(`/api/themes/ranking?top_n=${topN}`);
 }
+
+// ===== StockKing (홍인기 전략) =====
+
+export interface LeadingSector {
+  sector_name: string;
+  total_trading_value: number;
+  stock_count: number;
+  avg_change_rate: number;
+  leader_stock: string;
+  leader_code: string;
+  is_primary: boolean;
+}
+
+export interface LeaderStock {
+  code: string;
+  name: string;
+  sector: string;
+  trading_value: number;
+  change_rate: number;
+  daily_position: string;
+  ki_score: number;
+  grade: string;
+  is_leader: boolean;
+  patterns: string[];
+}
+
+export interface TradingSignal {
+  stock_code: string;
+  stock_name: string;
+  signal_type: string;
+  method: string;
+  confidence: number;
+  reason: string;
+  timestamp: string;
+}
+
+export interface PatternAlert {
+  stock_code: string;
+  stock_name: string;
+  pattern_name: string;
+  severity: string;
+  description: string;
+  confidence: number;
+  detected_at: string;
+}
+
+export interface DPlusCandidate {
+  code: string;
+  name: string;
+  d_day: string;
+  prev_change_rate: number;
+  prev_trading_value: number;
+  daily_position: string;
+  reason: string;
+}
+
+export interface MarketCondition {
+  phase: string;
+  phase_label: string;
+  condition: string;
+  is_caution_day: boolean;
+  caution_reason: string;
+  sector_concentration: number;
+  timestamp: string;
+}
+
+export interface TradingRule {
+  id: number;
+  category: string;
+  rule: string;
+  is_checked: boolean;
+  importance: string;
+}
+
+export interface StockkingDashboard {
+  timestamp: string;
+  market_condition: MarketCondition;
+  leading_sectors: LeadingSector[];
+  leader_stocks: LeaderStock[];
+  signals: TradingSignal[];
+  pattern_alerts: PatternAlert[];
+  d_plus_candidates: DPlusCandidate[];
+  rules_status: {
+    total: number;
+    checked: number;
+    critical_rules: TradingRule[];
+  };
+}
+
+export interface DailyPositionResult {
+  code: string;
+  name: string;
+  position_type: string;
+  resistance_levels: number[];
+  support_levels: number[];
+  ki_score: number;
+  description: string;
+}
+
+// StockKing API
+export async function getStockkingDashboard() {
+  return fetchApi<StockkingDashboard>("/api/stockking/dashboard");
+}
+
+export async function getLeadingSectors() {
+  return fetchApi<LeadingSector[]>("/api/stockking/leading-sector");
+}
+
+export async function getLeaderStocks() {
+  return fetchApi<LeaderStock[]>("/api/stockking/leader-stocks");
+}
+
+export async function getStockkingSignals() {
+  return fetchApi<TradingSignal[]>("/api/stockking/signals");
+}
+
+export async function getStockkingPatterns(code: string) {
+  return fetchApi<PatternAlert[]>(`/api/stockking/patterns/${code}`);
+}
+
+export async function getDPlusCandidates() {
+  return fetchApi<DPlusCandidate[]>("/api/stockking/d-plus");
+}
+
+export async function getDailyPosition(code: string) {
+  return fetchApi<DailyPositionResult>(`/api/stockking/daily-position/${code}`);
+}
+
+export async function getStockkingMarketCondition() {
+  return fetchApi<MarketCondition>("/api/stockking/market-condition");
+}
+
+export async function getStockkingRules() {
+  return fetchApi<TradingRule[]>("/api/stockking/rules");
+}

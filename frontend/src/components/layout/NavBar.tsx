@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Flame, Brain, TrendingUp, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Flame, Brain, TrendingUp, ClipboardList, Crown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const TABS: { href: string; label: string; Icon: LucideIcon }[] = [
@@ -11,6 +11,7 @@ const TABS: { href: string; label: string; Icon: LucideIcon }[] = [
   { href: "/strategies", label: "전략 모니터링", Icon: Brain },
   { href: "/performance", label: "수익률 현황", Icon: TrendingUp },
   { href: "/trades", label: "거래내역", Icon: ClipboardList },
+  { href: "/stockking", label: "홍인기 전략", Icon: Crown },
 ];
 
 export default function NavBar() {
