@@ -1,4 +1,4 @@
-"""홍인기 매매법 대시보드 API 라우트"""
+"""홍인기 매매법 대시보드 + 자동매매 트레이딩 API 라우트"""
 
 import time as time_module
 from datetime import datetime
@@ -15,6 +15,7 @@ from src.strategies.hongstyle.hongstyle_engine import (
 )
 from src.strategies.hongstyle.daily_chart_analyzer import DailyChartAnalyzer
 from src.analysis.stock_analyzer import get_stock_analyzer
+from src.server.dependencies import get_engine
 
 
 router = APIRouter(prefix="/api/stockking", tags=["stockking"])
@@ -448,4 +449,250 @@ async def get_market_condition():
             caution_reason=str(e),
             sector_concentration=0,
             timestamp=datetime.now().isoformat(),
+        )
+
+
+# ── 홍인기 트레이딩 API ───────────────────────────────────
+
+
+class HongTradingStatusResponse(BaseModel):
+    enabled: bool
+    state: str
+    consecutive_losses: int
+    is_caution_day: bool
+    trades_today: int
+    positions_count: int
+    day_pnl: float
+    last_scan_time: Optional[str] = None
+
+
+class HongPositionResponse(BaseModel):
+    stock_code: str
+    stock_name: str
+    strategy_name: str
+    quantity: int
+    avg_price: int
+    current_price: int
+    unrealized_pnl: int
+    unrealized_pnl_pct: float
+    partial_sold: bool
+    original_quantity: int
+    entry_time: str
+
+
+class HongTradeResponse(BaseModel):
+    type: Optional[str] = None
+    stock_code: str
+    stock_name: str
+    strategy_name: str
+    quantity: int
+    price: Optional[int] = None
+    entry_price: Optional[int] = None
+    exit_price: Optional[int] = None
+    pnl: Optional[float] = None
+    pnl_pct: Optional[float] = None
+    exit_reason: Optional[str] = None
+    confidence: Optional[float] = None
+    ki_score: Optional[float] = None
+    time: str
+
+
+class HongEventResponse(BaseModel):
+    event_type: str
+    message: str
+    severity: str
+    timestamp: str
+
+
+class TradingActionResponse(BaseModel):
+    success: bool
+    message: str
+
+
+@router.post("/trading/start", response_model=TradingActionResponse)
+async def start_hong_trading():
+    """홍인기 자동매매 시작."""
+    try:
+        engine = get_engine()
+        result = await engine.start_hongstyle()
+        return TradingActionResponse(**result)
+    except Exception as e:
+        logger.error(f"홍인기 자동매매 시작 실패: {e}")
+        return TradingActionResponse(success=False, message=str(e))
+
+
+@router.post("/trading/stop", response_model=TradingActionResponse)
+async def stop_hong_trading():
+    """홍인기 자동매매 중지."""
+    try:
+        engine = get_engine()
+        result = await engine.stop_hongstyle()
+        return TradingActionResponse(**result)
+    except Exception as e:
+        logger.error(f"홍인기 자동매매 중지 실패: {e}")
+        return TradingActionResponse(success=False, message=str(e))
+
+
+@router.get("/trading/status", response_model=HongTradingStatusResponse)
+async def get_hong_trading_status():
+    """홍인기 자동매매 상태."""
+    try:
+        engine = get_engine()
+        status = engine.get_hongstyle_status()
+        return HongTradingStatusResponse(**status)
+    except Exception as e:
+        logger.error(f"홍인기 상태 조회 실패: {e}")
+        return HongTradingStatusResponse(
+            enabled=False, state="ERROR", consecutive_losses=0,
+            is_caution_day=False, trades_today=0, positions_count=0,
+            day_pnl=0, last_scan_time=None,
+        )
+
+
+@router.get("/trading/positions", response_model=list[HongPositionResponse])
+async def get_hong_positions():
+    """홍인기 보유종목."""
+    try:
+        engine = get_engine()
+        if not engine.hongstyle_runner:
+            return []
+        return engine.hongstyle_runner.get_hong_positions()
+    except Exception as e:
+        logger.error(f"홍인기 포지션 조회 실패: {e}")
+        return []
+
+
+@router.get("/trading/trades")
+async def get_hong_trades():
+    """홍인기 오늘 거래 내역."""
+    try:
+        engine = get_engine()
+        if not engine.hongstyle_runner:
+            return []
+        return engine.hongstyle_runner.get_hong_trades()
+    except Exception as e:
+        logger.error(f"홍인기 거래 내역 조회 실패: {e}")
+        return []
+
+
+@router.get("/trading/events", response_model=list[HongEventResponse])
+async def get_hong_events():
+    """홍인기 최근 이벤트 로그."""
+    try:
+        engine = get_engine()
+        if not engine.hongstyle_runner:
+            return []
+        return engine.hongstyle_runner.get_events(limit=50)
+    except Exception as e:
+        logger.error(f"홍인기 이벤트 조회 실패: {e}")
+        return []
+
+
+class ConvictionItemResponse(BaseModel):
+    rank: int
+    stock_code: str
+    stock_name: str
+    score: float
+    confidence: float
+    ki_score: float
+    is_leader: bool
+    leader_bonus: float
+    daily_position: str
+    position_desc: str
+    method: str
+    action: str
+    reason: str
+    alloc_pct: float
+    alloc_label: str
+    is_buyable: bool
+    is_top: bool
+    patterns: list[str] = []
+
+
+class ConvictionRankingResponse(BaseModel):
+    ranking: list[ConvictionItemResponse]
+    top_n: int
+    max_positions: int
+    high_alloc_pct: float
+    low_alloc_pct: float
+    algorithm: dict
+
+
+@router.get("/trading/conviction", response_model=ConvictionRankingResponse)
+async def get_conviction_ranking():
+    """확신도 순위 + 알고리즘 설명."""
+    try:
+        engine = get_engine()
+
+        algorithm = {
+            "name": "홍인기 집중투자 알고리즘",
+            "steps": [
+                {
+                    "step": 1,
+                    "title": "핫테마 탐지",
+                    "desc": "ThemeAnalyzer로 오늘 상승률 상위 핫테마 5개 선정",
+                },
+                {
+                    "step": 2,
+                    "title": "종목 분석",
+                    "desc": "테마별 탑3 종목의 일봉 자리(신고가/전고점돌파/바닥반등) + 끼 점수(0~100) 분석",
+                },
+                {
+                    "step": 3,
+                    "title": "시그널 생성",
+                    "desc": "SignalGenerator가 자리+끼+대장주 여부로 매수 시그널 생성 (돌파매매/눌림매매)",
+                },
+                {
+                    "step": 4,
+                    "title": "확신도 점수",
+                    "desc": "score = confidence × (끼/100) × 대장주보너스(1.3x). 높을수록 좋은 종목",
+                },
+                {
+                    "step": 5,
+                    "title": "TOP 5 선정",
+                    "desc": "확신도 상위 5개만 진입 대상. 나머지는 아무리 좋아도 매수하지 않음",
+                },
+                {
+                    "step": 6,
+                    "title": "집중 배분",
+                    "desc": "확신(conf≥0.7 & 끼≥50) → 자산의 50%, 보통 → 30%. 최대 2종목",
+                },
+            ],
+            "exit_rules": [
+                {"rule": "손절", "desc": "-4% 도달 시 전량 매도 (원칙 준수)"},
+                {"rule": "1차 익절", "desc": "+5% 도달 시 70% 분할매도"},
+                {"rule": "본전컷", "desc": "분할매도 후 수익률 +0.5% 이하로 복귀 시 잔여 전량 매도"},
+                {"rule": "패턴 감지", "desc": "가분수/끼소진/거래량고점 등 위험 패턴 시 즉시 전량 매도"},
+                {"rule": "2연속 손절", "desc": "2번 연속 손절 시 당일 매매 종료"},
+            ],
+            "score_formula": "confidence × (끼점수 / 100) × 대장주보너스(1.3x)",
+        }
+
+        if not engine.hongstyle_runner:
+            return ConvictionRankingResponse(
+                ranking=[],
+                top_n=5,
+                max_positions=2,
+                high_alloc_pct=0.50,
+                low_alloc_pct=0.30,
+                algorithm=algorithm,
+            )
+
+        runner = engine.hongstyle_runner
+        ranking_data = runner.get_conviction_ranking()
+
+        return ConvictionRankingResponse(
+            ranking=[ConvictionItemResponse(**item) for item in ranking_data],
+            top_n=runner.TOP_N_ONLY,
+            max_positions=runner.MAX_POSITIONS,
+            high_alloc_pct=runner.HIGH_CONFIDENCE_PCT,
+            low_alloc_pct=runner.LOW_CONFIDENCE_PCT,
+            algorithm=algorithm,
+        )
+    except Exception as e:
+        logger.error(f"확신도 순위 조회 실패: {e}")
+        return ConvictionRankingResponse(
+            ranking=[], top_n=5, max_positions=2,
+            high_alloc_pct=0.50, low_alloc_pct=0.30,
+            algorithm={},
         )

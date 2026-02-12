@@ -1002,3 +1002,135 @@ export async function getStockkingMarketCondition() {
 export async function getStockkingRules() {
   return fetchApi<TradingRule[]>("/api/stockking/rules");
 }
+
+// ===== StockKing Trading (홍인기 자동매매) =====
+
+export interface HongTradingStatus {
+  enabled: boolean;
+  state: string; // "IDLE" | "SCANNING" | "TRADING" | "STOPPED" | "DAY_STOPPED"
+  consecutive_losses: number;
+  is_caution_day: boolean;
+  trades_today: number;
+  positions_count: number;
+  day_pnl: number;
+  last_scan_time: string | null;
+}
+
+export interface HongPosition {
+  stock_code: string;
+  stock_name: string;
+  strategy_name: string;
+  quantity: number;
+  avg_price: number;
+  current_price: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  partial_sold: boolean;
+  original_quantity: number;
+  entry_time: string;
+}
+
+export interface HongTrade {
+  type: string; // "buy" | "sell" | "partial_sell"
+  stock_code: string;
+  stock_name: string;
+  strategy_name: string;
+  quantity: number;
+  price?: number;
+  entry_price?: number;
+  exit_price?: number;
+  pnl?: number;
+  pnl_pct?: number;
+  exit_reason?: string;
+  confidence?: number;
+  ki_score?: number;
+  time: string;
+}
+
+export interface HongEvent {
+  event_type: string;
+  message: string;
+  severity: string;
+  timestamp: string;
+}
+
+export async function getStockkingTradingStatus() {
+  return fetchApi<HongTradingStatus>("/api/stockking/trading/status");
+}
+
+export async function startStockkingTrading() {
+  return postApi<{ success: boolean; message: string }>(
+    "/api/stockking/trading/start"
+  );
+}
+
+export async function stopStockkingTrading() {
+  return postApi<{ success: boolean; message: string }>(
+    "/api/stockking/trading/stop"
+  );
+}
+
+export async function getStockkingPositions() {
+  return fetchApi<HongPosition[]>("/api/stockking/trading/positions");
+}
+
+export async function getStockkingTrades() {
+  return fetchApi<HongTrade[]>("/api/stockking/trading/trades");
+}
+
+export async function getStockkingEvents() {
+  return fetchApi<HongEvent[]>("/api/stockking/trading/events");
+}
+
+// 확신도 순위
+export interface ConvictionItem {
+  rank: number;
+  stock_code: string;
+  stock_name: string;
+  score: number;
+  confidence: number;
+  ki_score: number;
+  is_leader: boolean;
+  leader_bonus: number;
+  daily_position: string;
+  position_desc: string;
+  method: string;
+  action: string;
+  reason: string;
+  alloc_pct: number;
+  alloc_label: string;
+  is_buyable: boolean;
+  is_top: boolean;
+  patterns: string[];
+}
+
+export interface AlgorithmStep {
+  step: number;
+  title: string;
+  desc: string;
+}
+
+export interface ExitRule {
+  rule: string;
+  desc: string;
+}
+
+export interface AlgorithmInfo {
+  name: string;
+  steps: AlgorithmStep[];
+  exit_rules: ExitRule[];
+  score_formula: string;
+}
+
+export interface ConvictionRanking {
+  ranking: ConvictionItem[];
+  top_n: number;
+  max_positions: number;
+  high_alloc_pct: number;
+  low_alloc_pct: number;
+  algorithm: AlgorithmInfo;
+}
+
+export async function getStockkingConviction() {
+  return fetchApi<ConvictionRanking>("/api/stockking/trading/conviction");
+}

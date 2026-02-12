@@ -46,6 +46,7 @@ class WebSocketHub:
         self.signals = ConnectionManager()
         self.pnl = ConnectionManager()
         self.system = ConnectionManager()
+        self.stockking = ConnectionManager()
         self._pnl_task: asyncio.Task | None = None
 
     async def broadcast_position(self, data: dict) -> None:
@@ -62,6 +63,9 @@ class WebSocketHub:
 
     async def broadcast_system(self, data: dict) -> None:
         await self.system.broadcast(data)
+
+    async def broadcast_stockking(self, data: dict) -> None:
+        await self.stockking.broadcast(data)
 
     def start_pnl_push(self, get_pnl_fn) -> None:
         """Start periodic PnL broadcasting."""

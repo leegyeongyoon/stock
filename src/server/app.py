@@ -227,3 +227,13 @@ async def ws_system(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         hub.system.disconnect(websocket)
+
+
+@app.websocket("/ws/stockking")
+async def ws_stockking(websocket: WebSocket):
+    await hub.stockking.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        hub.stockking.disconnect(websocket)
