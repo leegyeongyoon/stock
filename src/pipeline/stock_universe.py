@@ -34,9 +34,12 @@ class StockUniverse:
         with get_session() as session:
             repo = StockRepository(session)
             stocks = repo.get_all()
+            # 세션 닫히기 전에 속성을 모두 읽어서 plain data로 변환
+            codes = [s.code for s in stocks if s.is_active]
+            names = {s.code: s.name for s in stocks}
 
-        self._codes = [s.code for s in stocks if s.is_active]
-        self._names = {s.code: s.name for s in stocks}
+        self._codes = codes
+        self._names = names
         self._active_codes = set(self._codes)
 
         logger.info(f"종목 유니버스 로드: {len(self._codes)}종목")

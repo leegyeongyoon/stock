@@ -547,8 +547,18 @@ class TradingEngine:
             with get_session() as session:
                 repo = LivePositionRepository(session)
                 db_positions = repo.get_all()
+                # 세션 닫히기 전에 plain data로 변환 (detached instance 방지)
+                positions_data = [
+                    {
+                        "stock_code": p.stock_code,
+                        "strategy_name": p.strategy_name,
+                        "quantity": p.quantity,
+                        "avg_price": float(p.avg_price) if p.avg_price else 0.0,
+                    }
+                    for p in db_positions
+                ]
 
-            if not db_positions:
+            if not positions_data:
                 logger.info("DB에 복구할 포지션 없음")
                 return
 
@@ -557,8 +567,8 @@ class TradingEngine:
             broker_codes = {h.stock_code for h in balance.holdings}
 
             recovered = 0
-            for db_pos in db_positions:
-                code = db_pos.stock_code
+            for pos_data in positions_data:
+                code = pos_data["stock_code"]
                 if self.position_manager.has_position(code):
                     continue  # Already loaded from _sync_balance
 
@@ -566,9 +576,9 @@ class TradingEngine:
                     self.position_manager.open_position(
                         stock_code=code,
                         stock_name=self.universe.get_name(code) or code,
-                        strategy_name=db_pos.strategy_name or "복구",
-                        quantity=db_pos.quantity,
-                        price=float(db_pos.avg_price),
+                        strategy_name=pos_data["strategy_name"] or "복구",
+                        quantity=pos_data["quantity"],
+                        price=pos_data["avg_price"],
                         order_id="",
                     )
                     # Restore cash (open_position deducts it, _sync_balance already set correct cash)
@@ -595,7 +605,7 @@ class TradingEngine:
                                 "message": f"DB 포지션 {code} 브로커에 없음 - 자동 제거",
                                 "meta": {
                                     "stock_code": code,
-                                    "db_quantity": db_pos.quantity,
+                                    "db_quantity": pos_data["quantity"],
                                 },
                             })
                     except Exception:
