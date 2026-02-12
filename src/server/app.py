@@ -11,7 +11,7 @@ from loguru import logger
 from src.engine.trading_engine import TradingEngine
 from src.engine.scheduler import TradingScheduler
 from src.server.dependencies import get_engine, get_scheduler, set_engine, set_scheduler
-from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes, stockking
+from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes, stockking, gylee
 from src.server.websocket_hub import hub
 from src.analysis.theme_analyzer import get_theme_analyzer
 
@@ -176,6 +176,7 @@ app.include_router(analysis.router)
 app.include_router(system.router)
 app.include_router(themes.router)
 app.include_router(stockking.router)
+app.include_router(gylee.router)
 
 
 # WebSocket endpoints

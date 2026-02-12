@@ -1195,3 +1195,89 @@ export async function getStockkingStrategyGuide() {
     "/api/stockking/trading/strategy-guide"
   );
 }
+
+// ===== Gylee (경윤 수정 매매법) =====
+
+export interface GyleeFilterInfo {
+  name: string;
+  description: string;
+  condition: string;
+  enabled: boolean;
+  pass_count: number;
+  pass_rate: number;
+}
+
+export interface GyleeFilterStats {
+  data_date: string | null;
+  total_stocks: number;
+  market_cap_pass: number;
+  inst_filter_pass: number;
+  both_pass: number;
+  market_cap_rate: number;
+  inst_filter_rate: number;
+  both_rate: number;
+  last_refresh: string | null;
+  refresh_count: number;
+  scan_stats: {
+    total_candidates: number;
+    cap_filtered: number;
+    inst_filtered: number;
+    pullback_filtered: number;
+    passed: number;
+  };
+  filters: GyleeFilterInfo[];
+}
+
+export interface GyleeTradingStatus {
+  enabled: boolean;
+  state: string;
+  consecutive_losses: number;
+  is_caution_day: boolean;
+  trades_today: number;
+  positions_count: number;
+  day_pnl: number;
+  last_scan_time: string | null;
+  filter_loaded: boolean;
+  filter_date: string | null;
+}
+
+// Gylee API functions
+export async function getGyleeTradingStatus() {
+  return fetchApi<GyleeTradingStatus>("/api/gylee/trading/status");
+}
+
+export async function startGyleeTrading() {
+  return postApi<{ success: boolean; message: string }>("/api/gylee/trading/start");
+}
+
+export async function stopGyleeTrading() {
+  return postApi<{ success: boolean; message: string }>("/api/gylee/trading/stop");
+}
+
+export async function getGyleePositions() {
+  return fetchApi<HongPosition[]>("/api/gylee/trading/positions");
+}
+
+export async function getGyleeTrades() {
+  return fetchApi<HongTrade[]>("/api/gylee/trading/trades");
+}
+
+export async function getGyleeEvents() {
+  return fetchApi<HongEvent[]>("/api/gylee/trading/events");
+}
+
+export async function getGyleeConviction() {
+  return fetchApi<ConvictionRanking>("/api/gylee/trading/conviction");
+}
+
+export async function getGyleeFilters() {
+  return fetchApi<GyleeFilterStats>("/api/gylee/trading/filters");
+}
+
+export async function getGyleePerformance() {
+  return fetchApi<HongPerformanceData>("/api/gylee/trading/performance");
+}
+
+export async function getGyleeStrategyGuide() {
+  return fetchApi<HongStrategySection[]>("/api/gylee/strategy-guide");
+}

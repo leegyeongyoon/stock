@@ -18,6 +18,7 @@ from src.engine.risk_manager import RiskManager
 from src.engine.strategy_runner import STRATEGY_META, StrategyRunner
 from src.engine.trade_store import TradeStore
 from src.engine.hongstyle_runner import HongStyleRunner
+from src.engine.gylee_runner import GyleeRunner
 from src.pipeline.data_manager import DataManager
 from src.pipeline.stock_universe import StockUniverse
 
@@ -75,6 +76,9 @@ class TradingEngine:
 
         # 홍인기 전략 Runner (자동시작은 안 함 - API로 토글)
         self.hongstyle_runner = HongStyleRunner(self)
+
+        # 경윤 수정 매매법 Runner
+        self.gylee_runner = GyleeRunner(self)
 
         # Tasks
         self._main_loop_task: asyncio.Task | None = None
@@ -190,6 +194,10 @@ class TradingEngine:
         # Stop 홍인기 Runner
         if self.hongstyle_runner and self.hongstyle_runner.enabled:
             await self.hongstyle_runner.stop()
+
+        # Stop 경윤 Runner
+        if self.gylee_runner and self.gylee_runner.enabled:
+            await self.gylee_runner.stop()
 
         # Cancel open orders
         if self.order_manager:
@@ -390,6 +398,8 @@ class TradingEngine:
                         continue
                     if pos.strategy_name.startswith("홍스타일"):
                         continue  # HongStyleRunner 자체 모니터에서 처리
+                    if pos.strategy_name.startswith("경윤_"):
+                        continue  # GyleeRunner 자체 모니터에서 처리
 
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
@@ -451,6 +461,12 @@ class TradingEngine:
             await self.hongstyle_runner.stop()
         if self.hongstyle_runner:
             self.hongstyle_runner.reset_daily()
+
+        # 경윤 Runner 중지 + 일일 리셋
+        if self.gylee_runner and self.gylee_runner.enabled:
+            await self.gylee_runner.stop()
+        if self.gylee_runner:
+            self.gylee_runner.reset_daily()
 
         # Cancel all open orders
         await self.order_manager.cancel_all_open()
@@ -1075,3 +1091,23 @@ class TradingEngine:
         if not self.hongstyle_runner:
             return {"enabled": False, "state": "IDLE"}
         return self.hongstyle_runner.get_status()
+
+    # ── 경윤 수정 매매법 제어 ─────────────────────────────
+
+    async def start_gylee(self) -> dict:
+        """경윤 자동매매 시작."""
+        if not self.gylee_runner:
+            return {"success": False, "message": "경윤 Runner 미초기화"}
+        return await self.gylee_runner.start()
+
+    async def stop_gylee(self) -> dict:
+        """경윤 자동매매 중지."""
+        if not self.gylee_runner:
+            return {"success": False, "message": "경윤 Runner 미초기화"}
+        return await self.gylee_runner.stop()
+
+    def get_gylee_status(self) -> dict:
+        """경윤 자동매매 상태."""
+        if not self.gylee_runner:
+            return {"enabled": False, "state": "IDLE"}
+        return self.gylee_runner.get_status()
