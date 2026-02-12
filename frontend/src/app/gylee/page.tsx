@@ -11,6 +11,7 @@ import {
 import FilterStatusPanel from "@/components/gylee/FilterStatusPanel";
 import GyleeTradingPanel from "@/components/gylee/GyleeTradingPanel";
 import BacktestComparison from "@/components/gylee/BacktestComparison";
+import StrategyConditions from "@/components/gylee/StrategyConditions";
 
 import { Filter, TrendingUp, BarChart3 } from "lucide-react";
 
@@ -175,7 +176,7 @@ export default function GyleePage() {
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-white">경윤 수정 매매법</h1>
-            <p className="text-xs text-slate-500">홍인기 전략 + 3대 필터 (시총/기관/눌림)</p>
+            <p className="text-xs text-slate-500">홍인기 전략(돌파/눌림) + 3대 필터 + 시간대 필터</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -196,8 +197,11 @@ export default function GyleePage() {
         <GyleeTradeHistory />
       </div>
 
-      {/* 3. 백테스트 결과 */}
-      <BacktestComparison />
+      {/* 3. 전략 조건 총정리 + 백테스트 결과 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <StrategyConditions />
+        <BacktestComparison />
+      </div>
 
       {/* 4. 성과 대시보드 */}
       <div>

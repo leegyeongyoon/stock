@@ -5,7 +5,7 @@ HongStyleRunner를 상속하여 3개 필터(시총/기관/눌림)를 _scan_loop�
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, time
 from typing import Optional
 
 from loguru import logger
@@ -76,8 +76,6 @@ class GyleeRunner(HongStyleRunner):
 
     async def _scan_loop(self):
         """3분 간격 스캔 루프 - 부모 로직 + 3개 필터."""
-        from datetime import time
-
         while self.enabled:
             try:
                 if self._day_stopped:
@@ -165,13 +163,19 @@ class GyleeRunner(HongStyleRunner):
                             inst_filtered += 1
                             continue
 
-                    # 필터 3: 눌림매매일 때만 눌림 필터
+                    # 필터 3: 눌림매매 → 95%깊이 + 오전거래량 체크
                     if item["method"] == "눌림매매":
-                        # 눌림 깊이와 거래량은 시그널에서 추정
-                        # 기본적으로 눌림매매 자체를 매우 엄격히 필터링
-                        # (백테스트: 53건→5건으로 줄여서 전체 수익 +12% 개선)
-                        pullback_filtered += 1
-                        continue
+                        if not self._check_pullback_quality(code):
+                            pullback_filtered += 1
+                            continue
+
+                    # 필터 4: 시간대 필터 (돌파=오전, 눌림=오후)
+                    if item["method"] == "돌파매매":
+                        if not (self.MORNING_START <= current_time <= self.MORNING_END):
+                            continue
+                    elif item["method"] == "눌림매매":
+                        if not (self.AFTERNOON_START <= current_time <= self.AFTERNOON_END):
+                            continue
 
                     buyable.append(item)
 
@@ -316,6 +320,63 @@ class GyleeRunner(HongStyleRunner):
             logger.error(f"경윤 매수 실행 실패 ({stock_code}): {e}")
             self._add_event("ERROR", f"매수 실패: {stock_name} - {e}", severity="WARNING")
 
+    def _check_pullback_quality(self, code: str) -> bool:
+        """눌림매매 품질 체크: 95%깊이(5%+하락) + 오전거래량 >= 중간값.
+
+        BarAggregator에서 당일 5분봉을 가져와
+        오전고점 대비 눌림 깊이와 오전 거래량을 계산한다.
+        데이터 부족 시 보수적으로 차단(False).
+        """
+        try:
+            bars = self.engine.bar_aggregator.get_bars(code)
+            if len(bars) < 10:
+                return False
+
+            # 오전 봉 (09:00~12:00)
+            morning_bars = [
+                b for b in bars if b.timestamp.hour < 12
+            ]
+            if len(morning_bars) < 5:
+                return False
+
+            morning_high = max(b.high for b in morning_bars)
+            morning_vol = sum(b.volume for b in morning_bars)
+
+            # 현재 가격 (마지막 봉의 close)
+            current_price = bars[-1].close
+
+            # 깊이 계산: (고점 - 현재가) / 고점 * 100
+            if morning_high <= 0:
+                return False
+            depth_pct = (morning_high - current_price) / morning_high * 100
+
+            # 전체 종목 오전 거래량 중간값 계산
+            all_morning_vols = []
+            for other_code in self._top_codes:
+                other_bars = self.engine.bar_aggregator.get_bars(other_code)
+                other_morning = [
+                    b for b in other_bars if b.timestamp.hour < 12
+                ]
+                if other_morning:
+                    all_morning_vols.append(
+                        sum(b.volume for b in other_morning)
+                    )
+
+            median_vol = (
+                sorted(all_morning_vols)[len(all_morning_vols) // 2]
+                if all_morning_vols
+                else morning_vol + 1  # 중간값 계산 불가 시 차단
+            )
+
+            return DailyFilterProvider.passes_pullback_filter(
+                depth_pct=depth_pct,
+                morning_vol=morning_vol,
+                median_vol=median_vol,
+            )
+        except Exception as e:
+            logger.debug(f"눌림 품질 체크 실패 ({code}): {e}")
+            return False
+
     def _get_hong_positions_raw(self):
         """경윤 전략 포지션만 필터."""
         result = []
@@ -387,6 +448,47 @@ class GyleeRunner(HongStyleRunner):
                     "pass_rate": 0,
                 },
             ],
+            "entry_conditions": {
+                "universe": "거래대금 TOP100 또는 등락률 +3% 종목",
+                "leaders": "오전 모멘텀 TOP20 선별 (거래량×상승률)",
+                "breakout": {
+                    "name": "돌파매매",
+                    "time": "09:30~11:00",
+                    "conditions": [
+                        "신고가 돌파 (52주/역대 98%+)",
+                        "전고점 돌파 (20~60일 저항선)",
+                        "빈집 구간 돌파 (거래량 하위 25%)",
+                    ],
+                },
+                "pullback": {
+                    "name": "눌림매매",
+                    "time": "13:00~14:30",
+                    "conditions": [
+                        "바닥반등 (20%+ 하락 후 MA20 돌파)",
+                        "오전고점 95% 깊이 이상 눌림",
+                        "오전 거래량 >= 중간값",
+                    ],
+                },
+                "skip_patterns": [
+                    "뉴스빵 (비주도 섹터 뉴스)",
+                    "깊은눌림 (50%+ 되돌림)",
+                    "끼소진 (변동성 80%+ 소진)",
+                    "3파동 완성",
+                    "가분수 (3연속 양봉+거래량 3배)",
+                    "거래량고점 (최대거래량+윗꼬리음봉)",
+                ],
+                "min_confidence": 0.5,
+                "min_ki": 20,
+                "top_n": self.TOP_N_ONLY,
+                "max_positions": self.MAX_POSITIONS,
+            },
+            "risk_rules": {
+                "stop_loss": f"-{self.STOP_LOSS_PCT*100:.0f}%",
+                "take_profit": f"+{self.TAKE_PROFIT_PCT*100:.0f}% (70% 분매)",
+                "breakeven_cut": "분매 후 원가 복귀 → 잔여 전량",
+                "consecutive_stop": f"{self.MAX_CONSECUTIVE_LOSSES}연속 손절 → 당일종료",
+                "position_sizing": "확신 50% / 보통 30%",
+            },
         }
 
     def _add_event(
