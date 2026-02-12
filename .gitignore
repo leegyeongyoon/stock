@@ -86,3 +86,4 @@ frontend/out/
 
 # Trade data (runtime)
 data/trades/
+frontend/tsconfig.tsbuildinfo
