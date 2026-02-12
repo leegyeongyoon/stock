@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from src.engine.trading_engine import TradingEngine
-from src.server.dependencies import get_engine, set_engine
+from src.engine.scheduler import TradingScheduler
+from src.server.dependencies import get_engine, get_scheduler, set_engine, set_scheduler
 from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes
 from src.server.websocket_hub import hub
 
@@ -46,10 +47,16 @@ async def lifespan(app: FastAPI):
     # 서버 시작 시 KIS 잔고 조회 - 백그라운드에서 실행 (서버 시작 차단 방지)
     asyncio.create_task(_init_balance_background(engine))
 
-    logger.info("FastAPI 서버 시작")
+    # Auto-scheduler: 장 시간 자동 시작/종료
+    scheduler = TradingScheduler(engine)
+    set_scheduler(scheduler)
+    scheduler.start()
+
+    logger.info("FastAPI 서버 시작 (스케줄러 활성화)")
     yield
 
     # Shutdown
+    scheduler.stop()
     await engine.stop()
     logger.info("FastAPI 서버 종료")
 

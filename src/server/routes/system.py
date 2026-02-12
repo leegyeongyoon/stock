@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.engine.trading_engine import EngineState, TradingEngine
-from src.server.dependencies import get_engine
+from src.server.dependencies import get_engine, get_scheduler
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -77,3 +77,28 @@ async def get_events(
 ):
     """Get recent system events/logs."""
     return {"events": engine.get_event_log(limit=limit)}
+
+
+# ── Scheduler ────────────────────────────────────────────
+
+
+@router.get("/scheduler")
+async def get_scheduler_status():
+    """Get auto-scheduler status."""
+    scheduler = get_scheduler()
+    if not scheduler:
+        return {"enabled": False, "scheduler_running": False}
+    return scheduler.get_status()
+
+
+@router.post("/scheduler/toggle")
+async def toggle_scheduler():
+    """Toggle auto-scheduler on/off."""
+    scheduler = get_scheduler()
+    if not scheduler:
+        raise HTTPException(status_code=503, detail="스케줄러가 초기화되지 않았습니다")
+    scheduler.enabled = not scheduler.enabled
+    return {
+        "message": f"스케줄러 {'활성화' if scheduler.enabled else '비활성화'}",
+        "enabled": scheduler.enabled,
+    }
