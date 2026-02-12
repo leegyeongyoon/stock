@@ -362,7 +362,7 @@ export async function getTradeHistory(params?: {
   return fetchApi<{
     trades: TradeHistoryItem[];
     total: number;
-  }>(`/api/trades/history${query ? `?${query}` : ""}`);
+  }>(`/api/analysis/trade-history${query ? `?${query}` : ""}`);
 }
 
 // Strategy toggle
