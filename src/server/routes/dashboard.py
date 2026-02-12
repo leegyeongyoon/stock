@@ -21,9 +21,9 @@ async def get_pnl(engine: TradingEngine = Depends(get_engine)):
         return {"daily_pnl": 0, "total_pnl_pct": 0, "trades": []}
 
     return {
-        "daily_pnl": engine.position_manager.daily_pnl,
-        "total_pnl_pct": engine.position_manager.total_pnl_pct,
-        "total_equity": engine.position_manager.total_equity,
-        "cash": engine.position_manager.cash,
+        "daily_pnl": int(engine.position_manager.daily_pnl),
+        "total_pnl_pct": round(engine.position_manager.total_pnl_pct, 2),
+        "total_equity": int(engine.position_manager.total_equity),
+        "cash": int(engine.position_manager.cash),
         "trades": engine.get_trades_today(),
     }

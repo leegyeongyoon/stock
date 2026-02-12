@@ -135,7 +135,7 @@ class RiskManager:
             "circuit_breaker": self._circuit_breaker_active,
             "positions": self.pm.position_count,
             "max_positions": self.max_positions,
-            "daily_pnl": self.pm.daily_pnl,
-            "daily_loss_limit": -self.pm.initial_capital * self.max_daily_loss_pct,
-            "total_equity": self.pm.total_equity,
+            "daily_pnl": int(self.pm.daily_pnl),
+            "daily_loss_limit": int(-self.pm.initial_capital * self.max_daily_loss_pct),
+            "total_equity": int(self.pm.total_equity),
         }

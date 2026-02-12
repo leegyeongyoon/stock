@@ -246,13 +246,13 @@ class PositionManager:
 
     def get_summary(self) -> dict:
         return {
-            "total_equity": self.total_equity,
-            "cash": self.cash,
+            "total_equity": int(self.total_equity),
+            "cash": int(self.cash),
             "positions": self.position_count,
-            "daily_pnl": self._daily_pnl,
-            "total_pnl_pct": self.total_pnl_pct,
+            "daily_pnl": int(self._daily_pnl),
+            "total_pnl_pct": round(self.total_pnl_pct, 2),
             "trades_today": len(self._trades),
-            "win_rate": self.win_rate,
+            "win_rate": round(self.win_rate, 1),
         }
 
     # ── DB Persistence Helpers ─────────────────────────────

@@ -70,10 +70,10 @@ async def get_pnl_by_strategy(engine: TradingEngine = Depends(get_engine)):
             "trades": total_trades,
             "wins": wins,
             "losses": losses,
-            "total_pnl": round(total_pnl, 0),
-            "avg_pnl": round(total_pnl / total_trades, 0) if total_trades > 0 else 0,
-            "max_win": round(max_win, 0),
-            "max_loss": round(max_loss, 0),
+            "total_pnl": int(round(total_pnl)),
+            "avg_pnl": int(round(total_pnl / total_trades)) if total_trades > 0 else 0,
+            "max_win": int(round(max_win)),
+            "max_loss": int(round(max_loss)),
             "win_rate": round(wins / total_trades * 100, 1) if total_trades > 0 else 0,
         })
 
@@ -104,9 +104,9 @@ async def get_pnl_by_day_of_week(engine: TradingEngine = Depends(get_engine)):
             "day": day,
             "day_index": i,
             "trades": d["trades"],
-            "total_pnl": round(d["total_pnl"], 0),
+            "total_pnl": int(round(d["total_pnl"])),
             "win_rate": round(d["wins"] / d["trades"] * 100, 1) if d["trades"] > 0 else 0,
-            "avg_pnl": round(d["total_pnl"] / d["trades"], 0) if d["trades"] > 0 else 0,
+            "avg_pnl": int(round(d["total_pnl"] / d["trades"])) if d["trades"] > 0 else 0,
         })
 
     return {"days": days}
