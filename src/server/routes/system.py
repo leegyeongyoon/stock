@@ -1,5 +1,6 @@
 """System control API routes."""
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.engine.trading_engine import EngineState, TradingEngine
@@ -89,6 +90,17 @@ async def get_scheduler_status():
     if not scheduler:
         return {"enabled": False, "scheduler_running": False}
     return scheduler.get_status()
+
+
+@router.get("/server-ip")
+async def get_server_ip():
+    """Get this server's public IP address (for KIS API IP registration)."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("https://api.ipify.org?format=json")
+            return resp.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @router.post("/scheduler/toggle")
