@@ -18,17 +18,17 @@ variable "environment" {
   default     = "production"
 }
 
-# ECS 리소스 설정 (최소 사양으로 비용 절감)
+# ECS 리소스 설정
 variable "backend_cpu" {
   description = "Backend Fargate CPU units"
   type        = string
-  default     = "256"
+  default     = "512"
 }
 
 variable "backend_memory" {
   description = "Backend Fargate memory (MiB)"
   type        = string
-  default     = "512"
+  default     = "1024"
 }
 
 variable "frontend_cpu" {
