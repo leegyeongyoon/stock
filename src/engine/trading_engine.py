@@ -106,17 +106,25 @@ class TradingEngine:
             balance = await client.get_balance()
             await client.stop()
 
-            self.position_manager.cash = balance.total_deposit
-            self.position_manager.initial_capital = balance.total_eval if balance.total_eval > 0 else balance.total_deposit
+            # KIS 총평가금액 사용 (모의투자 예수금은 부정확)
+            total_eval = balance.total_eval or balance.total_deposit
+            holdings_eval = sum(h.eval_amount for h in balance.holdings)
+            actual_cash = total_eval - holdings_eval
+            if actual_cash < 0:
+                actual_cash = balance.total_deposit
+
+            self.position_manager.cash = actual_cash
+            self.position_manager.initial_capital = total_eval
 
             self.add_log(
                 "INIT",
-                f"초기 잔고 조회: 예수금 {balance.total_deposit:,}원, "
-                f"총평가 {balance.total_eval:,}원",
+                f"초기 잔고 조회: 총자산 {total_eval:,}원, "
+                f"현금 {actual_cash:,.0f}원, "
+                f"보유종목평가 {holdings_eval:,}원",
             )
             logger.info(
-                f"초기 잔고 조회: 예수금={balance.total_deposit:,}원 "
-                f"평가={balance.total_eval:,}원"
+                f"초기 잔고 조회: 총자산={total_eval:,}원 "
+                f"현금={actual_cash:,.0f}원 보유평가={holdings_eval:,}원"
             )
         except Exception as e:
             logger.warning(f"초기 잔고 조회 실패 (기본값 사용): {e}")
@@ -502,9 +510,17 @@ class TradingEngine:
         try:
             balance = await self.client.get_balance()
 
-            # PositionManager에 실제 예수금/자본금 반영
-            self.position_manager.cash = balance.total_deposit
-            self.position_manager.initial_capital = balance.total_eval
+            # KIS 총평가금액 = 실제 총자산 (모의투자 예수금은 매수 후에도 안 줄어서 부정확)
+            total_eval = balance.total_eval or balance.total_deposit
+
+            # 보유종목 KIS 평가금액 합계
+            holdings_eval = sum(h.eval_amount for h in balance.holdings)
+
+            # 실제 현금 = 총평가 - 보유종목 평가
+            actual_cash = total_eval - holdings_eval
+            if actual_cash < 0:
+                actual_cash = balance.total_deposit
+            self.position_manager.cash = actual_cash
 
             # 기존 보유 종목이 있으면 포지션으로 등록
             for h in balance.holdings:
@@ -516,18 +532,30 @@ class TradingEngine:
                         quantity=h.quantity,
                         price=h.avg_price,
                     )
-                    # open_position이 cash를 차감하므로 다시 보정
-                    self.position_manager.cash = balance.total_deposit
+                    # open_position이 cash를 차감하므로 actual_cash로 보정
+                    self.position_manager.cash = actual_cash
+
+                    # KIS 현재가로 시가평가 갱신
+                    if h.current_price > 0:
+                        self.position_manager.update_price(
+                            h.stock_code, h.current_price
+                        )
+
+            # 서버 재시작 시 initial_capital = 현재 총자산 → PnL 0%에서 시작
+            # 일중 거래 PnL은 이 시점 이후부터 누적
+            self.position_manager.initial_capital = self.position_manager.total_equity
 
             self.add_log(
                 "INIT",
-                f"계좌 동기화: 예수금 {balance.total_deposit:,}원, "
-                f"총평가 {balance.total_eval:,}원, "
+                f"계좌 동기화: 현금 {actual_cash:,.0f}원, "
+                f"총자산 {self.position_manager.total_equity:,.0f}원, "
                 f"보유 {len(balance.holdings)}종목",
             )
             logger.info(
-                f"계좌 동기화: 예수금={balance.total_deposit:,}원 "
-                f"평가={balance.total_eval:,}원 보유={len(balance.holdings)}종목"
+                f"계좌 동기화: 현금={actual_cash:,.0f}원 "
+                f"총자산={self.position_manager.total_equity:,.0f}원 "
+                f"보유={len(balance.holdings)}종목 "
+                f"(KIS 총평가={total_eval:,}원)"
             )
         except Exception as e:
             self.add_log("INIT", f"계좌 동기화 실패: {e}", severity="WARNING")
@@ -566,6 +594,15 @@ class TradingEngine:
             balance = await self.client.get_balance()
             broker_codes = {h.stock_code for h in balance.holdings}
 
+            # 올바른 현금 계산 (total_eval - 보유종목 평가)
+            total_eval = balance.total_eval or balance.total_deposit
+            holdings_eval = sum(h.eval_amount for h in balance.holdings)
+            actual_cash = total_eval - holdings_eval
+            if actual_cash < 0:
+                actual_cash = balance.total_deposit
+            self.position_manager.cash = actual_cash
+            saved_cash = actual_cash
+
             recovered = 0
             for pos_data in positions_data:
                 code = pos_data["stock_code"]
@@ -581,8 +618,8 @@ class TradingEngine:
                         price=pos_data["avg_price"],
                         order_id="",
                     )
-                    # Restore cash (open_position deducts it, _sync_balance already set correct cash)
-                    self.position_manager.cash = balance.total_deposit
+                    # open_position이 cash를 차감하므로 복원
+                    self.position_manager.cash = saved_cash
                     recovered += 1
                 else:
                     # DB has position but broker doesn't - log mismatch
@@ -611,8 +648,8 @@ class TradingEngine:
                     except Exception:
                         pass
 
-            # Always trust broker cash
-            self.position_manager.cash = balance.total_deposit
+            # 복구 후 initial_capital 재계산 (총자산 = 현금 + 보유종목)
+            self.position_manager.initial_capital = self.position_manager.total_equity
 
             if recovered > 0:
                 self.add_log("RECOVERY", f"DB에서 {recovered}개 포지션 복구")
