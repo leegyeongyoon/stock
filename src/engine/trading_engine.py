@@ -517,16 +517,25 @@ class TradingEngine:
             try:
                 balance = await self.client.get_balance()
 
-                # KIS 총평가금액 = 실제 총자산 (모의투자 예수금은 매수 후에도 안 줄어서 부정확)
-                total_eval = int(balance.total_eval or balance.total_deposit)
-
                 # 보유종목 KIS 평가금액 합계
                 holdings_eval = int(sum(h.eval_amount for h in balance.holdings))
 
-                # 실제 현금 = 총평가 - 보유종목 평가
-                actual_cash = int(total_eval - holdings_eval)
-                if actual_cash < 0:
+                # 현금 계산: KIS 모의투자에서 예수금(dnca_tot_amt)은 매수해도 안 줄어듦
+                # → 예수금 - 매입금액합계 = 실제 가용 현금
+                if balance.purchase_total > 0:
+                    # 매입금액합계(pchs_amt_smtl_amt) 사용: 가장 정확
+                    actual_cash = int(balance.total_deposit - balance.purchase_total)
+                elif holdings_eval > 0:
+                    # 폴백: 예수금 - 보유종목 평가금액 (근사값)
+                    actual_cash = int(balance.total_deposit - holdings_eval)
+                else:
                     actual_cash = int(balance.total_deposit)
+
+                if actual_cash < 0:
+                    actual_cash = 0
+
+                # 총자산 = 현금 + 평가금액
+                total_equity = actual_cash + holdings_eval
                 self.position_manager.cash = actual_cash
 
                 # 기존 보유 종목이 있으면 포지션으로 등록
@@ -560,10 +569,12 @@ class TradingEngine:
                     f"보유 {len(balance.holdings)}종목",
                 )
                 logger.info(
-                    f"계좌 동기화: 현금={actual_cash:,.0f}원 "
-                    f"총자산={self.position_manager.total_equity:,.0f}원 "
+                    f"계좌 동기화: 현금={actual_cash:,}원 "
+                    f"총자산={total_equity:,}원 "
                     f"보유={len(balance.holdings)}종목 "
-                    f"(KIS 총평가={total_eval:,}원)"
+                    f"(KIS 예수금={balance.total_deposit:,}원, "
+                    f"매입합계={balance.purchase_total:,}원, "
+                    f"평가={holdings_eval:,}원)"
                 )
                 return  # 성공 시 즉시 반환
             except Exception as e:

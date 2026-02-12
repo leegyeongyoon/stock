@@ -109,10 +109,12 @@ class BalanceItem(BaseModel):
 
 class AccountBalance(BaseModel):
     """Full account balance summary."""
-    total_eval: int = 0         # 총 평가금액
-    total_deposit: int = 0      # 예수금
+    total_eval: int = 0         # 총 평가금액 (예수금+평가, 모의투자에서 부정확)
+    total_deposit: int = 0      # 예수금 (모의투자에서 매수해도 안 줄어듦)
     total_pnl: int = 0          # 총 평가손익
     total_pnl_rate: float = 0.0
+    purchase_total: int = 0     # 매입금액합계 (pchs_amt_smtl_amt)
+    net_asset: int = 0          # 순자산금액 (nass_amt)
     holdings: list[BalanceItem] = Field(default_factory=list)
 
 

@@ -313,6 +313,8 @@ class KISClient:
             total_deposit=int(summary.get("dnca_tot_amt", 0)),
             total_pnl=int(summary.get("evlu_pfls_smtl_amt", 0)),
             total_pnl_rate=float(summary.get("tot_evlu_pfls_rt", 0)) if summary.get("tot_evlu_pfls_rt") else 0.0,
+            purchase_total=int(summary.get("pchs_amt_smtl_amt", 0)),
+            net_asset=int(summary.get("nass_amt", 0)),
             holdings=holdings,
         )
 
