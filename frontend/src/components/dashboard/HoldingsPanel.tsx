@@ -39,6 +39,7 @@ export default function HoldingsPanel({ holdings, summary }: Props) {
               <th className="px-4 py-2 text-left">전략</th>
               <th className="px-4 py-2 text-right">수량</th>
               <th className="px-4 py-2 text-right">매수가</th>
+              <th className="px-4 py-2 text-right">투자금액</th>
               <th className="px-4 py-2 text-right">현재가</th>
               <th className="px-4 py-2 text-right">평가금액</th>
               <th className="px-4 py-2 text-right">손익</th>
@@ -71,6 +72,9 @@ export default function HoldingsPanel({ holdings, summary }: Props) {
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-300">
                     {h.avg_price.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-slate-400">
+                    {h.cost_basis.toLocaleString()}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-white">
                     {h.current_price.toLocaleString()}
