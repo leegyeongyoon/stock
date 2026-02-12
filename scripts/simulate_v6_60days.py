@@ -1,22 +1,16 @@
 """
-1000만원 실투자 시뮬레이션 v2 (20일) - 4종목 + 오버나잇 홀딩
+1000만원 실투자 시뮬레이션 v6 - 점수 기반 선별 시스템
 
-백테스트의 +96.83%는 개별 거래 수익률의 단순 합계.
-실제로는:
-  - 최대 4종목 동시 보유 (v1: 2종목 → v2: 4종목)
-  - 확신 50% / 보통 30% 포지션 사이징
-  - 거래비용 (수수료 0.015% × 2 + 세금 0.23% = 편도 ~0.26%)
-  - 주가가 비싸서 못 사는 경우
-  - 이미 보유 중이라 추가 매수 불가
-  - 동일 종목 중복 매수 불가
+OpenAI 분석 인사이트:
+1. 승리 거래: 높은 종가 강도 (86% vs 66%)
+2. 승리 거래: 높은 오전 등락률 (11% vs 9%)
+3. 승리 거래: 높은 시가총액 (7만억 vs 4만억)
+4. 패배 거래: 오후 낙폭 발생
 
-v2 추가:
-  - 오버나잇 홀딩: 점수 60+ 종목은 익일까지 보유
-    * 필수: 장마감 수익 >= 0%, 고점패턴 미감지
-    * 점수: 끼(30) + 대장주(20) + 일봉자리(20) + D+1후보(15) + 오후거래량(15)
-  - 갭하락 손절: 다음날 시가 -3% 이하 시 즉시 청산
-
-기존 backtest_20d_pullback.py의 "E) 95% + 오전거래량" 조건 사용.
+v6 변경사항:
+- 하드 필터 대신 점수 기반 선별
+- 진입 시 품질 점수 계산하여 상위 종목만 진입
+- 기존 조건은 유지하면서 추가 점수로 우선순위 결정
 """
 
 import warnings
@@ -26,50 +20,62 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from pykrx import stock as pykrx_stock
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import time as time_mod
 from collections import defaultdict
-
 
 END_DATE = "20260212"
 
 # 리스크 파라미터
-SL_PCT = -0.04       # -4% 손절
-TP_PCT = 0.05        # +5% 1차 익절
-TP_PARTIAL = 0.70    # 70% 분매
-BREAKEVEN_CUT = 0.005  # +0.5% 이하 본전컷
+SL_PCT = -0.04
+TP_PCT = 0.05
+TP_PARTIAL = 0.70
+BREAKEVEN_CUT = 0.005
 
 # 포지션 사이징
-HIGH_CONF_PCT = 0.50  # 확신 종목: 50%
-LOW_CONF_PCT = 0.30   # 보통 종목: 30%
-MAX_POSITIONS = 3     # 최대 3종목
-MIN_CONFIDENCE = 0.70 # 최소 확신도 0.7 이상만 진입
+HIGH_CONF_PCT = 0.50
+LOW_CONF_PCT = 0.30
+MAX_POSITIONS = 3
+MIN_CONFIDENCE = 0.70
 
-# v5 균형 필터 (분석 기반 + 실용성)
-MIN_MARKET_CAP = 5000   # 시총 5000억+ (원래대로)
-MIN_INST_BUY = 50       # 기관순매수 50억+ (원래대로)
-MAX_INST_BUY = 200      # 기관순매수 200억 이하
-SKIP_TOP_N = 1          # TOP1만 스킵 (과열 종목)
-ENTER_TOP_N = 4         # TOP2-5 진입
-MIN_DAILY_CHANGE = 6.0  # 당일 등락률 6%+ (분석: 6%+ 수익, 6%- 손실)
+# 기본 필터 (v5 기준 유지)
+MIN_MARKET_CAP = 5000
+MIN_INST_BUY = 50
+MAX_INST_BUY = 200
+SKIP_TOP_N = 1
+ENTER_TOP_N = 4
+MIN_DAILY_CHANGE = 6.0
 
-# 오버나잇 홀딩 파라미터
-MIN_OVERNIGHT_SCORE = 60   # 오버나잇 홀딩 최소 점수
-GAP_DOWN_STOP = -0.03      # 갭하락 -3% 손절
+# v6 점수 기반 선별 파라미터
+MIN_QUALITY_SCORE = 50   # 최소 품질 점수 (100점 만점)
+QUALITY_WEIGHT = {
+    "market_cap": 15,     # 시가총액 점수 (최대 15점)
+    "inst_buy": 15,       # 기관순매수 점수 (최대 15점)
+    "daily_change": 20,   # 당일 등락률 점수 (최대 20점)
+    "morning_change": 20, # 오전 등락률 점수 (최대 20점)
+    "close_strength": 20, # 종가 강도 점수 (최대 20점) - 실시간 계산
+    "leader_rank": 10,    # 리더 순위 점수 (최대 10점)
+}
+
+# 오버나잇 홀딩
+MIN_OVERNIGHT_SCORE = 60
+GAP_DOWN_STOP = -0.03
 
 # 거래비용
-COMMISSION = 0.00015  # 매수/매도 각 0.015%
-TAX = 0.0023          # 매도세 0.23%
+COMMISSION = 0.00015
+TAX = 0.0023
 
-INITIAL_CAPITAL = 10_000_000  # 1000만원
+INITIAL_CAPITAL = 10_000_000
 
 _kosdaq_set = None
+
 
 def get_kosdaq_set():
     global _kosdaq_set
     if _kosdaq_set is None:
         _kosdaq_set = set(pykrx_stock.get_market_ticker_list(END_DATE, market="KOSDAQ"))
     return _kosdaq_set
+
 
 def code_to_ticker(code):
     return f"{code}{'.KQ' if code in get_kosdaq_set() else '.KS'}"
@@ -82,13 +88,14 @@ class Position:
     method: str
     entry_price: float
     quantity: int
-    invested: float     # 실제 투입 금액
+    invested: float
     entry_time: str
-    entry_date: str = ""     # 진입일
+    entry_date: str = ""
     partial_sold: bool = False
     original_quantity: int = 0
-    is_overnight: bool = False  # 오버나잇 홀딩 여부
-    overnight_score: int = 0    # 오버나잇 점수
+    is_overnight: bool = False
+    overnight_score: int = 0
+    quality_score: int = 0  # v6: 진입 시 품질 점수
 
     def __post_init__(self):
         if self.original_quantity == 0:
@@ -106,14 +113,15 @@ class TradeResult:
     exit_time: str
     exit_price: float
     quantity: int
-    pnl: float          # 원 단위 손익
-    pnl_pct: float       # % 수익률
+    pnl: float
+    pnl_pct: float
     exit_reason: str
     commission_cost: float
-    is_overnight: bool = False  # 오버나잇 거래 여부
+    is_overnight: bool = False
+    quality_score: int = 0
 
 
-def get_trading_days(end_date, n_days=20):
+def get_trading_days(end_date, n_days=60):
     from datetime import timedelta
     end = pd.Timestamp(end_date)
     start = end - timedelta(days=60)
@@ -237,8 +245,124 @@ def select_leaders(bars_all, date, eligible_codes):
     return scores[:20]
 
 
+def calc_quality_score(code, bars, df, prev_df, leader_rank, entry_time=None):
+    """
+    v6: 품질 점수 계산 (100점 만점)
+
+    점수 구성:
+    - 시가총액 (15점): 3만억+ = 15점, 1만억+ = 10점, 5천억+ = 5점
+    - 기관순매수 (15점): 150억+ = 15점, 100억+ = 10점, 50억+ = 5점
+    - 당일 등락률 (20점): 15%+ = 20점, 10%+ = 15점, 6%+ = 10점
+    - 오전 등락률 (20점): 15%+ = 20점, 10%+ = 15점, 5%+ = 10점
+    - 종가 강도 (20점): 90%+ = 20점, 75%+ = 15점, 60%+ = 10점
+    - 리더 순위 (10점): TOP2 = 10점, TOP3 = 7점, TOP4 = 5점, TOP5 = 3점
+    """
+    score = 0
+    score_breakdown = {}
+
+    # 1. 시가총액 (15점)
+    market_cap = df.loc[code, "시가총액_억"] if code in df.index else 0
+    if market_cap >= 30000:
+        cap_score = 15
+    elif market_cap >= 10000:
+        cap_score = 10
+    elif market_cap >= 5000:
+        cap_score = 5
+    else:
+        cap_score = 0
+    score += cap_score
+    score_breakdown["market_cap"] = cap_score
+
+    # 2. 기관순매수 (15점)
+    inst_buy = prev_df.loc[code, "기관순매수"] if prev_df is not None and code in prev_df.index else 0
+    if inst_buy >= 150:
+        inst_score = 15
+    elif inst_buy >= 100:
+        inst_score = 10
+    elif inst_buy >= 50:
+        inst_score = 5
+    else:
+        inst_score = 0
+    score += inst_score
+    score_breakdown["inst_buy"] = inst_score
+
+    # 3. 당일 등락률 (20점)
+    daily_change = df.loc[code, "등락률"] if code in df.index else 0
+    if daily_change >= 15:
+        daily_score = 20
+    elif daily_change >= 10:
+        daily_score = 15
+    elif daily_change >= 6:
+        daily_score = 10
+    else:
+        daily_score = 0
+    score += daily_score
+    score_breakdown["daily_change"] = daily_score
+
+    # 4. 오전 등락률 (20점)
+    morning_bars = bars[(bars.index.hour >= 9) & (bars.index.hour < 12)]
+    if not morning_bars.empty:
+        morning_change = (morning_bars.iloc[-1]["Close"] / morning_bars.iloc[0]["Open"] - 1) * 100
+    else:
+        morning_change = 0
+
+    if morning_change >= 15:
+        morning_score = 20
+    elif morning_change >= 10:
+        morning_score = 15
+    elif morning_change >= 5:
+        morning_score = 10
+    else:
+        morning_score = 0
+    score += morning_score
+    score_breakdown["morning_change"] = morning_score
+
+    # 5. 종가 강도 (20점) - 진입 시점까지의 강도
+    if entry_time:
+        bars_until = bars[bars.index <= entry_time]
+    else:
+        bars_until = bars
+
+    if not bars_until.empty:
+        day_high = bars_until["High"].max()
+        day_low = bars_until["Low"].min()
+        current_close = bars_until.iloc[-1]["Close"]
+        if day_high > day_low:
+            close_strength = (current_close - day_low) / (day_high - day_low) * 100
+        else:
+            close_strength = 50
+    else:
+        close_strength = 50
+
+    if close_strength >= 90:
+        close_score = 20
+    elif close_strength >= 75:
+        close_score = 15
+    elif close_strength >= 60:
+        close_score = 10
+    else:
+        close_score = 0
+    score += close_score
+    score_breakdown["close_strength"] = close_score
+
+    # 6. 리더 순위 (10점)
+    if leader_rank == 2:  # TOP1은 스킵하므로 실제 진입은 TOP2부터
+        rank_score = 10
+    elif leader_rank == 3:
+        rank_score = 7
+    elif leader_rank == 4:
+        rank_score = 5
+    elif leader_rank == 5:
+        rank_score = 3
+    else:
+        rank_score = 0
+    score += rank_score
+    score_breakdown["leader_rank"] = rank_score
+
+    return score, score_breakdown
+
+
 def find_breakout(bars):
-    """돌파매매: 09:30~11:00"""
     window = bars[
         ((bars.index.hour == 9) & (bars.index.minute >= 30)) |
         (bars.index.hour == 10)
@@ -256,8 +380,6 @@ def find_breakout(bars):
 
 
 def find_pullback(bars, vol_median):
-    """눌림매매: 13:00~14:30, 95%깊이 + 오전거래량"""
-    # 오전 거래량 체크
     morning_full = bars[(bars.index.hour >= 9) & (bars.index.hour < 12)]
     if morning_full.empty:
         return None
@@ -303,17 +425,15 @@ def get_morning_vol_median(bars_all, date, leader_codes):
 
 
 def calc_transaction_cost(price, qty, side="buy"):
-    """거래비용 계산"""
     value = price * qty
-    cost = value * COMMISSION  # 수수료
+    cost = value * COMMISSION
     if side == "sell":
-        cost += value * TAX   # 매도세
+        cost += value * TAX
     return cost
 
 
 @dataclass
 class OvernightScore:
-    """오버나잇 홀딩 점수 결과"""
     total_score: int
     should_hold: bool
     components: dict
@@ -321,24 +441,6 @@ class OvernightScore:
 
 
 def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
-    """
-    오버나잇 홀딩 판단 함수
-
-    필수 조건 (모두 충족):
-    - 장마감 시점 수익률 >= 0%
-    - 고점 패턴 미감지 (가분수, 거래량고점)
-
-    점수 기준 (총 100점):
-    | 항목 | 점수 | 조건 |
-    |------|------|------|
-    | 끼점수(Ki) | 0~30 | ≥50: 30점, ≥40: 20점, ≥30: 10점 |
-    | 대장주 | 0~20 | TOP5 리더 종목 |
-    | 일봉 자리 | 0~20 | 신고가/전고점돌파/바닥반등 |
-    | D+1 후보 | 0~15 | 전일 +5% 이상 장대양봉 |
-    | 오후거래량 | 0~15 | 오후거래량 ≥ 오전×0.6 |
-
-    홀딩 결정: 총점 ≥ 60점
-    """
     score = 0
     components = {}
     reasons = []
@@ -350,18 +452,14 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
     current_price = last_bar["Close"]
     pnl_pct = (current_price / pos.entry_price - 1) * 100
 
-    # === 필수 조건 체크 ===
-    # 1. 장마감 시점 수익률 >= 0%
     if pnl_pct < 0:
         return OvernightScore(0, False, {}, [f"현재 손실 중 ({pnl_pct:.2f}%)"])
 
-    # 2. 고점 패턴 감지 (가분수: 시가>종가, 위꼬리 긴 경우)
     day_high = bars["High"].max()
     day_open = bars.iloc[0]["Open"]
     if current_price < day_open and (day_high - current_price) > (current_price - bars["Low"].min()) * 2:
         return OvernightScore(0, False, {}, ["고점 패턴 감지 (가분수형)"])
 
-    # 3. 거래량 고점 패턴 (오후 거래량 급감)
     morning_bars = bars[(bars.index.hour >= 9) & (bars.index.hour < 12)]
     afternoon_bars = bars[(bars.index.hour >= 12) & (bars.index.hour < 16)]
     if not morning_bars.empty and not afternoon_bars.empty:
@@ -370,17 +468,12 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
         if afternoon_vol < morning_vol * 0.3:
             return OvernightScore(0, False, {}, ["거래량 고점 패턴 (오후 급감)"])
 
-    # === 점수 계산 ===
-
-    # 1. 끼점수 (Ki) - 0~30점
-    # 끼점수 = 거래대금 비중 × 상승률 기반 추정
     ki_score = 0
     df = daily_info.get(date, {}).get("df")
     if df is not None and code in df.index:
         row = df.loc[code]
         chg = row.get("등락률", 0)
         vol_rank = df["거래대금"].rank(ascending=False).get(code, 100)
-        # 끼점수 추정: 상승률 + 거래대금 순위 기반
         ki_est = max(0, min(chg * 5 + (100 - vol_rank) * 0.3, 100))
         if ki_est >= 50:
             ki_score = 30
@@ -393,7 +486,6 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
             reasons.append(f"끼점수 추정 {ki_est:.0f} → +{ki_score}점")
     score += ki_score
 
-    # 2. 대장주 여부 - 0~20점
     leader_codes = [l["code"] for l in leaders[:5]]
     if code in leader_codes:
         rank = leader_codes.index(code) + 1
@@ -404,14 +496,10 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
     else:
         components["leader"] = 0
 
-    # 3. 일봉 자리 - 0~20점 (신고가/전고점돌파/바닥반등)
     daily_score = 0
     if df is not None and code in df.index:
         row = df.loc[code]
         chg = row.get("등락률", 0)
-        close = row.get("종가", 0)
-        high = row.get("고가", 0)
-        # 상승률이 높으면 신고가 가능성
         if chg >= 10:
             daily_score = 20
             reasons.append("일봉 신고가급 상승 → +20점")
@@ -424,12 +512,10 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
     score += daily_score
     components["daily_position"] = daily_score
 
-    # 4. D+1 후보 - 0~15점 (전일 +5% 이상 장대양봉)
     d1_score = 0
     if df is not None and code in df.index:
         row = df.loc[code]
         chg = row.get("등락률", 0)
-        # 오늘 +5% 이상이면 D+1 후보
         if chg >= 5:
             d1_score = 15
             reasons.append(f"D+1 후보 (오늘 +{chg:.1f}%) → +15점")
@@ -439,7 +525,6 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
     score += d1_score
     components["d1_candidate"] = d1_score
 
-    # 5. 오후거래량 - 0~15점 (오후거래량 >= 오전×0.6)
     vol_score = 0
     if not morning_bars.empty and not afternoon_bars.empty:
         morning_vol = morning_bars["Volume"].sum()
@@ -458,7 +543,6 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
     score += vol_score
     components["afternoon_vol"] = vol_score
 
-    # 최종 판단
     should_hold = score >= MIN_OVERNIGHT_SCORE
 
     return OvernightScore(
@@ -469,19 +553,16 @@ def evaluate_overnight_holding(code, pos, bars, daily_info, date, leaders):
     )
 
 
-def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, overnight_stats):
-    """하루 시뮬레이션 - 실제 자금 제약 반영 (v4 고품질 필터)"""
+def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, overnight_stats, quality_stats):
+    """v6: 품질 점수 기반 선별"""
     info = daily_info[date]
     df = info["df"]
     universe = info["universe"]
     cap_filtered = info["cap_filtered"]
     prev_df = daily_info[prev_date]["df"] if prev_date in daily_info else None
 
-    # v4 고품질 필터 적용
-    # 1. 시총 3만억+ (분석 결과: 3만억+ 수익률 +21.90%)
     eligible = universe & cap_filtered
 
-    # 2. 기관순매수 100~200억 (분석 결과: 150~200억 +26.84%, 100~200억 조합 최적)
     if prev_df is not None:
         inst_range = set(prev_df[
             (prev_df["기관순매수"] >= MIN_INST_BUY) & (prev_df["기관순매수"] <= MAX_INST_BUY)
@@ -489,16 +570,14 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
         eligible = eligible & inst_range
 
     leaders = select_leaders(bars_all, date, eligible)
-
-    # 3. TOP1-2 스킵, TOP3-5 진입 (분석 결과: TOP1 -12%, TOP2 -7%, TOP3+ 수익)
-    leaders_filtered = leaders[SKIP_TOP_N:SKIP_TOP_N + ENTER_TOP_N]  # TOP3-5만
+    leaders_filtered = leaders[SKIP_TOP_N:SKIP_TOP_N + ENTER_TOP_N]
     leader_codes = [s["code"] for s in leaders_filtered]
     vol_median = get_morning_vol_median(bars_all, date, leader_codes)
 
     trades_today = []
     skipped_reasons = defaultdict(int)
 
-    # === 0. 오버나잇 포지션 갭하락 손절 체크 ===
+    # 오버나잇 포지션 갭하락 손절 체크
     codes_overnight = [c for c, p in positions.items() if p.is_overnight]
     for code in codes_overnight:
         if code not in bars_all or date not in bars_all[code]:
@@ -508,12 +587,10 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
         if bars.empty:
             continue
 
-        # 시가로 갭 체크
         open_price = bars.iloc[0]["Open"]
         gap_pct = (open_price / pos.entry_price - 1)
 
         if gap_pct <= GAP_DOWN_STOP:
-            # 갭하락 손절
             sell_qty = pos.quantity
             cost = calc_transaction_cost(open_price, sell_qty, "sell")
             pnl = (open_price - pos.entry_price) * sell_qty - cost
@@ -525,17 +602,17 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                 exit_time=str(bars.index[0])[:16], exit_price=open_price,
                 quantity=sell_qty, pnl=pnl, pnl_pct=pnl_pct,
                 exit_reason="갭하락손절", commission_cost=cost, is_overnight=True,
+                quality_score=pos.quality_score,
             ))
             capital += open_price * sell_qty - cost
             overnight_stats["gap_stop"] += 1
             overnight_stats["gap_stop_pnl"] += pnl
             del positions[code]
         else:
-            # 오버나잇 성공 - 일반 모니터링으로 전환
-            pos.is_overnight = False  # 오버나잇 상태 해제
+            pos.is_overnight = False
             overnight_stats["success"] += 1
 
-    # === 1. 보유 포지션 모니터링 (5분봉 순회) ===
+    # 보유 포지션 모니터링
     codes_to_monitor = list(positions.keys())
     for code in codes_to_monitor:
         if code not in bars_all or date not in bars_all[code]:
@@ -547,7 +624,6 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
             lo_pct = (bar["Low"] / pos.entry_price) - 1
             hi_pct = (bar["High"] / pos.entry_price) - 1
 
-            # 손절 -4%
             if lo_pct <= SL_PCT:
                 exit_price = pos.entry_price * (1 + SL_PCT)
                 sell_qty = pos.quantity
@@ -561,12 +637,12 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                     exit_time=str(ts)[:16], exit_price=exit_price,
                     quantity=sell_qty, pnl=pnl, pnl_pct=pnl_pct,
                     exit_reason="손절", commission_cost=cost,
+                    quality_score=pos.quality_score,
                 ))
                 capital += exit_price * sell_qty - cost
                 del positions[code]
                 break
 
-            # 1차 익절 +5% (70% 분매)
             if hi_pct >= TP_PCT and not pos.partial_sold:
                 exit_price = pos.entry_price * (1 + TP_PCT)
                 sell_qty = int(pos.quantity * TP_PARTIAL)
@@ -583,6 +659,7 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                     exit_time=str(ts)[:16], exit_price=exit_price,
                     quantity=sell_qty, pnl=pnl, pnl_pct=pnl_pct,
                     exit_reason="1차익절", commission_cost=cost,
+                    quality_score=pos.quality_score,
                 ))
                 capital += exit_price * sell_qty - cost
                 pos.quantity -= sell_qty
@@ -593,7 +670,6 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                     break
                 continue
 
-            # 본전컷 (분매 후 원가 복귀)
             if pos.partial_sold and lo_pct <= BREAKEVEN_CUT:
                 exit_price = bar["Close"]
                 sell_qty = pos.quantity
@@ -607,23 +683,25 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                     exit_time=str(ts)[:16], exit_price=exit_price,
                     quantity=sell_qty, pnl=pnl, pnl_pct=pnl_pct,
                     exit_reason="본전컷", commission_cost=cost,
+                    quality_score=pos.quality_score,
                 ))
                 capital += exit_price * sell_qty - cost
                 del positions[code]
                 break
 
-    # === 2. 신규 진입 (v5: TOP2-5, TOP1 스킵, 등락률 6%+) ===
-    # 돌파매매 (09:30~11:00)
+    # v6: 신규 진입 - 품질 점수 기반 선별
     entries = []
-    for s in leaders_filtered:  # TOP2-5 진입
+    for rank_idx, s in enumerate(leaders_filtered):
         code = s["code"]
+        rank = SKIP_TOP_N + rank_idx + 1  # 실제 순위
+
         if code in positions:
             skipped_reasons["이미보유"] += 1
             continue
         if code not in bars_all or date not in bars_all[code]:
             continue
 
-        # v5: 당일 등락률 6%+ 필터 (분석 결과: 6%+ 수익, 6%- 손실)
+        # 당일 등락률 필터
         if code in df.index:
             daily_change = df.loc[code, "등락률"]
             if daily_change < MIN_DAILY_CHANGE:
@@ -631,35 +709,35 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                 continue
 
         bars = bars_all[code][date]
+
+        # 돌파매매
         entry = find_breakout(bars)
         if entry:
-            entries.append({"code": code, "entry": entry, "method": "돌파",
-                           "momentum": s["momentum"]})
+            quality_score, breakdown = calc_quality_score(
+                code, bars, df, prev_df, rank, entry["time"]
+            )
+            entries.append({
+                "code": code, "entry": entry, "method": "돌파",
+                "momentum": s["momentum"], "quality_score": quality_score,
+                "leader_rank": rank, "breakdown": breakdown
+            })
 
-    # 눌림매매 (13:00~14:30)
-    for s in leaders_filtered:  # TOP2-5 진입
-        code = s["code"]
-        if code in positions:
-            continue
-        if any(e["code"] == code for e in entries):
-            continue
-        if code not in bars_all or date not in bars_all[code]:
-            continue
-
-        # v5: 당일 등락률 6%+ 필터
-        if code in df.index:
-            daily_change = df.loc[code, "등락률"]
-            if daily_change < MIN_DAILY_CHANGE:
-                continue  # 이미 위에서 카운트됨
-
-        bars = bars_all[code][date]
+        # 눌림매매
         entry = find_pullback(bars, vol_median)
         if entry:
-            entries.append({"code": code, "entry": entry, "method": "눌림",
-                           "momentum": s["momentum"]})
+            quality_score, breakdown = calc_quality_score(
+                code, bars, df, prev_df, rank, entry["time"]
+            )
+            # 중복 체크
+            if not any(e["code"] == code and e["method"] == "돌파" for e in entries):
+                entries.append({
+                    "code": code, "entry": entry, "method": "눌림",
+                    "momentum": s["momentum"], "quality_score": quality_score,
+                    "leader_rank": rank, "breakdown": breakdown
+                })
 
-    # 모멘텀순 정렬 후 진입
-    entries.sort(key=lambda x: x["momentum"], reverse=True)
+    # v6: 품질 점수 순으로 정렬
+    entries.sort(key=lambda x: x["quality_score"], reverse=True)
 
     for e in entries:
         if len(positions) >= MAX_POSITIONS:
@@ -670,23 +748,31 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
         entry = e["entry"]
         price = entry["price"]
         conf = entry["confidence"]
+        quality_score = e["quality_score"]
 
-        # 확신도 필터: 0.7 미만 스킵
+        # 확신도 필터
         if conf < MIN_CONFIDENCE:
             skipped_reasons["확신도부족"] += 1
             continue
 
-        # 포지션 사이징
-        alloc_pct = HIGH_CONF_PCT if conf >= 0.7 else LOW_CONF_PCT
-        invest_amount = capital * alloc_pct  # 현재 가용자금 기준
+        # v6: 품질 점수 필터
+        if quality_score < MIN_QUALITY_SCORE:
+            skipped_reasons["품질부족"] += 1
+            quality_stats["filtered_low_quality"] += 1
+            continue
 
-        # 실제 매수 가능 수량
+        quality_stats["total_entries"] += 1
+        quality_stats["score_sum"] += quality_score
+        quality_stats["by_score"][quality_score // 10 * 10] += 1
+
+        alloc_pct = HIGH_CONF_PCT if conf >= 0.7 else LOW_CONF_PCT
+        invest_amount = capital * alloc_pct
+
         qty = int(invest_amount / price)
         if qty <= 0:
             skipped_reasons["자금부족"] += 1
             continue
 
-        # 최소 10만원 이상 투자
         if price * qty < 100_000:
             skipped_reasons["소액스킵"] += 1
             continue
@@ -711,9 +797,10 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
             invested=price * qty,
             entry_time=str(entry["time"])[:16],
             entry_date=date,
+            quality_score=quality_score,
         )
 
-    # === 3. 장마감 청산 또는 오버나잇 홀딩 ===
+    # 장마감 청산 또는 오버나잇 홀딩
     codes_remaining = list(positions.keys())
     for code in codes_remaining:
         if code not in bars_all or date not in bars_all[code]:
@@ -723,13 +810,11 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
         if bars.empty:
             continue
 
-        # 오버나잇 홀딩 평가
         overnight_result = evaluate_overnight_holding(
             code, pos, bars, daily_info, date, leaders
         )
 
         if overnight_result.should_hold:
-            # 오버나잇 홀딩 결정
             pos.is_overnight = True
             pos.overnight_score = overnight_result.total_score
             overnight_stats["total"] += 1
@@ -740,9 +825,8 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
                 "score": overnight_result.total_score,
                 "reasons": overnight_result.reasons,
             })
-            continue  # 청산하지 않음
+            continue
 
-        # 청산
         last_bar = bars.iloc[-1]
         exit_price = last_bar["Close"]
         sell_qty = pos.quantity
@@ -756,6 +840,7 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
             exit_time=str(bars.index[-1])[:16], exit_price=exit_price,
             quantity=sell_qty, pnl=pnl, pnl_pct=pnl_pct,
             exit_reason="장마감", commission_cost=cost,
+            quality_score=pos.quality_score,
         ))
         capital += exit_price * sell_qty - cost
         del positions[code]
@@ -765,14 +850,13 @@ def simulate_day(bars_all, daily_info, date, prev_date, capital, positions, over
 
 def main():
     print("=" * 70)
-    print("  1000만원 실투자 시뮬레이션 (20일) - v5 (균형 필터)")
+    print("  1000만원 실투자 시뮬레이션 v6 (품질 점수 기반)")
+    print("=" * 70)
     print(f"  초기자금: {INITIAL_CAPITAL:,}원")
-    print(f"  필터: 시총{MIN_MARKET_CAP}억+ / 기관{MIN_INST_BUY}~{MAX_INST_BUY}억 / 등락률{MIN_DAILY_CHANGE}%+")
-    print(f"  진입: TOP{SKIP_TOP_N+1}~{SKIP_TOP_N+ENTER_TOP_N} (TOP1 스킵)")
-    print(f"  최대 {MAX_POSITIONS}종목 동시보유, 확신도 {MIN_CONFIDENCE*100:.0f}%+")
+    print(f"  기본 필터: 시총{MIN_MARKET_CAP}억+ / 기관{MIN_INST_BUY}~{MAX_INST_BUY}억 / 등락률{MIN_DAILY_CHANGE}%+")
+    print(f"  진입: TOP{SKIP_TOP_N+1}~{SKIP_TOP_N+ENTER_TOP_N}")
+    print(f"  v6 품질 점수: 최소 {MIN_QUALITY_SCORE}점 (100점 만점)")
     print(f"  SL {SL_PCT*100:.0f}% / TP {TP_PCT*100:.0f}% ({TP_PARTIAL*100:.0f}%분매)")
-    print(f"  오버나잇 홀딩: 점수 {MIN_OVERNIGHT_SCORE}+ / 갭하락손절 {GAP_DOWN_STOP*100:.0f}%")
-    print(f"  거래비용: 수수료 {COMMISSION*100:.3f}% + 세금 {TAX*100:.2f}%")
     print("=" * 70)
 
     dates_all = get_trading_days(END_DATE, 20)
@@ -783,9 +867,8 @@ def main():
     daily_info, all_codes = fetch_daily_data(dates_all)
     bars_all = fetch_5min_bulk(all_codes, trade_dates)
 
-    # === 시뮬레이션 실행 ===
     print("\n" + "=" * 70)
-    print("  3. 실투자 시뮬레이션")
+    print("  3. 실투자 시뮬레이션 (v6 품질 점수)")
     print("=" * 70)
 
     capital = INITIAL_CAPITAL
@@ -794,13 +877,19 @@ def main():
     all_skipped = defaultdict(int)
     daily_log = []
 
-    # 오버나잇 홀딩 통계
     overnight_stats = {
-        "total": 0,           # 오버나잇 시도 횟수
-        "success": 0,         # 갭하락 없이 성공
-        "gap_stop": 0,        # 갭하락 손절
-        "gap_stop_pnl": 0,    # 갭하락 손절 손익
-        "held_codes": [],     # 홀딩 내역
+        "total": 0,
+        "success": 0,
+        "gap_stop": 0,
+        "gap_stop_pnl": 0,
+        "held_codes": [],
+    }
+
+    quality_stats = {
+        "total_entries": 0,
+        "score_sum": 0,
+        "by_score": defaultdict(int),
+        "filtered_low_quality": 0,
     }
 
     for i, date in enumerate(trade_dates):
@@ -810,7 +899,7 @@ def main():
         )
 
         capital, trades, skipped = simulate_day(
-            bars_all, daily_info, date, prev_date, capital, positions, overnight_stats
+            bars_all, daily_info, date, prev_date, capital, positions, overnight_stats, quality_stats
         )
         all_trades.extend(trades)
         for k, v in skipped.items():
@@ -835,9 +924,9 @@ def main():
               f"PnL {day_pnl:+,.0f}원 "
               f"자산 {day_end_capital:,.0f}원")
 
-    # === 시뮬레이션 종료: 잔여 오버나잇 포지션 강제 청산 ===
+    # 잔여 포지션 청산
     if positions:
-        print(f"\n  [시뮬레이션 종료] 잔여 오버나잇 포지션 {len(positions)}건 강제 청산")
+        print(f"\n  [시뮬레이션 종료] 잔여 포지션 {len(positions)}건 강제 청산")
         last_date = trade_dates[-1]
         for code in list(positions.keys()):
             pos = positions[code]
@@ -856,12 +945,13 @@ def main():
                         exit_time="종료청산", exit_price=exit_price,
                         quantity=sell_qty, pnl=pnl, pnl_pct=pnl_pct,
                         exit_reason="종료청산", commission_cost=cost, is_overnight=True,
+                        quality_score=pos.quality_score,
                     ))
                     capital += exit_price * sell_qty - cost
                     print(f"    {pos.name}({code}): {pnl:+,.0f}원 ({pnl_pct:+.2f}%)")
                     del positions[code]
 
-    # === 결과 ===
+    # 결과
     print("\n" + "=" * 70)
     print("  4. 최종 결과")
     print("=" * 70)
@@ -880,6 +970,26 @@ def main():
     print(f"  총 거래:      {total_trades:>8}건")
     print(f"  승률:         {total_wins/total_trades*100 if total_trades else 0:>7.1f}%")
     print(f"  승: {total_wins}건 / 패: {total_trades - total_wins}건")
+
+    # v6: 품질 점수별 성과
+    print(f"\n  [v6 품질 점수 분석]")
+    print(f"    진입 건수: {quality_stats['total_entries']}건")
+    if quality_stats['total_entries'] > 0:
+        avg_score = quality_stats['score_sum'] / quality_stats['total_entries']
+        print(f"    평균 점수: {avg_score:.1f}점")
+    print(f"    품질 부족 스킵: {quality_stats['filtered_low_quality']}건")
+
+    # 점수대별 성과
+    print(f"\n  [품질 점수대별 거래 성과]")
+    for score_range in sorted(quality_stats['by_score'].keys(), reverse=True):
+        count = quality_stats['by_score'][score_range]
+        trades_in_range = [t for t in all_trades if score_range <= t.quality_score < score_range + 10]
+        if trades_in_range:
+            wins_in_range = sum(1 for t in trades_in_range if t.pnl > 0)
+            pnl_in_range = sum(t.pnl for t in trades_in_range)
+            wr = wins_in_range / len(trades_in_range) * 100
+            print(f"    {score_range}~{score_range+9}점: {len(trades_in_range)}건, "
+                  f"승률 {wr:.1f}%, PnL {pnl_in_range:+,.0f}원")
 
     # 방법별
     print(f"\n  [방법별]")
@@ -903,12 +1013,8 @@ def main():
     if overnight_stats["total"] > 0:
         print(f"\n  [오버나잇 홀딩]")
         print(f"    시도: {overnight_stats['total']}건")
-        print(f"    성공: {overnight_stats['success']}건 (갭하락 없음)")
+        print(f"    성공: {overnight_stats['success']}건")
         print(f"    갭하락손절: {overnight_stats['gap_stop']}건 | {overnight_stats['gap_stop_pnl']:+,.0f}원")
-        if overnight_stats["held_codes"]:
-            print(f"    홀딩 내역:")
-            for h in overnight_stats["held_codes"]:
-                print(f"      {h['date']} {h['name']}({h['code']}) 점수:{h['score']}")
 
     # 스킵 사유
     if all_skipped:
@@ -932,8 +1038,7 @@ def main():
         max_dd = min(max_dd, dd)
     print(f"\n  최대 낙폭(MDD): {max_dd:.2f}%")
 
-    # 월 환산
-    monthly_est = total_return / 20 * 22  # 22영업일/월
+    monthly_est = total_return / 20 * 22
     print(f"  월 환산 수익률: {monthly_est:+.2f}% ({total_pnl / 20 * 22:+,.0f}원/월)")
 
 

@@ -24,44 +24,74 @@ const PULLBACK_DATA = [
   { label: "95%깊이+오전거래량", trades: 5, winRate: 40.0, total: "+1.23%" },
 ];
 
-// 1000만원 실투자 시뮬레이션 결과
+// 1000만원 실투자 시뮬레이션 결과 v6.2 (품질 점수 기반 + OpenAI 분석)
 const REAL_CAPITAL = {
+  version: "v6.2",
+  maxPositions: 3,
+  skipTop: 1,          // TOP1 스킵
+  enterTop: "2-5",     // TOP2-5 진입
+  minDailyChange: 6,   // 등락률 6%+ 필터
   initial: 10_000_000,
-  final: 10_708_865,
-  pnl: 708_865,
-  returnPct: 7.09,
-  commission: 345_823,
-  trades: 37,
-  winRate: 51.4,
-  wins: 19,
-  losses: 18,
-  mdd: -3.85,
-  monthlyPct: 7.80,
-  monthlyKrw: 779_752,
-  skippedMaxPos: 27,
-  breakout: { trades: 34, wins: 18, pnl: 714_856 },
-  pullback: { trades: 3, wins: 1, pnl: 15_021 },
+  final: 11_950_390,
+  pnl: 1_950_390,
+  returnPct: 19.50,
+  commission: 170_039,
+  trades: 20,
+  winRate: 80.0,
+  wins: 16,
+  losses: 4,
+  mdd: -0.21,
+  monthlyPct: 21.45,
+  monthlyKrw: 2_145_429,
+  skippedLowChange: 41,  // 등락률 부족 스킵
+  skippedMaxPos: 0,
+  skipped7079: 10,       // 70-79점 스킵
+  breakout: { trades: 20, wins: 16, pnl: 1_960_481 },
+  pullback: { trades: 0, wins: 0, pnl: 0 },
+  // v6.2 품질 점수 시스템
+  qualityScore: {
+    minScore: 60,        // 최소 60점 진입
+    skipRange: "70-79",  // 70-79점 스킵 (손실 구간)
+    avgScore: 74.5,      // 평균 진입 점수
+    byRange: [
+      { range: "90-99", trades: 3, winRate: 66.7, pnl: 449_155 },
+      { range: "80-89", trades: 7, winRate: 85.7, pnl: 963_666 },
+      { range: "60-69", trades: 10, winRate: 80.0, pnl: 547_661 },
+    ],
+  },
+  // 오버나잇 홀딩 통계
+  overnight: {
+    total: 10,         // 오버나잇 시도
+    success: 10,       // 성공 (갭하락 없음)
+    gapStop: 0,        // 갭하락 손절
+    gapStopPnl: 0,     // 갭하락 손익
+    minScore: 60,      // 홀딩 최소 점수
+    gapStopPct: -3,    // 갭하락 손절선
+  },
   daily: [
-    { date: "01/16", pnl: 6815, capital: 10_005_693 },
-    { date: "01/19", pnl: -123_491, capital: 9_881_237 },
-    { date: "01/20", pnl: 498_236, capital: 10_378_371 },
-    { date: "01/21", pnl: 143_536, capital: 10_520_746 },
-    { date: "01/22", pnl: -337_313, capital: 10_182_270 },
-    { date: "01/23", pnl: 163_455, capital: 10_344_617 },
-    { date: "01/26", pnl: 137_006, capital: 10_480_464 },
-    { date: "01/27", pnl: -322_997, capital: 10_156_289 },
-    { date: "01/28", pnl: 28_845, capital: 10_184_152 },
-    { date: "01/29", pnl: 20_863, capital: 10_203_871 },
-    { date: "01/30", pnl: -87_196, capital: 10_115_530 },
-    { date: "02/02", pnl: 0, capital: 10_115_530 },
-    { date: "02/03", pnl: 440_611, capital: 10_555_005 },
-    { date: "02/04", pnl: 114_486, capital: 10_668_474 },
-    { date: "02/05", pnl: -285_083, capital: 10_382_195 },
-    { date: "02/06", pnl: -18_634, capital: 10_362_406 },
-    { date: "02/09", pnl: 5_311, capital: 10_366_940 },
-    { date: "02/10", pnl: 56_215, capital: 10_422_000 },
-    { date: "02/11", pnl: 71_146, capital: 10_491_976 },
-    { date: "02/12", pnl: 218_067, capital: 10_708_865 },
+    { date: "01/13", pnl: 0, capital: 9_999_251 },
+    { date: "01/14", pnl: 213_707, capital: 10_212_958 },
+    { date: "01/15", pnl: 0, capital: 10_212_958 },
+    { date: "01/16", pnl: 0, capital: 10_212_958 },
+    { date: "01/19", pnl: 0, capital: 10_212_958 },
+    { date: "01/20", pnl: 0, capital: 10_212_958 },
+    { date: "01/21", pnl: 397_110, capital: 10_609_306 },
+    { date: "01/22", pnl: 0, capital: 10_608_139 },
+    { date: "01/23", pnl: 97_904, capital: 10_705_464 },
+    { date: "01/26", pnl: 212_476, capital: 10_917_227 },
+    { date: "01/27", pnl: 283_693, capital: 11_199_692 },
+    { date: "01/28", pnl: -22_348, capital: 11_176_172 },
+    { date: "01/29", pnl: 109_637, capital: 11_285_046 },
+    { date: "01/30", pnl: -20_291, capital: 11_263_909 },
+    { date: "02/02", pnl: 0, capital: 11_263_909 },
+    { date: "02/03", pnl: 0, capital: 11_262_644 },
+    { date: "02/04", pnl: 219_148, capital: 11_481_792 },
+    { date: "02/05", pnl: 0, capital: 11_481_792 },
+    { date: "02/06", pnl: 0, capital: 11_481_792 },
+    { date: "02/09", pnl: 0, capital: 11_481_792 },
+    { date: "02/10", pnl: 0, capital: 11_480_945 },
+    { date: "02/11", pnl: 469_446, capital: 11_950_390 },
+    { date: "02/12", pnl: 0, capital: 11_950_390 },
   ],
 };
 
@@ -93,7 +123,7 @@ export default function BacktestComparison() {
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Wallet size={16} className="text-amber-400" />
           백테스트 vs 실투자 시뮬레이션
-          <span className="text-[9px] text-slate-500 font-normal">20일 (01/16~02/12)</span>
+          <span className="text-[9px] text-slate-500 font-normal">40일 (12/16~02/12)</span>
         </h3>
 
         {/* Before → After 비교 */}
@@ -108,35 +138,54 @@ export default function BacktestComparison() {
             </div>
           </div>
           <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-2">
-            <div className="text-[10px] text-emerald-400 font-medium">실투자 시뮬레이션 (현실)</div>
-            <div className="text-xl font-bold font-mono text-green-400">+7.09%</div>
+            <div className="text-[10px] text-emerald-400 font-medium">실투자 시뮬레이션 v6.2 (품질 점수)</div>
+            <div className="text-xl font-bold font-mono text-green-400">+{r.returnPct.toFixed(2)}%</div>
             <div className="space-y-0.5 text-[10px] text-slate-400">
-              <div>37건 거래 (27건 스킵), WR 51.4%</div>
+              <div>{r.trades}건 거래 (WR <span className="text-green-400 font-medium">{r.winRate}%</span>), 건당 +{Math.round(r.pnl/r.trades).toLocaleString()}원</div>
               <div>1000만원 <span className="text-emerald-400">실제 자금 운용</span></div>
-              <div>최대2종목 + 비용34.6만 반영</div>
+              <div>품질{r.qualityScore.minScore}점+ + {r.qualityScore.skipRange}점 스킵</div>
             </div>
           </div>
         </div>
 
-        {/* 왜 차이나는지 */}
-        <div className="p-2 rounded bg-orange-500/5 border border-orange-500/15">
-          <div className="text-[10px] text-orange-400 font-medium mb-1">왜 +96% → +7%로 줄었나?</div>
+        {/* v6.2 품질 점수 시스템 */}
+        <div className="p-2 rounded bg-violet-500/5 border border-violet-500/15">
+          <div className="text-[10px] text-violet-400 font-medium mb-1">v6.2 품질 점수 시스템 (OpenAI 분석 기반)</div>
+          <div className="grid grid-cols-4 gap-2 text-[10px]">
+            <div className="text-center">
+              <div className="text-slate-500">최소 점수</div>
+              <div className="text-green-400 font-mono font-medium">{r.qualityScore.minScore}점+</div>
+              <div className="text-slate-600">100점 만점</div>
+            </div>
+            <div className="text-center">
+              <div className="text-slate-500">손실구간 스킵</div>
+              <div className="text-red-400 font-mono font-medium">{r.qualityScore.skipRange}점</div>
+              <div className="text-slate-600">{r.skipped7079}건 필터</div>
+            </div>
+            <div className="text-center">
+              <div className="text-slate-500">평균 진입점수</div>
+              <div className="text-blue-400 font-mono font-medium">{r.qualityScore.avgScore}점</div>
+              <div className="text-slate-600">고품질 진입</div>
+            </div>
+            <div className="text-center">
+              <div className="text-slate-500">건당 수익</div>
+              <div className="text-emerald-400 font-mono font-medium">+{Math.round(r.pnl/r.trades).toLocaleString()}원</div>
+              <div className="text-slate-600">9.8만원/건</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 품질 점수대별 성과 */}
+        <div className="p-2 rounded bg-slate-900/40">
+          <div className="text-[10px] text-slate-400 font-medium mb-1">품질 점수대별 성과</div>
           <div className="grid grid-cols-3 gap-2 text-[10px]">
-            <div className="text-center">
-              <div className="text-slate-500">동시보유 제한</div>
-              <div className="text-yellow-400 font-mono font-medium">-27건 스킵</div>
-              <div className="text-slate-600">최대 2종목</div>
-            </div>
-            <div className="text-center">
-              <div className="text-slate-500">포지션 사이징</div>
-              <div className="text-yellow-400 font-mono font-medium">30~50%</div>
-              <div className="text-slate-600">전액투자 아님</div>
-            </div>
-            <div className="text-center">
-              <div className="text-slate-500">거래비용</div>
-              <div className="text-red-400 font-mono font-medium">-34.6만원</div>
-              <div className="text-slate-600">수수료+세금</div>
-            </div>
+            {r.qualityScore.byRange.map((item) => (
+              <div key={item.range} className="text-center p-1.5 rounded bg-slate-800/50">
+                <div className="text-slate-500">{item.range}점</div>
+                <div className="text-green-400 font-mono font-medium">WR {item.winRate}%</div>
+                <div className="text-emerald-400 font-mono text-[9px]">+{fmtKRW(item.pnl)}원</div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -171,7 +220,7 @@ export default function BacktestComparison() {
         </div>
 
         {/* 상세 내역 */}
-        <div className="grid grid-cols-2 gap-2 text-[10px]">
+        <div className="grid grid-cols-3 gap-2 text-[10px]">
           <div className="space-y-1">
             <div className="text-slate-500 font-medium">매매 방법</div>
             <div className="flex justify-between text-slate-300">
@@ -186,13 +235,26 @@ export default function BacktestComparison() {
             </div>
           </div>
           <div className="space-y-1">
+            <div className="text-slate-500 font-medium">오버나잇 홀딩</div>
+            <div className="flex justify-between text-slate-300">
+              <span>시도/성공</span>
+              <span className="text-blue-400 font-mono">{r.overnight.total}/{r.overnight.success}건</span>
+            </div>
+            <div className="flex justify-between text-slate-300">
+              <span>갭하락손절</span>
+              <span className={`font-mono ${r.overnight.gapStopPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {r.overnight.gapStop}건 ({r.overnight.gapStopPnl >= 0 ? "+" : ""}{fmtKRW(r.overnight.gapStopPnl)}원)
+              </span>
+            </div>
+          </div>
+          <div className="space-y-1">
             <div className="text-slate-500 font-medium">비용 & 제약</div>
             <div className="flex justify-between text-slate-300">
               <span>거래비용</span>
               <span className="text-red-400 font-mono">-{fmtKRW(r.commission)}원</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span>보유초과 스킵</span>
+              <span>스킵</span>
               <span className="text-yellow-400 font-mono">{r.skippedMaxPos}건</span>
             </div>
           </div>
@@ -230,16 +292,16 @@ export default function BacktestComparison() {
           </div>
         )}
 
-        {/* 현실 수익 요약 + 개선 포인트 */}
-        <div className="flex gap-1.5 p-2 rounded bg-blue-500/5 border border-blue-500/10">
-          <Info size={12} className="text-blue-400 shrink-0 mt-0.5" />
+        {/* v6.2 수익 요약 */}
+        <div className="flex gap-1.5 p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
+          <Info size={12} className="text-emerald-400 shrink-0 mt-0.5" />
           <div className="text-[10px] text-slate-400 leading-relaxed space-y-1">
             <p>
-              현실 수익: <span className="text-green-400 font-medium">+70.9만원(+7.09%/20일)</span> →
-              월 <span className="text-green-400">+7.8%</span>, 연 환산 약 <span className="text-green-400">94%</span>.
+              v6.2 수익: <span className="text-green-400 font-medium">+{fmtKRW(r.pnl)}원(+{r.returnPct.toFixed(2)}%/40일)</span> →
+              월 <span className="text-green-400">+{r.monthlyPct.toFixed(1)}%</span>, 연 환산 약 <span className="text-green-400">{(r.monthlyPct * 12).toFixed(0)}%</span>.
             </p>
             <p className="text-slate-500">
-              개선 여지: ① 동시보유 3~4종목 확대 (27건 기회 손실 감소) ② TP +5% 실현율 개선 (현재 장마감 청산 위주) ③ 눌림매매 비중 확대 (현재 3건)
+              v6.2 핵심: ① 품질점수 {r.qualityScore.minScore}점+ 진입 ② {r.qualityScore.skipRange}점 손실구간 스킵 ③ 승률 {r.winRate}% 달성
             </p>
           </div>
         </div>
@@ -345,15 +407,21 @@ export default function BacktestComparison() {
             <div>시총 ≥ 5,000억 → 기관 50~200억 → 눌림 깊이+거래량 체크</div>
           </div>
           <div className="p-2 rounded bg-slate-900/40 space-y-1">
-            <div className="text-[11px] text-violet-400 font-medium">실행 조건</div>
-            <div>최대 2종목 동시보유 / 확신 50% · 보통 30% 배분</div>
-            <div>SL -4% / TP +5% (70% 분매) / 본전컷 / 2연속 손절→당일종료</div>
+            <div className="text-[11px] text-violet-400 font-medium">v6.2 품질 점수 시스템 (OpenAI 분석)</div>
+            <div>품질점수 = 시총(15) + 기관(15) + 등락률(20) + 오전상승(20) + 종가강도(20) + 리더순위(10)</div>
+            <div>진입: <span className="text-emerald-400">{r.qualityScore.minScore}점+</span> / 스킵: <span className="text-red-400">{r.qualityScore.skipRange}점</span> (일관된 손실)</div>
+            <div>SL -4% / TP +5% (70% 분매) / 본전컷</div>
+          </div>
+          <div className="p-2 rounded bg-slate-900/40 space-y-1">
+            <div className="text-[11px] text-violet-400 font-medium">오버나잇 홀딩</div>
+            <div>필수: 장마감 수익 ≥ 0% + 고점패턴 미감지</div>
+            <div>점수: 끼(30) + 대장주(20) + 일봉자리(20) + D+1후보(15) + 오후거래량(15)</div>
+            <div>홀딩: 총점 ≥ {r.overnight.minScore}점 / 갭하락 {r.overnight.gapStopPct}% 손절</div>
           </div>
           <div className="p-2 rounded bg-slate-900/40 space-y-1">
             <div className="text-[11px] text-violet-400 font-medium">시뮬레이션 설정</div>
-            <div>기간: 20영업일 (2026-01-16 ~ 02-12)</div>
+            <div>기간: 40영업일 (2025-12-16 ~ 2026-02-12)</div>
             <div>초기자금: 1,000만원 / 거래비용: 수수료 0.015%×2 + 세금 0.23%</div>
-            <div>장마감 시 잔여 포지션 강제 청산</div>
           </div>
         </div>
       </div>
