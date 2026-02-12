@@ -203,9 +203,13 @@ export default function StrategyConditions() {
           </div>
         </Section>
 
-        {/* 8. 패턴기반 청산 */}
+        {/* 8. 패턴기반 청산 - 미검증 */}
         <Section icon={Crosshair} title="패턴 기반 청산" color="text-pink-400" defaultOpen={false}>
-          <div className="space-y-1.5 text-[11px]">
+          <div className="flex items-center gap-1.5 mb-2 p-1.5 rounded bg-orange-500/10 border border-orange-500/20">
+            <AlertTriangle size={10} className="text-orange-400 shrink-0" />
+            <span className="text-[10px] text-orange-400">미검증 — 백테스트에 미포함. 홍인기 이론 기반 규칙 (현재 미적용)</span>
+          </div>
+          <div className="space-y-1.5 text-[11px] opacity-70">
             <div className="text-slate-300">보유 중 아래 패턴 감지 시 <span className="text-red-400 font-medium">즉시 전량 매도</span>:</div>
             <div className="flex gap-1.5 flex-wrap">
               <Tag color="text-red-400 bg-red-500/15">거래량고점</Tag>
