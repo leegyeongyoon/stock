@@ -28,11 +28,22 @@ function Card({
   );
 }
 
-export default function SummaryCards({ data }: Props) {
+interface SummaryProps {
+  data: DashboardSummary | undefined;
+  holdingsSummary?: {
+    count: number;
+    total_cost: number;
+    total_market_value: number;
+    total_unrealized_pnl: number;
+    total_unrealized_pnl_pct: number;
+  };
+}
+
+export default function SummaryCards({ data, holdingsSummary }: SummaryProps) {
   if (!data) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
             className="bg-slate-800 rounded-lg p-4 border border-slate-700 animate-pulse h-24"
@@ -55,8 +66,31 @@ export default function SummaryCards({ data }: Props) {
     portfolio.daily_pnl >= 0 ? "text-green-400" : "text-red-400";
   const pnlSign = portfolio.daily_pnl >= 0 ? "+" : "";
 
+  const invested = holdingsSummary?.total_cost ?? 0;
+  const marketVal = holdingsSummary?.total_market_value ?? 0;
+  const unrealPnl = holdingsSummary?.total_unrealized_pnl ?? 0;
+  const unrealPct = holdingsSummary?.total_unrealized_pnl_pct ?? 0;
+  const unrealColor = unrealPnl >= 0 ? "text-green-400" : "text-red-400";
+  const unrealSign = unrealPnl >= 0 ? "+" : "";
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <Card
+        label="총 자산"
+        value={`${portfolio.total_equity.toLocaleString()}원`}
+        sub={`현금: ${portfolio.cash.toLocaleString()}원`}
+      />
+      <Card
+        label="투자금액"
+        value={`${invested.toLocaleString()}원`}
+        sub={`${portfolio.positions}종목 보유`}
+      />
+      <Card
+        label="평가금액"
+        value={`${marketVal.toLocaleString()}원`}
+        sub={`${unrealSign}${unrealPnl.toLocaleString()}원 (${unrealSign}${unrealPct.toFixed(2)}%)`}
+        color={unrealColor}
+      />
       <Card
         label="오늘 수익"
         value={`${pnlSign}${portfolio.daily_pnl.toLocaleString()}원`}
@@ -66,17 +100,12 @@ export default function SummaryCards({ data }: Props) {
       <Card
         label="매매 횟수"
         value={`${portfolio.trades_today}회`}
-        sub={`보유: ${portfolio.positions}종목`}
+        sub={`승률: ${portfolio.win_rate.toFixed(1)}%`}
       />
       <Card
-        label="승률"
-        value={`${portfolio.win_rate.toFixed(1)}%`}
-        sub={`오늘 매매 기준`}
-      />
-      <Card
-        label="총 자산"
-        value={`${portfolio.total_equity.toLocaleString()}원`}
-        sub={`현금: ${portfolio.cash.toLocaleString()}원`}
+        label="현금 비중"
+        value={`${portfolio.total_equity > 0 ? ((portfolio.cash / portfolio.total_equity) * 100).toFixed(1) : "0"}%`}
+        sub={`${portfolio.cash.toLocaleString()}원`}
       />
     </div>
   );

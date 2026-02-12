@@ -66,7 +66,7 @@ export default function DashboardPage() {
       )}
 
       {/* Summary Cards */}
-      <SummaryCards data={summary} />
+      <SummaryCards data={summary} holdingsSummary={holdingsData?.summary} />
 
       {/* Holdings */}
       <HoldingsPanel
