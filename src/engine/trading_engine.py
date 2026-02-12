@@ -93,43 +93,6 @@ class TradingEngine:
             f"자본금 {settings.initial_capital:,}원"
         )
 
-    async def init_balance(self) -> None:
-        """서버 시작 시 KIS 잔고 한번 조회하여 초기 자본금 세팅."""
-        try:
-            auth = KISAuth(
-                app_key=settings.kis_app_key,
-                app_secret=settings.kis_app_secret,
-                account_no=settings.kis_account_no,
-                is_mock=settings.kis_is_mock,
-            )
-            client = KISClient(auth)
-            await client.start()
-            balance = await client.get_balance()
-            await client.stop()
-
-            # KIS 총평가금액 사용 (모의투자 예수금은 부정확)
-            total_eval = balance.total_eval or balance.total_deposit
-            holdings_eval = sum(h.eval_amount for h in balance.holdings)
-            actual_cash = total_eval - holdings_eval
-            if actual_cash < 0:
-                actual_cash = balance.total_deposit
-
-            self.position_manager.cash = actual_cash
-            self.position_manager.initial_capital = total_eval
-
-            self.add_log(
-                "INIT",
-                f"초기 잔고 조회: 총자산 {total_eval:,}원, "
-                f"현금 {actual_cash:,.0f}원, "
-                f"보유종목평가 {holdings_eval:,}원",
-            )
-            logger.info(
-                f"초기 잔고 조회: 총자산={total_eval:,}원 "
-                f"현금={actual_cash:,.0f}원 보유평가={holdings_eval:,}원"
-            )
-        except Exception as e:
-            logger.warning(f"초기 잔고 조회 실패 (기본값 사용): {e}")
-
     # ── Lifecycle ──────────────────────────────────────────
 
     async def start(self) -> None:

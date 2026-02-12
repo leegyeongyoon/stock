@@ -16,16 +16,6 @@ from src.server.websocket_hub import hub
 from src.analysis.theme_analyzer import get_theme_analyzer
 
 
-async def _init_balance_background(engine):
-    """백그라운드에서 초기 잔고 조회 (서버 시작 차단 방지)"""
-    try:
-        await asyncio.wait_for(engine.init_balance(), timeout=30.0)
-    except asyncio.TimeoutError:
-        logger.warning("초기 잔고 조회 타임아웃 (30초) - 기본값 사용")
-    except Exception as e:
-        logger.warning(f"초기 잔고 조회 실패: {e}")
-
-
 async def _warmup_theme_cache():
     """서버 시작 후 테마 분석 캐시를 미리 채움."""
     await asyncio.sleep(3)  # 서버 안정화 대기
@@ -81,8 +71,8 @@ async def lifespan(app: FastAPI):
     # Start periodic PnL push
     hub.start_pnl_push(lambda: engine.position_manager.get_summary() if engine.position_manager else {})
 
-    # 서버 시작 시 KIS 잔고 조회 - 백그라운드에서 실행 (서버 시작 차단 방지)
-    asyncio.create_task(_init_balance_background(engine))
+    # init_balance 제거: _sync_balance()가 engine.start()에서 정확하게 처리
+    # (init_balance와 _sync_balance 동시 실행 시 레이스 컨디션으로 현금 이중 계산 버그 발생)
 
     # Auto-scheduler: 장 시간 자동 시작/종료
     scheduler = TradingScheduler(engine)
