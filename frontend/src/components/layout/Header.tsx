@@ -23,7 +23,7 @@ export default function Header() {
   const { data: summary } = useQuery({
     queryKey: ["dashboard"],
     queryFn: getDashboardSummary,
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const startMutation = useMutation({

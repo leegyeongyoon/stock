@@ -20,30 +20,31 @@ export default function DashboardPage() {
   const { data: summary } = useQuery({
     queryKey: ["dashboard"],
     queryFn: getDashboardSummary,
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const { data: pnl } = useQuery({
     queryKey: ["pnl"],
     queryFn: getPnL,
+    refetchInterval: 30000,
   });
 
   const { data: positionsData } = useQuery({
     queryKey: ["positions"],
     queryFn: getPositions,
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const { data: holdingsData } = useQuery({
     queryKey: ["holdings"],
     queryFn: getHoldings,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   const { data: eventsData } = useQuery({
     queryKey: ["events"],
     queryFn: () => getEvents(50),
-    refetchInterval: 3000,
+    refetchInterval: 10000,
   });
 
   const { data: wsSignal } = useWebSocket<{

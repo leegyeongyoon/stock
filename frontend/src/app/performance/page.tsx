@@ -10,19 +10,19 @@ export default function PerformancePage() {
   const { data: byStrategy } = useQuery({
     queryKey: ["pnl-by-strategy"],
     queryFn: getPnLByStrategy,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   const { data: byDay } = useQuery({
     queryKey: ["pnl-by-day"],
     queryFn: getPnLByDayOfWeek,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   const { data: analysis } = useQuery({
     queryKey: ["pnl-analysis"],
     queryFn: getPnLAnalysis,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   return (
