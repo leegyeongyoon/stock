@@ -26,9 +26,9 @@ async def get_holdings(engine: TradingEngine = Depends(get_engine)):
         "holdings": holdings,
         "summary": {
             "count": len(holdings),
-            "total_cost": round(total_cost, 0),
-            "total_market_value": round(total_market, 0),
-            "total_unrealized_pnl": round(total_pnl, 0),
+            "total_cost": int(round(total_cost)),
+            "total_market_value": int(round(total_market)),
+            "total_unrealized_pnl": int(round(total_pnl)),
             "total_unrealized_pnl_pct": round(total_pnl / total_cost * 100, 2) if total_cost > 0 else 0,
         },
     }
@@ -46,6 +46,6 @@ async def get_position_summary(engine: TradingEngine = Depends(get_engine)):
 
     return {
         "count": len(positions),
-        "total_value": total_value,
-        "unrealized_pnl": unrealized_pnl,
+        "total_value": int(total_value),
+        "unrealized_pnl": int(unrealized_pnl),
     }

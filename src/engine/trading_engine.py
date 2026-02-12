@@ -511,15 +511,15 @@ class TradingEngine:
             balance = await self.client.get_balance()
 
             # KIS 총평가금액 = 실제 총자산 (모의투자 예수금은 매수 후에도 안 줄어서 부정확)
-            total_eval = balance.total_eval or balance.total_deposit
+            total_eval = int(balance.total_eval or balance.total_deposit)
 
             # 보유종목 KIS 평가금액 합계
-            holdings_eval = sum(h.eval_amount for h in balance.holdings)
+            holdings_eval = int(sum(h.eval_amount for h in balance.holdings))
 
             # 실제 현금 = 총평가 - 보유종목 평가
-            actual_cash = total_eval - holdings_eval
+            actual_cash = int(total_eval - holdings_eval)
             if actual_cash < 0:
-                actual_cash = balance.total_deposit
+                actual_cash = int(balance.total_deposit)
             self.position_manager.cash = actual_cash
 
             # 기존 보유 종목이 있으면 포지션으로 등록
@@ -530,7 +530,7 @@ class TradingEngine:
                         stock_name=h.stock_name,
                         strategy_name="기존보유",
                         quantity=h.quantity,
-                        price=h.avg_price,
+                        price=int(h.avg_price),
                     )
                     # open_position이 cash를 차감하므로 actual_cash로 보정
                     self.position_manager.cash = actual_cash
@@ -538,7 +538,7 @@ class TradingEngine:
                     # KIS 현재가로 시가평가 갱신
                     if h.current_price > 0:
                         self.position_manager.update_price(
-                            h.stock_code, h.current_price
+                            h.stock_code, int(h.current_price)
                         )
 
             # 서버 재시작 시 initial_capital = 현재 총자산 → PnL 0%에서 시작
@@ -959,10 +959,10 @@ class TradingEngine:
         for pos in positions:
             cost = pos["avg_price"] * pos["quantity"]
             market_val = pos["current_price"] * pos["quantity"]
-            pos["market_value"] = market_val
-            pos["cost_basis"] = cost
-            pos["pnl_amount"] = market_val - cost
-            pos["pnl_pct"] = ((pos["current_price"] / pos["avg_price"]) - 1) * 100 if pos["avg_price"] > 0 else 0
+            pos["market_value"] = int(market_val)
+            pos["cost_basis"] = int(cost)
+            pos["pnl_amount"] = int(market_val - cost)
+            pos["pnl_pct"] = round(((pos["current_price"] / pos["avg_price"]) - 1) * 100, 2) if pos["avg_price"] > 0 else 0
         return positions
 
     def get_dashboard_summary(self) -> dict:
