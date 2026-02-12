@@ -21,6 +21,8 @@ class LivePosition:
     take_profit_pct: float = 0.05    # 5%
     entry_time: datetime = field(default_factory=datetime.now)
     order_id: str = ""
+    partial_sold: bool = False        # 분할매도 완료 여부
+    original_quantity: int = 0        # 최초 진입 수량
 
     @property
     def stop_loss_price(self) -> float:
@@ -166,6 +168,7 @@ class PositionManager:
             entry_time=datetime.now(),
             order_id=order_id,
         )
+        pos.original_quantity = quantity
         self._positions[stock_code] = pos
 
         logger.info(
@@ -220,7 +223,69 @@ class PositionManager:
         )
 
         self._delete_position_from_db(code)
-        self._save_trade_to_db(trade)
+        # trade_store.save_trade()가 DB 저장을 전담 (중복 방지)
+        return trade
+
+    def partial_close_position(
+        self, code: str, sell_quantity: int, exit_price: float, exit_reason: str
+    ) -> Optional[ClosedTrade]:
+        """포지션 일부만 청산 (분할매도).
+
+        sell_quantity만큼 팔고, 나머지는 유지.
+        partial_sold = True로 마킹.
+        """
+        pos = self._positions.get(code)
+        if not pos:
+            return None
+
+        if sell_quantity <= 0 or sell_quantity >= pos.quantity:
+            # 전량이면 close_position 사용
+            return self.close_position(code, exit_price, exit_reason)
+
+        # 매도 금액 계산
+        proceeds = exit_price * sell_quantity
+        commission = proceeds * self.COMMISSION_RATE
+        tax = proceeds * self.TAX_RATE
+        self.cash += (proceeds - commission - tax)
+
+        # PnL 계산 (매도분만)
+        pnl = (exit_price - pos.avg_price) * sell_quantity - commission - tax
+        entry_cost = pos.avg_price * sell_quantity
+        pnl_pct = pnl / entry_cost * 100 if entry_cost > 0 else 0.0
+
+        # 거래 기록
+        trade = ClosedTrade(
+            stock_code=code,
+            stock_name=pos.stock_name,
+            strategy_name=pos.strategy_name,
+            side="BUY",
+            quantity=sell_quantity,
+            entry_price=pos.avg_price,
+            exit_price=exit_price,
+            entry_time=pos.entry_time,
+            exit_time=datetime.now(),
+            pnl=pnl,
+            pnl_pct=pnl_pct,
+            exit_reason=exit_reason,
+            order_id=pos.order_id,
+        )
+        self._trades.append(trade)
+        self._daily_pnl += pnl
+
+        # 포지션 수량 감소 + 분할매도 마킹
+        pos.quantity -= sell_quantity
+        pos.partial_sold = True
+
+        emoji = "+" if pnl > 0 else ""
+        logger.info(
+            f"분할매도: {code} {sell_quantity}주 @{exit_price:,.0f} "
+            f"PnL={emoji}{pnl:,.0f} ({emoji}{pnl_pct:.2f}%) "
+            f"잔여={pos.quantity}주 [{pos.strategy_name}]"
+        )
+
+        # DB 업데이트 (수량 변경 반영)
+        self._save_position_to_db(pos)
+        # trade_store.save_trade()가 DB 저장을 전담 (중복 방지)
         return trade
 
     def update_price(self, code: str, price: float) -> None:

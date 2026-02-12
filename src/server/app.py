@@ -16,6 +16,54 @@ from src.server.websocket_hub import hub
 from src.analysis.theme_analyzer import get_theme_analyzer
 
 
+def _cleanup_bad_trade_data():
+    """서버 시작 시 잘못된 거래 데이터 정리 (일회성, 멱등).
+
+    1. strategy_name='기존보유' 거래 삭제 (전략 거래가 아닌 KIS 기존보유 강제청산)
+    2. 중복 거래 제거 (같은 stock_code + traded_at에 여러 레코드)
+    3. entry_price=0이고 중복인 레코드 삭제
+    """
+    try:
+        from src.database.connection import get_session
+        from src.database.models import LiveTrade
+        from sqlalchemy import delete, text
+
+        with get_session() as session:
+            # 1. "기존보유" 거래 삭제
+            result1 = session.execute(
+                delete(LiveTrade).where(LiveTrade.strategy_name == "기존보유")
+            )
+            deleted_legacy = result1.rowcount
+
+            # 2. 중복 제거: 같은 stock_code + 같은 분(minute)에 여러 레코드 → 불완전한 것 삭제
+            # position_manager가 저장한 레코드(entry_price=NULL/0)를 삭제, trade_store 레코드 유지
+            result2 = session.execute(text("""
+                DELETE FROM live_trades
+                WHERE id IN (
+                    SELECT lt.id FROM live_trades lt
+                    INNER JOIN (
+                        SELECT stock_code, date_trunc('minute', traded_at) AS trade_min
+                        FROM live_trades
+                        GROUP BY stock_code, date_trunc('minute', traded_at)
+                        HAVING COUNT(*) > 1
+                    ) dups ON lt.stock_code = dups.stock_code
+                        AND date_trunc('minute', lt.traded_at) = dups.trade_min
+                    WHERE (lt.entry_price IS NULL OR lt.entry_price = 0)
+                )
+            """))
+            deleted_dupes = result2.rowcount
+
+            session.commit()
+
+            if deleted_legacy > 0 or deleted_dupes > 0:
+                logger.info(
+                    f"거래 데이터 정리: 기존보유 {deleted_legacy}건 삭제, "
+                    f"불완전 중복 {deleted_dupes}건 삭제"
+                )
+    except Exception as e:
+        logger.warning(f"거래 데이터 정리 실패 (무시): {e}")
+
+
 async def _warmup_theme_cache():
     """서버 시작 후 테마 분석 캐시를 미리 채움."""
     await asyncio.sleep(3)  # 서버 안정화 대기
@@ -54,6 +102,9 @@ async def _periodic_cache_refresh():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
+    # 잘못된 거래 데이터 정리 (기존보유 + 중복)
+    _cleanup_bad_trade_data()
+
     engine = TradingEngine()
     set_engine(engine)
 

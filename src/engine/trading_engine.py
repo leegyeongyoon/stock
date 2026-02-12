@@ -17,6 +17,7 @@ from src.engine.position_manager import PositionManager
 from src.engine.risk_manager import RiskManager
 from src.engine.strategy_runner import STRATEGY_META, StrategyRunner
 from src.engine.trade_store import TradeStore
+from src.engine.hongstyle_runner import HongStyleRunner
 from src.pipeline.data_manager import DataManager
 from src.pipeline.stock_universe import StockUniverse
 
@@ -71,6 +72,9 @@ class TradingEngine:
         )
         self.strategy_runner = StrategyRunner(data_manager=None)
         self.trade_store = TradeStore()
+
+        # 홍인기 전략 Runner (자동시작은 안 함 - API로 토글)
+        self.hongstyle_runner = HongStyleRunner(self)
 
         # Tasks
         self._main_loop_task: asyncio.Task | None = None
@@ -182,6 +186,10 @@ class TradingEngine:
                     await task
                 except asyncio.CancelledError:
                     pass
+
+        # Stop 홍인기 Runner
+        if self.hongstyle_runner and self.hongstyle_runner.enabled:
+            await self.hongstyle_runner.stop()
 
         # Cancel open orders
         if self.order_manager:
@@ -374,12 +382,14 @@ class TradingEngine:
                                 fallback = float(df.iloc[-1]["close"])
                                 self.position_manager.update_price(code, fallback)
 
-                # Check SL/TP
+                # Check SL/TP (홍인기 포지션은 HongStyleRunner가 자체 관리)
                 to_close = self.risk_manager.check_stop_loss_tp()
                 for code, reason in to_close:
                     pos = self.position_manager.get_position(code)
                     if not pos:
                         continue
+                    if pos.strategy_name.startswith("홍스타일"):
+                        continue  # HongStyleRunner 자체 모니터에서 처리
 
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
@@ -436,11 +446,21 @@ class TradingEngine:
             return
         self._close_done = True
 
+        # 홍인기 Runner 중지 + 일일 리셋
+        if self.hongstyle_runner and self.hongstyle_runner.enabled:
+            await self.hongstyle_runner.stop()
+        if self.hongstyle_runner:
+            self.hongstyle_runner.reset_daily()
+
         # Cancel all open orders
         await self.order_manager.cancel_all_open()
 
-        # Force close all positions
+        # Force close all positions (전략이 진입한 것만, "기존보유"는 스킵)
         for code, pos in list(self.position_manager.positions.items()):
+            if pos.strategy_name == "기존보유":
+                logger.info(f"기존보유 포지션 스킵: {code} {pos.stock_name}")
+                continue
+
             await self.order_manager.submit_order(
                 stock_code=code,
                 side=OrderSide.SELL,
@@ -1035,3 +1055,23 @@ class TradingEngine:
             }
             for t in self.position_manager.trades_today
         ]
+
+    # ── 홍인기 전략 제어 ─────────────────────────────────
+
+    async def start_hongstyle(self) -> dict:
+        """홍인기 자동매매 시작."""
+        if not self.hongstyle_runner:
+            return {"success": False, "message": "홍인기 Runner 미초기화"}
+        return await self.hongstyle_runner.start()
+
+    async def stop_hongstyle(self) -> dict:
+        """홍인기 자동매매 중지."""
+        if not self.hongstyle_runner:
+            return {"success": False, "message": "홍인기 Runner 미초기화"}
+        return await self.hongstyle_runner.stop()
+
+    def get_hongstyle_status(self) -> dict:
+        """홍인기 자동매매 상태."""
+        if not self.hongstyle_runner:
+            return {"enabled": False, "state": "IDLE"}
+        return self.hongstyle_runner.get_status()
