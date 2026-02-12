@@ -49,6 +49,12 @@ class TradeStore:
             return []
 
     def load_all_trades(self) -> list[dict]:
+        # 1. Try DB first (persistent across container restarts)
+        db_trades = self._load_from_db()
+        if db_trades:
+            return db_trades
+
+        # 2. Fallback to JSON files (local only)
         all_trades = []
         for path in sorted(self._dir.glob("*.json")):
             try:
@@ -57,6 +63,39 @@ class TradeStore:
             except (json.JSONDecodeError, OSError):
                 continue
         return all_trades
+
+    def _load_from_db(self) -> list[dict]:
+        """Load all trades from DB."""
+        if not self._enable_db:
+            return []
+        try:
+            from src.database.connection import get_session
+            from src.database.models import LiveTrade
+            from sqlalchemy import select
+
+            with get_session() as session:
+                query = select(LiveTrade).order_by(LiveTrade.traded_at)
+                trades = list(session.execute(query).scalars().all())
+                return [
+                    {
+                        "stock_code": t.stock_code,
+                        "stock_name": t.stock_name or t.stock_code,
+                        "strategy_name": t.strategy_name or "",
+                        "side": t.side,
+                        "quantity": t.quantity,
+                        "entry_price": float(t.entry_price) if t.entry_price else 0,
+                        "exit_price": float(t.price) if t.price else 0,
+                        "pnl": float(t.pnl) if t.pnl else 0,
+                        "pnl_pct": float(t.pnl_pct) if t.pnl_pct else 0,
+                        "exit_reason": t.exit_reason or "",
+                        "entry_time": t.entry_time.isoformat() if t.entry_time else "",
+                        "exit_time": t.traded_at.isoformat() if t.traded_at else "",
+                    }
+                    for t in trades
+                ]
+        except Exception as e:
+            logger.warning(f"거래 DB 조회 실패, JSON 폴백: {e}")
+            return []
 
     def get_by_day_of_week(self) -> dict[str, dict]:
         """Aggregate trades by day of week (월~금)."""
@@ -121,15 +160,28 @@ class TradeStore:
             else:
                 traded_at = datetime.now()
 
+            entry_time = trade.get("entry_time", "")
+            entry_at = None
+            if isinstance(entry_time, str) and entry_time:
+                try:
+                    entry_at = datetime.fromisoformat(entry_time)
+                except ValueError:
+                    pass
+
             with get_session() as session:
                 repo = LiveTradeRepository(session)
                 repo.create({
                     "stock_code": trade.get("stock_code", ""),
+                    "stock_name": trade.get("stock_name", ""),
                     "strategy_name": trade.get("strategy_name", ""),
                     "side": trade.get("side", "BUY"),
                     "quantity": trade.get("quantity", 0),
+                    "entry_price": Decimal(str(trade.get("entry_price", 0))),
                     "price": Decimal(str(trade.get("exit_price", 0))),
                     "pnl": Decimal(str(trade.get("pnl", 0))),
+                    "pnl_pct": trade.get("pnl_pct", 0),
+                    "exit_reason": trade.get("exit_reason", ""),
+                    "entry_time": entry_at,
                     "traded_at": traded_at,
                 })
         except Exception as e:

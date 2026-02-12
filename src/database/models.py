@@ -304,11 +304,16 @@ class LiveTrade(Base):
         String(50), ForeignKey("live_orders.order_id")
     )
     stock_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    stock_name: Mapped[Optional[str]] = mapped_column(String(50))
     strategy_name: Mapped[Optional[str]] = mapped_column(String(50))
     side: Mapped[str] = mapped_column(String(4), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    entry_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    pnl_pct: Mapped[Optional[float]] = mapped_column(Numeric(8, 4))
+    exit_reason: Mapped[Optional[str]] = mapped_column(String(20))
+    entry_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     traded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Relationships
