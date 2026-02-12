@@ -44,6 +44,7 @@ class TradingEngine:
     def __init__(self):
         self.state = EngineState.IDLE
         self.broker_connected = False
+        self._balance_synced = False
 
         # KIS broker (initialized in start())
         self.auth: KISAuth | None = None
@@ -183,6 +184,7 @@ class TradingEngine:
             self.state = EngineState.RUNNING
             self._main_loop_task = asyncio.create_task(self._main_loop())
             self._monitor_task = asyncio.create_task(self._position_monitor_loop())
+            self._balance_sync_task = asyncio.create_task(self._periodic_balance_sync())
 
             # 9. Subscribe to execution notices (after WS start)
             try:
@@ -210,7 +212,7 @@ class TradingEngine:
         logger.info("=== 트레이딩 엔진 중지 ===")
 
         # Cancel loops
-        for task in [self._main_loop_task, self._monitor_task]:
+        for task in [self._main_loop_task, self._monitor_task, getattr(self, '_balance_sync_task', None)]:
             if task:
                 task.cancel()
                 try:
@@ -505,61 +507,107 @@ class TradingEngine:
 
         await self._emit_system("MARKET_CLOSE", "장 마감 처리 완료")
 
-    async def _sync_balance(self) -> None:
-        """Sync account balance from broker → PositionManager에 실제 잔고 반영."""
-        try:
-            balance = await self.client.get_balance()
+    async def _sync_balance(self, max_retries: int = 3) -> None:
+        """Sync account balance from broker → PositionManager에 실제 잔고 반영.
 
-            # KIS 총평가금액 = 실제 총자산 (모의투자 예수금은 매수 후에도 안 줄어서 부정확)
-            total_eval = int(balance.total_eval or balance.total_deposit)
+        KIS 모의투자 서버가 간헐적으로 500 에러를 반환하므로 재시도 로직 포함.
+        """
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                balance = await self.client.get_balance()
 
-            # 보유종목 KIS 평가금액 합계
-            holdings_eval = int(sum(h.eval_amount for h in balance.holdings))
+                # KIS 총평가금액 = 실제 총자산 (모의투자 예수금은 매수 후에도 안 줄어서 부정확)
+                total_eval = int(balance.total_eval or balance.total_deposit)
 
-            # 실제 현금 = 총평가 - 보유종목 평가
-            actual_cash = int(total_eval - holdings_eval)
-            if actual_cash < 0:
-                actual_cash = int(balance.total_deposit)
-            self.position_manager.cash = actual_cash
+                # 보유종목 KIS 평가금액 합계
+                holdings_eval = int(sum(h.eval_amount for h in balance.holdings))
 
-            # 기존 보유 종목이 있으면 포지션으로 등록
-            for h in balance.holdings:
-                if not self.position_manager.has_position(h.stock_code):
-                    self.position_manager.open_position(
-                        stock_code=h.stock_code,
-                        stock_name=h.stock_name,
-                        strategy_name="기존보유",
-                        quantity=h.quantity,
-                        price=int(h.avg_price),
-                    )
-                    # open_position이 cash를 차감하므로 actual_cash로 보정
-                    self.position_manager.cash = actual_cash
+                # 실제 현금 = 총평가 - 보유종목 평가
+                actual_cash = int(total_eval - holdings_eval)
+                if actual_cash < 0:
+                    actual_cash = int(balance.total_deposit)
+                self.position_manager.cash = actual_cash
 
-                    # KIS 현재가로 시가평가 갱신
-                    if h.current_price > 0:
-                        self.position_manager.update_price(
-                            h.stock_code, int(h.current_price)
+                # 기존 보유 종목이 있으면 포지션으로 등록
+                for h in balance.holdings:
+                    if not self.position_manager.has_position(h.stock_code):
+                        self.position_manager.open_position(
+                            stock_code=h.stock_code,
+                            stock_name=h.stock_name,
+                            strategy_name="기존보유",
+                            quantity=h.quantity,
+                            price=int(h.avg_price),
                         )
+                        # open_position이 cash를 차감하므로 actual_cash로 보정
+                        self.position_manager.cash = actual_cash
 
-            # 서버 재시작 시 initial_capital = 현재 총자산 → PnL 0%에서 시작
-            # 일중 거래 PnL은 이 시점 이후부터 누적
-            self.position_manager.initial_capital = self.position_manager.total_equity
+                        # KIS 현재가로 시가평가 갱신
+                        if h.current_price > 0:
+                            self.position_manager.update_price(
+                                h.stock_code, int(h.current_price)
+                            )
 
-            self.add_log(
-                "INIT",
-                f"계좌 동기화: 현금 {actual_cash:,.0f}원, "
-                f"총자산 {self.position_manager.total_equity:,.0f}원, "
-                f"보유 {len(balance.holdings)}종목",
-            )
-            logger.info(
-                f"계좌 동기화: 현금={actual_cash:,.0f}원 "
-                f"총자산={self.position_manager.total_equity:,.0f}원 "
-                f"보유={len(balance.holdings)}종목 "
-                f"(KIS 총평가={total_eval:,}원)"
-            )
-        except Exception as e:
-            self.add_log("INIT", f"계좌 동기화 실패: {e}", severity="WARNING")
-            logger.warning(f"계좌 동기화 실패: {e}")
+                # 서버 재시작 시 initial_capital = 현재 총자산 → PnL 0%에서 시작
+                # 일중 거래 PnL은 이 시점 이후부터 누적
+                self.position_manager.initial_capital = self.position_manager.total_equity
+                self._balance_synced = True
+
+                self.add_log(
+                    "INIT",
+                    f"계좌 동기화: 현금 {actual_cash:,.0f}원, "
+                    f"총자산 {self.position_manager.total_equity:,.0f}원, "
+                    f"보유 {len(balance.holdings)}종목",
+                )
+                logger.info(
+                    f"계좌 동기화: 현금={actual_cash:,.0f}원 "
+                    f"총자산={self.position_manager.total_equity:,.0f}원 "
+                    f"보유={len(balance.holdings)}종목 "
+                    f"(KIS 총평가={total_eval:,}원)"
+                )
+                return  # 성공 시 즉시 반환
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait_sec = 5 * (attempt + 1)
+                    logger.warning(
+                        f"계좌 동기화 실패 ({attempt+1}/{max_retries}): {e}, "
+                        f"{wait_sec}초 후 재시도"
+                    )
+                    self.add_log(
+                        "INIT",
+                        f"계좌 동기화 재시도 ({attempt+1}/{max_retries}): {e}",
+                        severity="WARNING",
+                    )
+                    await asyncio.sleep(wait_sec)
+
+        # 모든 재시도 실패
+        self._balance_synced = False
+        self.add_log("INIT", f"계좌 동기화 실패 ({max_retries}회 시도): {last_error}", severity="WARNING")
+        logger.warning(f"계좌 동기화 실패 ({max_retries}회 시도): {last_error}")
+
+    async def _periodic_balance_sync(self) -> None:
+        """주기적으로 KIS 계좌를 재동기화 (초기 동기화 실패 시 복구용)."""
+        await asyncio.sleep(60)  # 첫 실행은 60초 후
+        while self.state == EngineState.RUNNING:
+            try:
+                if not getattr(self, '_balance_synced', False):
+                    logger.info("계좌 미동기화 상태 → 재동기화 시도")
+                    await self._sync_balance(max_retries=2)
+                elif len(self.position_manager.positions) > 0:
+                    # 보유종목이 있으면 현재가 갱신
+                    try:
+                        balance = await self.client.get_balance()
+                        for h in balance.holdings:
+                            if h.current_price > 0 and self.position_manager.has_position(h.stock_code):
+                                self.position_manager.update_price(
+                                    h.stock_code, int(h.current_price)
+                                )
+                    except Exception as e:
+                        logger.debug(f"현재가 갱신 실패 (무시): {e}")
+            except Exception as e:
+                logger.warning(f"주기적 동기화 오류: {e}")
+            await asyncio.sleep(120)  # 2분 간격
 
     # ── Recovery & Execution ────────────────────────────────
 
