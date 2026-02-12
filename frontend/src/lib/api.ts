@@ -1175,3 +1175,23 @@ export interface HongPerformanceData {
 export async function getStockkingPerformance() {
   return fetchApi<HongPerformanceData>("/api/stockking/trading/performance");
 }
+
+// 홍인기 전략 가이드
+export interface HongStrategyRule {
+  importance: "핵심" | "중요" | "참고";
+  rule: string;
+  detail: string;
+}
+
+export interface HongStrategySection {
+  id: string;
+  title: string;
+  icon: string;
+  rules: HongStrategyRule[];
+}
+
+export async function getStockkingStrategyGuide() {
+  return fetchApi<HongStrategySection[]>(
+    "/api/stockking/trading/strategy-guide"
+  );
+}

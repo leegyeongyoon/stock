@@ -13,6 +13,7 @@ import TradingPanel from "@/components/stockking/TradingPanel";
 import TradeHistory from "@/components/stockking/TradeHistory";
 import HongPerformance from "@/components/stockking/HongPerformance";
 import ConvictionPanel from "@/components/stockking/ConvictionPanel";
+import HongStrategyGuide from "@/components/stockking/HongStrategyGuide";
 import { StockDetailSheet } from "@/components/themes";
 
 import { useState } from "react";
@@ -190,6 +191,8 @@ export default function StockkingPage() {
           <HongPerformance />
           {/* 하단: 확신도 순위 + 알고리즘 */}
           <ConvictionPanel />
+          {/* 전략 가이드 */}
+          <HongStrategyGuide />
         </div>
       )}
     </div>
