@@ -11,6 +11,7 @@ import DPlusCandidates from "@/components/stockking/DPlusCandidates";
 import TradingRules from "@/components/stockking/TradingRules";
 import TradingPanel from "@/components/stockking/TradingPanel";
 import TradeHistory from "@/components/stockking/TradeHistory";
+import HongPerformance from "@/components/stockking/HongPerformance";
 import ConvictionPanel from "@/components/stockking/ConvictionPanel";
 import { StockDetailSheet } from "@/components/themes";
 
@@ -185,6 +186,8 @@ export default function StockkingPage() {
             <TradingPanel />
             <TradeHistory />
           </div>
+          {/* 성과 차트 */}
+          <HongPerformance />
           {/* 하단: 확신도 순위 + 알고리즘 */}
           <ConvictionPanel />
         </div>

@@ -1134,3 +1134,44 @@ export interface ConvictionRanking {
 export async function getStockkingConviction() {
   return fetchApi<ConvictionRanking>("/api/stockking/trading/conviction");
 }
+
+// 홍인기 성과 대시보드
+export interface HongDailyPerformance {
+  date: string;
+  pnl: number;
+  cumulative: number;
+  trades: number;
+  wins: number;
+  win_rate: number;
+}
+
+export interface HongWeeklyPerformance {
+  week_start: string;
+  pnl: number;
+  trades: number;
+  wins: number;
+  win_rate: number;
+}
+
+export interface HongPerformanceSummary {
+  total_pnl: number;
+  total_trades: number;
+  win_rate: number;
+  avg_daily_pnl: number;
+  best_day_pnl: number;
+  worst_day_pnl: number;
+  win_days: number;
+  loss_days: number;
+  trading_days: number;
+  projected_monthly: number;
+}
+
+export interface HongPerformanceData {
+  daily: HongDailyPerformance[];
+  weekly: HongWeeklyPerformance[];
+  summary: HongPerformanceSummary;
+}
+
+export async function getStockkingPerformance() {
+  return fetchApi<HongPerformanceData>("/api/stockking/trading/performance");
+}

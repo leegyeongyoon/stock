@@ -1,12 +1,15 @@
 """홍인기 매매법 대시보드 + 자동매매 트레이딩 API 라우트"""
 
 import time as time_module
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 from loguru import logger
+from sqlalchemy import text
 
 from src.strategies.hongstyle.hongstyle_engine import (
     get_hongstyle_engine,
@@ -16,6 +19,7 @@ from src.strategies.hongstyle.hongstyle_engine import (
 from src.strategies.hongstyle.daily_chart_analyzer import DailyChartAnalyzer
 from src.analysis.stock_analyzer import get_stock_analyzer
 from src.server.dependencies import get_engine
+from src.database.connection import get_session
 
 
 router = APIRouter(prefix="/api/stockking", tags=["stockking"])
@@ -696,3 +700,150 @@ async def get_conviction_ranking():
             high_alloc_pct=0.50, low_alloc_pct=0.30,
             algorithm={},
         )
+
+
+# ── 홍인기 성과 대시보드 API ──────────────────────────────
+
+
+def _decimal_to_float(val) -> float:
+    if val is None:
+        return 0.0
+    if isinstance(val, Decimal):
+        return float(val)
+    return float(val)
+
+
+@router.get("/trading/performance")
+async def get_hong_performance():
+    """홍인기 전략 일별/주별 성과 + 요약 통계."""
+    try:
+        with get_session() as session:
+            rows = session.execute(text("""
+                SELECT
+                    DATE(traded_at) AS trade_date,
+                    SUM(pnl) AS total_pnl,
+                    COUNT(*) AS trade_count,
+                    COUNT(CASE WHEN pnl > 0 THEN 1 END) AS win_count
+                FROM live_trades
+                WHERE strategy_name LIKE '홍스타일%'
+                  AND side = 'SELL'
+                GROUP BY DATE(traded_at)
+                ORDER BY trade_date
+            """)).fetchall()
+
+        if not rows:
+            return {
+                "daily": [],
+                "weekly": [],
+                "summary": {
+                    "total_pnl": 0,
+                    "total_trades": 0,
+                    "win_rate": 0,
+                    "avg_daily_pnl": 0,
+                    "best_day_pnl": 0,
+                    "worst_day_pnl": 0,
+                    "win_days": 0,
+                    "loss_days": 0,
+                    "trading_days": 0,
+                    "projected_monthly": 0,
+                },
+            }
+
+        # 일별 데이터
+        daily = []
+        cumulative = 0.0
+        total_pnl = 0.0
+        total_trades = 0
+        total_wins = 0
+        best_day = -float("inf")
+        worst_day = float("inf")
+        win_days = 0
+        loss_days = 0
+
+        for row in rows:
+            day_pnl = _decimal_to_float(row[1])
+            trade_count = int(row[2])
+            win_count = int(row[3])
+            cumulative += day_pnl
+            total_pnl += day_pnl
+            total_trades += trade_count
+            total_wins += win_count
+
+            if day_pnl > best_day:
+                best_day = day_pnl
+            if day_pnl < worst_day:
+                worst_day = day_pnl
+            if day_pnl > 0:
+                win_days += 1
+            elif day_pnl < 0:
+                loss_days += 1
+
+            daily.append({
+                "date": str(row[0]),
+                "pnl": round(day_pnl),
+                "cumulative": round(cumulative),
+                "trades": trade_count,
+                "wins": win_count,
+                "win_rate": round(win_count / trade_count * 100, 1) if trade_count > 0 else 0,
+            })
+
+        # 주별 데이터
+        weekly_map: dict[str, dict] = defaultdict(
+            lambda: {"pnl": 0.0, "trades": 0, "wins": 0}
+        )
+        for d in daily:
+            dt = datetime.strptime(d["date"], "%Y-%m-%d")
+            week_start = dt - timedelta(days=dt.weekday())
+            week_key = week_start.strftime("%Y-%m-%d")
+            weekly_map[week_key]["pnl"] += d["pnl"]
+            weekly_map[week_key]["trades"] += d["trades"]
+            weekly_map[week_key]["wins"] += d["wins"]
+
+        weekly = []
+        for week_key in sorted(weekly_map.keys()):
+            w = weekly_map[week_key]
+            weekly.append({
+                "week_start": week_key,
+                "pnl": round(w["pnl"]),
+                "trades": w["trades"],
+                "wins": w["wins"],
+                "win_rate": round(w["wins"] / w["trades"] * 100, 1) if w["trades"] > 0 else 0,
+            })
+
+        trading_days = len(daily)
+        avg_daily_pnl = total_pnl / trading_days if trading_days > 0 else 0
+        win_rate = total_wins / total_trades * 100 if total_trades > 0 else 0
+
+        summary = {
+            "total_pnl": round(total_pnl),
+            "total_trades": total_trades,
+            "win_rate": round(win_rate, 1),
+            "avg_daily_pnl": round(avg_daily_pnl),
+            "best_day_pnl": round(best_day) if best_day != -float("inf") else 0,
+            "worst_day_pnl": round(worst_day) if worst_day != float("inf") else 0,
+            "win_days": win_days,
+            "loss_days": loss_days,
+            "trading_days": trading_days,
+            "projected_monthly": round(avg_daily_pnl * 22),
+        }
+
+        return {"daily": daily, "weekly": weekly, "summary": summary}
+
+    except Exception as e:
+        logger.error(f"홍인기 성과 조회 실패: {e}")
+        return {
+            "daily": [],
+            "weekly": [],
+            "summary": {
+                "total_pnl": 0,
+                "total_trades": 0,
+                "win_rate": 0,
+                "avg_daily_pnl": 0,
+                "best_day_pnl": 0,
+                "worst_day_pnl": 0,
+                "win_days": 0,
+                "loss_days": 0,
+                "trading_days": 0,
+                "projected_monthly": 0,
+            },
+        }
