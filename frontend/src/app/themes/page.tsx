@@ -29,6 +29,8 @@ import {
   NewsSection,
   ThemeDetailSheet,
   StockDetailSheet,
+  OverviewSkeleton,
+  RankingSkeleton,
 } from "@/components/themes";
 import type { PeriodType } from "@/components/themes/overview/HotThemeSection";
 import type {
@@ -76,10 +78,12 @@ export default function ThemesPage() {
   const {
     data: analysis,
     isLoading,
+    isError: analysisError,
     dataUpdatedAt,
+    refetch: refetchAnalysis,
   } = useMarketAnalysis();
   const { data: newsAnalysis } = useNewsAnalysis(activeTab);
-  const { data: themeRanking, isLoading: rankingLoading } =
+  const { data: themeRanking, isLoading: rankingLoading, isError: rankingError, refetch: refetchRanking } =
     useThemeRanking(activeTab);
   const { data: periodHotThemes, isLoading: periodLoading } =
     usePeriodHotThemes(hotPeriod, activeTab);
@@ -132,21 +136,10 @@ export default function ThemesPage() {
   const handleStockClick = (code: string, name: string) =>
     setStockModal({ code, name });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">시장 분석 중...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen p-3 space-y-3 sm:p-4 sm:space-y-4 lg:p-6 lg:space-y-6 pb-20 md:pb-6">
       {/* Header */}
-      {analysis && (
+      {analysis ? (
         <div className="flex items-center justify-between flex-wrap gap-2">
           <MarketHeader
             phase={analysis.phase}
@@ -155,7 +148,18 @@ export default function ThemesPage() {
           />
           <UpdateIndicator lastUpdate={lastUpdate} isLoading={isLoading} />
         </div>
-      )}
+      ) : isLoading ? (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="animate-pulse w-10 h-10 rounded-lg bg-slate-700/60" />
+            <div>
+              <div className="animate-pulse w-24 h-4 rounded bg-slate-700/60 mb-1" />
+              <div className="animate-pulse w-16 h-3 rounded bg-slate-700/60" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">시장 분석 데이터를 불러오는 중...</p>
+        </div>
+      ) : null}
 
       {/* Desktop tabs */}
       <div className="hidden md:flex gap-1 p-1 bg-slate-800/50 rounded-xl">
@@ -176,7 +180,20 @@ export default function ThemesPage() {
       </div>
 
       {/* === Overview Tab === */}
-      {activeTab === "overview" && (
+      {activeTab === "overview" && isLoading && !analysis && <OverviewSkeleton />}
+      {activeTab === "overview" && !isLoading && analysisError && !analysis && (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <p className="text-slate-400">서버에서 데이터를 불러오지 못했습니다.</p>
+          <p className="text-xs text-slate-500">서버 시작 직후에는 캐시 준비에 1~2분 소요됩니다.</p>
+          <button
+            onClick={() => refetchAnalysis()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white transition-colors"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+      {activeTab === "overview" && (analysis || (!isLoading && !analysisError)) && (
         <div className="space-y-3 sm:space-y-4 lg:space-y-6">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 md:gap-4">
             <SummaryCard
@@ -298,14 +315,18 @@ export default function ThemesPage() {
             </div>
           )}
 
-          {rankingLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-slate-400">
-                  테마 순위 분석 중... (최대 1분 소요)
-                </p>
-              </div>
+          {rankingLoading && !themeRanking ? (
+            <RankingSkeleton />
+          ) : rankingError && !themeRanking ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <p className="text-slate-400">테마 순위를 불러오지 못했습니다.</p>
+              <p className="text-xs text-slate-500">서버 캐시 준비 중일 수 있습니다. 잠시 후 다시 시도해주세요.</p>
+              <button
+                onClick={() => refetchRanking()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white transition-colors"
+              >
+                다시 시도
+              </button>
             </div>
           ) : filteredThemes.length > 0 ? (
             <>

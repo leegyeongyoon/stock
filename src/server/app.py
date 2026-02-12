@@ -2,6 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from src.engine.scheduler import TradingScheduler
 from src.server.dependencies import get_engine, get_scheduler, set_engine, set_scheduler
 from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes
 from src.server.websocket_hub import hub
+from src.analysis.theme_analyzer import get_theme_analyzer
 
 
 async def _init_balance_background(engine):
@@ -22,6 +24,41 @@ async def _init_balance_background(engine):
         logger.warning("초기 잔고 조회 타임아웃 (30초) - 기본값 사용")
     except Exception as e:
         logger.warning(f"초기 잔고 조회 실패: {e}")
+
+
+async def _warmup_theme_cache():
+    """서버 시작 후 테마 분석 캐시를 미리 채움."""
+    await asyncio.sleep(3)  # 서버 안정화 대기
+    try:
+        analyzer = get_theme_analyzer()
+        logger.info("테마 캐시 워밍업 시작...")
+        # 순차 실행 (외부 API rate limit 방지)
+        await analyzer.get_market_analysis()
+        await analyzer.analyze_news_for_themes(["AI", "반도체", "2차전지", "로봇", "바이오"])
+        await analyzer.get_theme_ranking(top_n=30)
+        await analyzer.get_hot_themes_by_period(days=1, top_n=20)
+        logger.info("테마 캐시 워밍업 완료")
+    except Exception as e:
+        logger.warning(f"테마 캐시 워밍업 실패: {e}")
+
+
+async def _periodic_cache_refresh():
+    """4분마다 테마 캐시를 백그라운드에서 갱신."""
+    await asyncio.sleep(300)  # 첫 워밍업 후 5분 뒤부터
+    while True:
+        try:
+            now = datetime.now().time()
+            if time(8, 50) <= now <= time(15, 40):  # 장 시간에만
+                analyzer = get_theme_analyzer()
+                logger.info("테마 캐시 백그라운드 갱신 시작...")
+                await analyzer.get_market_analysis(force_refresh=True)
+                await analyzer.analyze_news_for_themes(["AI", "반도체", "2차전지", "로봇", "바이오"])
+                await analyzer.get_theme_ranking(top_n=30, force_refresh=True)
+                await analyzer.get_hot_themes_by_period(days=1, top_n=20, force_refresh=True)
+                logger.info("테마 캐시 백그라운드 갱신 완료")
+        except Exception as e:
+            logger.warning(f"테마 캐시 갱신 실패: {e}")
+        await asyncio.sleep(240)  # 4분 간격
 
 
 @asynccontextmanager
@@ -52,10 +89,16 @@ async def lifespan(app: FastAPI):
     set_scheduler(scheduler)
     scheduler.start()
 
+    # 테마 캐시 워밍업 + 주기적 갱신
+    warmup_task = asyncio.create_task(_warmup_theme_cache())
+    refresh_task = asyncio.create_task(_periodic_cache_refresh())
+
     logger.info("FastAPI 서버 시작 (스케줄러 활성화)")
     yield
 
     # Shutdown
+    warmup_task.cancel()
+    refresh_task.cancel()
     scheduler.stop()
     await engine.stop()
     logger.info("FastAPI 서버 종료")

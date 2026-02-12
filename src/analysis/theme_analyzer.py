@@ -182,6 +182,16 @@ class ThemeAnalyzer:
         self._news_cache_time: Optional[datetime] = None
         self._news_cache_duration = timedelta(minutes=10)  # 뉴스 10분 캐시
 
+        # ranking 캐시
+        self._ranking_cache: Optional[list[ThemeRanking]] = None
+        self._ranking_cache_time: Optional[datetime] = None
+        self._ranking_cache_duration = timedelta(minutes=5)
+
+        # period hot themes 캐시
+        self._period_cache: dict[int, list[PeriodHotTheme]] = {}
+        self._period_cache_time: dict[int, datetime] = {}
+        self._period_cache_duration = timedelta(minutes=5)
+
     async def close(self):
         await self.crawler.close()
         await self.news_crawler.close()
@@ -777,7 +787,7 @@ class ThemeAnalyzer:
 
         return supply_analyses
 
-    async def get_theme_ranking(self, top_n: int = 30) -> list[ThemeRanking]:
+    async def get_theme_ranking(self, top_n: int = 30, force_refresh: bool = False) -> list[ThemeRanking]:
         """
         테마 종합 순위 - 가격/뉴스/수급 종합 분석
 
@@ -787,6 +797,15 @@ class ThemeAnalyzer:
         3. 뉴스 감성 (20점) - 긍정/부정 비율
         4. 수급 예측 (25점) - 뉴스 기반 수급 예측
         """
+        # 캐시 확인
+        now = datetime.now()
+        if (not force_refresh
+            and self._ranking_cache
+            and self._ranking_cache_time
+            and now - self._ranking_cache_time < self._ranking_cache_duration):
+            logger.debug("테마 순위 캐시 사용")
+            return self._ranking_cache[:top_n]
+
         logger.info(f"테마 종합 순위 분석 시작 (top {top_n})")
 
         # 1. 모든 테마 조회
@@ -933,8 +952,12 @@ class ThemeAnalyzer:
         for i, r in enumerate(rankings):
             r.rank = i + 1
 
+        # 캐시 저장
+        self._ranking_cache = rankings
+        self._ranking_cache_time = datetime.now()
+
         logger.info(f"테마 종합 순위 분석 완료: {len(rankings)}개 테마")
-        return rankings
+        return rankings[:top_n]
 
     def _generate_theme_recommendation(
         self,
@@ -984,7 +1007,7 @@ class ThemeAnalyzer:
 
         return " | ".join(parts)
 
-    async def get_hot_themes_by_period(self, days: int = 1, top_n: int = 20) -> list[PeriodHotTheme]:
+    async def get_hot_themes_by_period(self, days: int = 1, top_n: int = 20, force_refresh: bool = False) -> list[PeriodHotTheme]:
         """
         기간별 핫 테마 조회
 
@@ -995,6 +1018,15 @@ class ThemeAnalyzer:
         Returns:
             기간 수익률 기준 정렬된 테마 목록
         """
+        # 캐시 확인
+        now = datetime.now()
+        if (not force_refresh
+            and days in self._period_cache
+            and days in self._period_cache_time
+            and now - self._period_cache_time[days] < self._period_cache_duration):
+            logger.debug(f"기간별 핫 테마 캐시 사용 ({days}일)")
+            return self._period_cache[days][:top_n]
+
         logger.info(f"기간별 핫 테마 조회 시작: {days}일, 상위 {top_n}개")
 
         # 1. 전체 테마 목록 조회
@@ -1029,6 +1061,10 @@ class ThemeAnalyzer:
         results.sort(key=lambda x: x.change_rate, reverse=True)
         for i, item in enumerate(results):
             item.rank = i + 1
+
+        # 캐시 저장
+        self._period_cache[days] = results
+        self._period_cache_time[days] = datetime.now()
 
         logger.info(f"기간별 핫 테마 조회 완료: {len(results)}개 테마")
         return results[:top_n]

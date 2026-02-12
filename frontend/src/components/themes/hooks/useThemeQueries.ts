@@ -24,6 +24,8 @@ export function useMarketAnalysis() {
     queryKey: ["market-analysis"],
     queryFn: () => getMarketAnalysis(false),
     refetchInterval: 60000,
+    retry: 2,
+    retryDelay: 5000,
   });
 }
 
@@ -33,6 +35,8 @@ export function useNewsAnalysis(activeTab: TabType) {
     queryFn: () => getNewsAnalysis(),
     refetchInterval: 300000,
     enabled: activeTab === "overview" || activeTab === "news",
+    retry: 1,
+    retryDelay: 3000,
   });
 }
 
@@ -44,6 +48,8 @@ export function useThemeRanking(activeTab: TabType) {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchInterval: 300000,
+    retry: 1,
+    retryDelay: 5000,
   });
 }
 
@@ -52,6 +58,7 @@ export function useThemeDetail(themeCode: string | null, activeTab: TabType) {
     queryKey: ["theme-detail", themeCode],
     queryFn: () => getThemeDetail(themeCode!),
     enabled: !!themeCode && activeTab === "themes",
+    retry: 1,
   });
 }
 
@@ -62,5 +69,7 @@ export function usePeriodHotThemes(period: PeriodType, activeTab: TabType) {
     enabled: activeTab === "overview",
     staleTime: 5 * 60 * 1000,
     refetchInterval: 300000,
+    retry: 1,
+    retryDelay: 5000,
   });
 }
