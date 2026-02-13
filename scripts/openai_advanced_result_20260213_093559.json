@@ -1,0 +1,1319 @@
+{
+  "history": [
+    {
+      "iteration": 1,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 가치와 품질 점수에서 나타납니다. 승리 거래는 평균적으로 더 높은 시장 가치를 가지며, 품질 점수도 더 낮습니다. 또한, 패배 거래에서는 아침 변동률과 종가 강도가 더 높게 나타나지만, 이는 승리로 이어지지 않았습니다.",
+        "win_patterns": [
+          "높은 시장 가치",
+          "낮은 품질 점수",
+          "낮은 거래량 비율"
+        ],
+        "loss_patterns": [
+          "높은 아침 변동률",
+          "높은 품질 점수",
+          "높은 종가 강도"
+        ],
+        "recommended_changes": {
+          "min_quality_score": 70
+        },
+        "new_conditions": {
+          "min_morning_change": 8.0,
+          "min_close_strength": null,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": 0.25,
+          "min_momentum": null,
+          "max_leader_rank": 3,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "품질 점수를 높임으로써 패배 거래를 줄일 수 있으며, 아침 변동률과 거래량 비율 조건을 추가하여 승리 거래의 공통점을 강화할 수 있습니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 2,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 품질 점수, 그리고 갭 비율에서 나타납니다. 승리 거래는 평균 시장 규모가 더 크고, 품질 점수가 상대적으로 낮으며, 갭 비율이 양수인 경우가 많습니다. 반면 패배 거래는 평균 시장 규모가 작고, 품질 점수가 높으며, 갭 비율이 음수인 경우가 있습니다.",
+        "win_patterns": [
+          "시장 규모가 상대적으로 큼",
+          "품질 점수가 60~70 사이",
+          "갭 비율이 양수"
+        ],
+        "loss_patterns": [
+          "시장 규모가 작음",
+          "품질 점수가 80 이상",
+          "갭 비율이 음수"
+        ],
+        "recommended_changes": {
+          "min_quality_score": 60,
+          "max_quality_score": 79
+        },
+        "new_conditions": {
+          "min_morning_change": 8.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": 0.0,
+          "min_volume_ratio": 0.2,
+          "min_momentum": 10000000,
+          "max_leader_rank": 4,
+          "min_prev_day_change": 0.0,
+          "max_gap_up": 2.0,
+          "min_intraday_range": 15.0,
+          "max_high_tail": 15.0,
+          "min_body_ratio": 70.0
+        },
+        "expected_impact": "패배 거래를 줄이고 승리 거래의 비율을 높일 수 있을 것으로 예상됩니다. 특히, 품질 점수와 갭 비율에 대한 조건을 추가함으로써, 더 안정적인 거래를 유도할 수 있습니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 3,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모와 품질 점수에서 나타납니다. 승리 거래는 평균적으로 더 높은 시장 규모와 낮은 품질 점수를 가지고 있으며, 이는 더 안정적인 종목 선택을 의미할 수 있습니다. 또한, 패배 거래는 평균적으로 더 높은 아침 변동률을 보이며, 이는 진입 시점에서의 변동성이 높음을 나타냅니다.",
+        "win_patterns": [
+          "높은 시장 규모",
+          "낮은 품질 점수",
+          "낮은 아침 변동률"
+        ],
+        "loss_patterns": [
+          "낮은 시장 규모",
+          "높은 품질 점수",
+          "높은 아침 변동률"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000,
+          "min_quality_score": 70
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": 2.0,
+          "min_volume_ratio": 0.3,
+          "min_momentum": 50000000,
+          "max_leader_rank": 3,
+          "min_prev_day_change": 0.5,
+          "max_gap_up": 3.0,
+          "min_intraday_range": 15.0,
+          "max_high_tail": 15.0,
+          "min_body_ratio": 70.0
+        },
+        "expected_impact": "패배 거래를 줄이고 승리 거래의 비율을 높일 수 있을 것으로 예상됩니다. 특히, 높은 아침 변동률을 제한함으로써 불필요한 변동성을 피할 수 있습니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 4,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 품질 점수, 그리고 갭 비율입니다. 승리 거래는 평균 시장 규모가 더 크고, 품질 점수가 높으며, 갭 비율이 양수인 경우가 많습니다. 반면 패배 거래는 시장 규모가 작고, 갭 비율이 음수인 경우가 많습니다.",
+        "win_patterns": [
+          "평균 시장 규모가 87396.7로 비교적 큼",
+          "평균 품질 점수가 73.9로 높음",
+          "평균 갭 비율이 1.97으로 양수"
+        ],
+        "loss_patterns": [
+          "평균 시장 규모가 17083.6으로 작음",
+          "평균 품질 점수가 79로 높지만, 갭 비율이 -0.73으로 음수"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000,
+          "min_quality_score": 70
+        },
+        "new_conditions": {
+          "min_morning_change": 10,
+          "min_close_strength": 90,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": 0.3,
+          "min_momentum": null,
+          "max_leader_rank": 4,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "거래 건수를 유지하면서 패배 거래를 줄이고 승리 확률을 높일 것으로 예상됩니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 5,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 품질 점수, 갭 비율, 그리고 거래량 비율에서 나타납니다. 승리 거래는 평균 시장 규모가 더 크고, 품질 점수가 낮으며, 갭 비율이 더 긍정적입니다. 또한, 승리 거래는 거래량 비율이 더 낮은 경향이 있습니다.",
+        "win_patterns": [
+          "승리 거래의 평균 시장 규모는 87396.7로, 패배 거래의 17083.6보다 큽니다.",
+          "승리 거래의 평균 품질 점수는 73.9로, 패배 거래의 79보다 낮습니다.",
+          "승리 거래의 평균 갭 비율은 1.9668로, 패배 거래의 -0.7275보다 긍정적입니다.",
+          "승리 거래의 평균 거래량 비율은 0.3741로, 패배 거래의 0.3103보다 낮습니다."
+        ],
+        "loss_patterns": [
+          "패배 거래의 평균 시장 규모는 17083.6로, 승리 거래의 87396.7보다 작습니다.",
+          "패배 거래의 평균 품질 점수는 79로, 승리 거래의 73.9보다 높습니다.",
+          "패배 거래의 평균 갭 비율은 -0.7275로, 승리 거래의 1.9668보다 부정적입니다.",
+          "패배 거래의 평균 거래량 비율은 0.3103로, 승리 거래의 0.3741보다 높습니다."
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000,
+          "max_quality_score": 75
+        },
+        "new_conditions": {
+          "min_morning_change": 10,
+          "min_close_strength": 90,
+          "max_afternoon_drop": 1.0,
+          "min_volume_ratio": 0.3,
+          "min_momentum": null,
+          "max_leader_rank": 4,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "제안된 조건을 통해 패배 거래를 줄이고 승리 거래의 비율을 높일 수 있습니다. 특히, 시장 규모와 품질 점수에 대한 조건을 강화함으로써 더 안정적인 거래를 유도할 수 있습니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 6,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 차이를 분석한 결과, 승리 거래는 평균적으로 더 높은 품질 점수와 강한 종가 강도를 보이며, 거래량 비율이 낮고, 모멘텀이 높은 경향이 있습니다. 반면, 패배 거래는 평균적으로 낮은 모멘텀과 높은 거래량 비율을 보입니다. 또한, 패배 거래는 갭 비율이 음수인 경우가 많습니다.",
+        "win_patterns": [
+          "높은 품질 점수",
+          "강한 종가 강도",
+          "낮은 거래량 비율",
+          "높은 모멘텀"
+        ],
+        "loss_patterns": [
+          "낮은 모멘텀",
+          "높은 거래량 비율",
+          "음수 갭 비율"
+        ],
+        "recommended_changes": {
+          "min_quality_score": 70
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": 0.5,
+          "min_volume_ratio": 0.2,
+          "min_momentum": 20000000,
+          "max_leader_rank": 3,
+          "min_prev_day_change": 0.0,
+          "max_gap_up": 2.0,
+          "min_intraday_range": 15.0,
+          "max_high_tail": 15.0,
+          "min_body_ratio": 70.0
+        },
+        "expected_impact": "이러한 조건을 추가하면 패배 거래를 줄이고 승리 거래의 비율을 높일 수 있을 것으로 예상됩니다. 특히, 품질 점수와 모멘텀을 강화함으로써 거래의 성공 확률을 높일 수 있습니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 7,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모와 품질 점수에서 나타납니다. 승리 거래는 평균 시장 규모가 더 크고 품질 점수가 낮은 경향이 있습니다. 또한, 승리 거래는 아침 변동성이 더 높고, 거래 종료 시점의 강도가 높습니다.",
+        "win_patterns": [
+          "아침 변동성이 높음",
+          "거래 종료 시점의 강도가 높음",
+          "시장 규모가 큼"
+        ],
+        "loss_patterns": [
+          "품질 점수가 높음",
+          "시장 규모가 작음"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": null,
+          "min_momentum": null,
+          "max_leader_rank": 4,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "새로운 조건을 추가하면 승리 거래의 공통적인 패턴을 강화하여 패배 거래를 줄일 수 있습니다. 특히, 아침 변동성과 거래 종료 시점의 강도를 기준으로 진입 조건을 강화하면 승리 확률이 높아질 것으로 예상됩니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 8,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 품질 점수, 그리고 갭 퍼센트에서 나타납니다. 승리 거래의 평균 시장 규모는 87396.7억 원으로, 패배 거래의 평균 시장 규모 17083.5억 원보다 훨씬 큽니다. 또한, 승리 거래의 평균 품질 점수는 73.9점으로 패배 거래의 79점보다 낮지만, 승리 거래의 갭 퍼센트는 평균 1.97%로 패배 거래의 -0.73%보다 높습니다.",
+        "win_patterns": [
+          "높은 시장 규모",
+          "긍정적인 갭 퍼센트",
+          "높은 종가 강도"
+        ],
+        "loss_patterns": [
+          "낮은 시장 규모",
+          "부정적인 갭 퍼센트",
+          "높은 품질 점수"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": null,
+          "min_momentum": null,
+          "max_leader_rank": null,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "시장 규모가 작은 종목에서 발생하는 패배 거래를 줄이고, 아침 변동성이 높은 종목에 집중함으로써 승리 거래의 비율을 높일 수 있을 것으로 예상됩니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 9,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 차이점은 주로 시장 규모, 품질 점수, 그리고 갭 비율에서 나타납니다. 승리 거래는 평균 시장 규모가 더 크고, 품질 점수가 낮으며, 갭 비율이 더 긍정적입니다. 반면, 패배 거래는 시장 규모가 작고, 품질 점수가 높으며, 갭 비율이 부정적입니다.",
+        "win_patterns": [
+          "평균 시장 규모가 87396.70714249999으로 높음",
+          "품질 점수가 73.9090909090909으로 비교적 낮음",
+          "갭 비율이 평균 1.96682705986815로 긍정적"
+        ],
+        "loss_patterns": [
+          "평균 시장 규모가 17083.550545666665으로 낮음",
+          "품질 점수가 79.0으로 높음",
+          "갭 비율이 평균 -0.7275881490859634로 부정적"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000
+        },
+        "new_conditions": {
+          "min_morning_change": 8.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": 0.2,
+          "min_momentum": null,
+          "max_leader_rank": 4,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "시장 규모가 작은 종목을 제외함으로써 패배 거래를 줄이고, 아침 변동성과 종가 강도가 높은 종목을 선택하여 승리 확률을 높일 것으로 기대됩니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 10,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 가치와 품질 점수입니다. 승리 거래는 평균 시장 가치가 더 높고 품질 점수가 더 낮습니다. 또한, 승리 거래는 아침 변동이 더 낮고, 종가 강도가 더 높습니다.",
+        "win_patterns": [
+          "높은 시장 가치",
+          "낮은 품질 점수",
+          "낮은 아침 변동",
+          "높은 종가 강도"
+        ],
+        "loss_patterns": [
+          "낮은 시장 가치",
+          "높은 품질 점수",
+          "높은 아침 변동",
+          "낮은 종가 강도"
+        ],
+        "recommended_changes": {
+          "min_quality_score": 65
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": null,
+          "min_momentum": null,
+          "max_leader_rank": null,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "품질 점수와 아침 변동 조건을 조정함으로써 패배 거래를 줄이고 승리 거래의 비율을 높일 수 있습니다.",
+        "confidence": 0.75
+      }
+    },
+    {
+      "iteration": 11,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모와 품질 점수입니다. 승리 거래는 평균 시장 규모가 더 크고 품질 점수가 낮은 경향이 있습니다. 반면 패배 거래는 평균 시장 규모가 작고 품질 점수가 높은 경향이 있습니다. 또한, 승리 거래는 아침 변동과 종가 강도가 높으며, 패배 거래는 갭 비율이 음수인 경우가 많습니다.",
+        "win_patterns": [
+          "높은 아침 변동",
+          "높은 종가 강도",
+          "낮은 갭 비율"
+        ],
+        "loss_patterns": [
+          "작은 시장 규모",
+          "높은 품질 점수",
+          "음수 갭 비율"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000
+        },
+        "new_conditions": {
+          "min_morning_change": 8.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": null,
+          "min_momentum": null,
+          "max_leader_rank": 4,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "거래 건수가 최소 15건 이상 유지되면서 패배 거래를 줄이고 승리 거래의 비율을 높일 수 있을 것으로 예상됩니다.",
+        "confidence": 0.75
+      }
+    },
+    {
+      "iteration": 12,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 일일 변동성, 그리고 거래량 비율에서 나타납니다. 승리 거래는 평균 시장 규모가 더 크고, 일일 변동성과 거래량 비율이 패배 거래보다 낮습니다. 또한, 승리 거래는 평균 모멘텀이 더 낮은 경향이 있습니다.",
+        "win_patterns": [
+          "평균 시장 규모가 87396.7 이상",
+          "평균 일일 변동성 16.6% 이상",
+          "평균 거래량 비율 0.37 이하"
+        ],
+        "loss_patterns": [
+          "평균 시장 규모가 17083.5 이하",
+          "평균 일일 변동성 16.3% 이하",
+          "평균 거래량 비율 0.31 이하"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": 0.0,
+          "min_volume_ratio": 0.25,
+          "min_momentum": null,
+          "max_leader_rank": 3,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "시장 규모가 작은 종목에서 발생하는 패배 거래를 줄이고, 아침 변동성이 높은 종목에 진입하여 승리 확률을 높일 수 있습니다.",
+        "confidence": 0.85
+      }
+    },
+    {
+      "iteration": 13,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모와 품질 점수입니다. 승리 거래는 평균 시장 규모가 더 크고 품질 점수가 낮은 반면, 패배 거래는 품질 점수가 더 높습니다. 또한, 승리 거래는 평균 모멘텀이 더 높고, 승리 거래의 평균 갭 비율이 더 높습니다.",
+        "win_patterns": [
+          "평균 시장 규모가 87396.70714249999 이상",
+          "평균 품질 점수가 73.9090909090909",
+          "평균 모멘텀이 71964009.85020532 이상",
+          "평균 갭 비율이 1.96682705986815 이상"
+        ],
+        "loss_patterns": [
+          "평균 품질 점수가 79.0",
+          "평균 갭 비율이 -0.7275881490859634",
+          "평균 모멘텀이 80278977.73937218 이상"
+        ],
+        "recommended_changes": {
+          "min_quality_score": 70
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": 0.3,
+          "min_momentum": 70000000,
+          "max_leader_rank": 3,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "품질 점수와 모멘텀을 기준으로 거래의 질을 높이고, 아침 변동성과 종가 강도를 추가하여 패배 거래를 줄일 수 있을 것으로 예상됩니다.",
+        "confidence": 0.75
+      }
+    },
+    {
+      "iteration": 14,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 품질 점수, 그리고 갭 비율입니다. 승리 거래는 평균적으로 더 높은 시장 규모와 품질 점수를 가지고 있으며, 갭 비율이 더 긍정적입니다. 패배 거래는 갭 비율이 음수인 경우가 많고, 품질 점수가 더 높지만 수익률이 낮습니다.",
+        "win_patterns": [
+          "높은 시장 규모",
+          "긍정적인 갭 비율",
+          "높은 품질 점수"
+        ],
+        "loss_patterns": [
+          "음수의 갭 비율",
+          "높은 품질 점수에도 불구하고 낮은 수익률"
+        ],
+        "recommended_changes": {
+          "min_market_cap": 20000
+        },
+        "new_conditions": {
+          "min_morning_change": 10.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": null,
+          "min_volume_ratio": null,
+          "min_momentum": null,
+          "max_leader_rank": 3,
+          "min_prev_day_change": null,
+          "max_gap_up": null,
+          "min_intraday_range": null,
+          "max_high_tail": null,
+          "min_body_ratio": null
+        },
+        "expected_impact": "시장의 규모가 작은 종목을 제외함으로써 패배 거래를 줄이고, 아침 변동성과 종가 강도가 높은 종목에 집중하여 승리 거래의 비율을 높일 수 있을 것으로 예상됩니다.",
+        "confidence": 0.75
+      }
+    },
+    {
+      "iteration": 15,
+      "params": {
+        "sl_pct": -0.04,
+        "tp_pct": 0.05,
+        "tp_partial": 0.7,
+        "max_positions": 3,
+        "min_confidence": 0.7,
+        "min_market_cap": 5000,
+        "min_inst_buy": 50,
+        "max_inst_buy": 200,
+        "skip_top_n": 1,
+        "enter_top_n": 4,
+        "min_daily_change": 6.0,
+        "min_quality_score": 60,
+        "skip_score_70_79": true,
+        "min_morning_change": null,
+        "min_close_strength": null,
+        "max_afternoon_drop": null,
+        "min_volume_ratio": null,
+        "min_momentum": null,
+        "max_leader_rank": null,
+        "min_prev_day_change": null,
+        "min_consecutive_up": null,
+        "max_gap_up": null,
+        "min_intraday_range": null,
+        "max_high_tail": null,
+        "min_body_ratio": null
+      },
+      "summary_20d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "summary_60d": {
+        "trades": 14,
+        "wins": 11,
+        "win_rate": 78.57142857142857,
+        "total_pnl": 1880430.128,
+        "total_return": 18.80430128,
+        "skipped": {
+          "70-79점스킵": 8,
+          "품질점수부족": 9
+        }
+      },
+      "recommendations": {
+        "analysis": "승리 거래와 패배 거래의 주요 차이점은 시장 규모, 품질 점수, 전일 변화율, 갭 비율 등에서 나타납니다. 승리 거래는 평균 시장 규모가 더 크고, 품질 점수가 더 낮으며, 전일 변화율이 낮고, 갭 비율이 더 긍정적입니다. 반면 패배 거래는 품질 점수가 높고, 전일 변화율이 높으며, 갭 비율이 부정적입니다.",
+        "win_patterns": [
+          "시장 규모가 크다",
+          "품질 점수가 60~80 사이",
+          "전일 변화율이 낮다",
+          "갭 비율이 긍정적이다"
+        ],
+        "loss_patterns": [
+          "품질 점수가 높다",
+          "전일 변화율이 높다",
+          "갭 비율이 부정적이다"
+        ],
+        "recommended_changes": {
+          "min_quality_score": 60,
+          "max_quality_score": 80
+        },
+        "new_conditions": {
+          "min_morning_change": 8.0,
+          "min_close_strength": 90.0,
+          "max_afternoon_drop": 1.0,
+          "min_volume_ratio": 0.2,
+          "min_momentum": 10000000,
+          "max_leader_rank": 3,
+          "min_prev_day_change": -1.0,
+          "max_gap_up": 2.0,
+          "min_intraday_range": 10.0,
+          "max_high_tail": 15.0,
+          "min_body_ratio": 70.0
+        },
+        "expected_impact": "새로운 조건을 통해 패배 거래를 줄이고 승리 거래의 비율을 높일 수 있습니다. 특히 품질 점수와 전일 변화율, 갭 비율을 고려한 조건은 패배 거래를 줄이는 데 효과적일 것입니다.",
+        "confidence": 0.85
+      }
+    }
+  ],
+  "best_result": {
+    "params": {
+      "sl_pct": -0.04,
+      "tp_pct": 0.05,
+      "tp_partial": 0.7,
+      "max_positions": 3,
+      "min_confidence": 0.7,
+      "min_market_cap": 5000,
+      "min_inst_buy": 50,
+      "max_inst_buy": 200,
+      "skip_top_n": 1,
+      "enter_top_n": 4,
+      "min_daily_change": 6.0,
+      "min_quality_score": 60,
+      "skip_score_70_79": true,
+      "min_morning_change": null,
+      "min_close_strength": null,
+      "max_afternoon_drop": null,
+      "min_volume_ratio": null,
+      "min_momentum": null,
+      "max_leader_rank": null,
+      "min_prev_day_change": null,
+      "min_consecutive_up": null,
+      "max_gap_up": null,
+      "min_intraday_range": null,
+      "max_high_tail": null,
+      "min_body_ratio": null
+    },
+    "total_return_20d": 18.80430128,
+    "total_return_60d": 18.80430128,
+    "win_rate_20d": 78.57142857142857,
+    "win_rate_60d": 78.57142857142857,
+    "iteration": 1
+  },
+  "final_params": {
+    "sl_pct": -0.04,
+    "tp_pct": 0.05,
+    "tp_partial": 0.7,
+    "max_positions": 3,
+    "min_confidence": 0.7,
+    "min_market_cap": 5000,
+    "min_inst_buy": 50,
+    "max_inst_buy": 200,
+    "skip_top_n": 1,
+    "enter_top_n": 4,
+    "min_daily_change": 6.0,
+    "min_quality_score": 60,
+    "skip_score_70_79": true,
+    "min_morning_change": null,
+    "min_close_strength": null,
+    "max_afternoon_drop": null,
+    "min_volume_ratio": null,
+    "min_momentum": null,
+    "max_leader_rank": null,
+    "min_prev_day_change": null,
+    "min_consecutive_up": null,
+    "max_gap_up": null,
+    "min_intraday_range": null,
+    "max_high_tail": null,
+    "min_body_ratio": null
+  }
+}
