@@ -97,6 +97,17 @@ class IntradayStrategy(ABC):
 
     def __init__(self, name: str):
         self.name = name
+        self._daily_context = None
+
+    # --- Daily context for hong-style filters ---
+
+    def set_daily_context(self, code: str, trade_date, context=None):
+        """V2 엔진이 호출하여 일별 컨텍스트를 주입."""
+        self._daily_context = context
+
+    def get_daily_context(self):
+        """현재 설정된 일별 컨텍스트 반환."""
+        return getattr(self, '_daily_context', None)
 
     # --- Original slow-path methods (backward compatible) ---
 

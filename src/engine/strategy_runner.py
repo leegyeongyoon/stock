@@ -1,4 +1,4 @@
-"""Strategy runner - executes 6 strategies against live data."""
+"""Strategy runner - executes 2 strategies against live data."""
 
 from datetime import datetime
 from typing import Optional
@@ -9,15 +9,15 @@ from src.pipeline.data_manager import DataManager
 from src.strategies.data_driven import get_data_driven_strategies
 from src.strategies.intraday.base import IntradayStrategy
 
-# 전략별 상세 메타데이터 (백테스트 검증 결과 포함)
+# 전략별 상세 메타데이터 (GPT-4.1 최적화 + 홍인기 필터 적용)
 STRATEGY_META: dict[str, dict] = {
     "morning_rsi_neutral_atr": {
-        "display_name": "전략1: 오전 모멘텀",
-        "description": "장 초반 강한 모멘텀을 포착하는 전략",
+        "display_name": "전략1: 오전 모멘텀 (GPT-4.1)",
+        "description": "장 초반 강한 모멘텀 + 거래량 가속도 + 홍인기 필터",
         "time_window": "09:30 ~ 11:00",
-        "backtest_return": "+20.04%",
-        "backtest_wr": "48.9%",
-        "backtest_trades": 188,
+        "backtest_return": "+11.23% (IS)",
+        "backtest_wr": "54.4%",
+        "backtest_trades": 49,
         "sl": "3%",
         "tp": "5%",
         "conditions": [
@@ -26,31 +26,18 @@ STRATEGY_META: dict[str, dict] = {
             "거래량 ≥ 10일 평균 × 1.2",
             "종가 > VWAP",
             "직전 2봉 양봉",
-        ],
-    },
-    "lunch_rsi_neutral_atr_volume": {
-        "display_name": "전략2: 점심 거래량 돌파",
-        "description": "점심시간 거래량 급증 시 진입",
-        "time_window": "11:00 ~ 13:00",
-        "backtest_return": "+9.18%",
-        "backtest_wr": "41.8%",
-        "backtest_trades": 196,
-        "sl": "3%",
-        "tp": "5%",
-        "conditions": [
-            "RSI 40~60 (중립 구간)",
-            "ATR ≥ 0.54%",
-            "거래량 ≥ 20일 평균 × 1.17",
-            "직전 1봉 양봉",
+            "거래량 가속도 ≥ 5% (GPT-4.1)",
+            "최근3봉 ATR ≥ 0.4% (GPT-4.1)",
+            "홍인기: 시총≥5000억, 끼≥30",
         ],
     },
     "modified_rsi_neutral_atr": {
         "display_name": "전략3: 종일 VWAP 이격도",
-        "description": "장 전체에서 VWAP 위 0.2% 이상일 때 진입",
+        "description": "장 전체에서 VWAP 위 0.2% 이상 + 홍인기 필터 (1위 전략)",
         "time_window": "09:00 ~ 14:00",
-        "backtest_return": "+10.84%",
-        "backtest_wr": "44.7%",
-        "backtest_trades": 217,
+        "backtest_return": "+30.03% (IS)",
+        "backtest_wr": "55.3%",
+        "backtest_trades": 152,
         "sl": "3%",
         "tp": "5%",
         "conditions": [
@@ -58,56 +45,8 @@ STRATEGY_META: dict[str, dict] = {
             "ATR ≥ 0.50%",
             "종가 > VWAP × 1.002",
             "직전 2봉 양봉",
-        ],
-    },
-    "afternoon_from_morning": {
-        "display_name": "전략4: 오후 모멘텀",
-        "description": "오후 시간대 전략1 변형 (시간대 이동)",
-        "time_window": "13:00 ~ 15:00",
-        "backtest_return": "+3.87%",
-        "backtest_wr": "42.2%",
-        "backtest_trades": 204,
-        "sl": "3%",
-        "tp": "5%",
-        "conditions": [
-            "RSI 40~60 (중립 구간)",
-            "ATR ≥ 0.50%",
-            "종가 > VWAP",
-            "직전 2봉 양봉",
-        ],
-    },
-    "afternoon_rsi_neutral_atr_volume": {
-        "display_name": "전략6: 오후 정밀 거래량",
-        "description": "오후 좁은 ATR 범위 + 거래량 급증 포착",
-        "time_window": "13:00 ~ 14:30",
-        "backtest_return": "+11.46%",
-        "backtest_wr": "44.6%",
-        "backtest_trades": 175,
-        "sl": "3%",
-        "tp": "5%",
-        "conditions": [
-            "RSI 40~55 (타이트 중립)",
-            "ATR 0.40%~0.60% (범위)",
-            "거래량 > 최근5봉 평균 × 1.3",
-            "종가 > VWAP",
-            "직전 1봉 양봉",
-        ],
-    },
-    "morning_wide_rsi": {
-        "display_name": "전략8: 오전 확장 (GPT-5.2)",
-        "description": "GPT-5.2 최적화, 전략1의 확장 시간대 버전",
-        "time_window": "09:30 ~ 11:30",
-        "backtest_return": "+19.24%",
-        "backtest_wr": "49.0%",
-        "backtest_trades": 200,
-        "sl": "3%",
-        "tp": "5%",
-        "conditions": [
-            "RSI 40~60 (중립 구간)",
-            "ATR ≥ 0.50%",
-            "거래량 ≥ 10일 SMA × 1.15",
-            "종가 > VWAP × 1.002",
-            "직전 2봉 양봉",
+            "홍인기: 시총≥5000억, 끼≥30",
+            "일봉자리: 신고가/전고점돌파만",
         ],
     },
 }
@@ -141,7 +80,7 @@ class StrategySignal:
 
 
 class StrategyRunner:
-    """Runs all 6 strategies against current market data.
+    """Runs all strategies against current market data.
 
     Reuses the exact same check_entry_fast() interface from backtesting:
         indicators = strategy.precompute_day(day_df)

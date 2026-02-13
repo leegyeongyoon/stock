@@ -28,8 +28,8 @@ class HongStyleRunner:
     AFTERNOON_END = time(14, 30)
 
     # 집중투자 포지션 사이징
-    HIGH_CONFIDENCE_PCT = 0.50    # 확신 종목: 총자산 50%
-    LOW_CONFIDENCE_PCT = 0.30     # 보통 종목: 총자산 30%
+    HIGH_CONFIDENCE_PCT = 0.40    # 확신 종목: 총자산 40% (그리드서치 최적)
+    LOW_CONFIDENCE_PCT = 0.20     # 보통 종목: 총자산 20% (그리드서치 최적)
     CONFIDENCE_THRESHOLD = 0.7    # 확신/보통 경계
     KI_THRESHOLD = 50             # 끼 50 이상이어야 확신 배분
 

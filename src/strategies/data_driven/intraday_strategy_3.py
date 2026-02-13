@@ -1,8 +1,14 @@
 import numpy as np
 from src.strategies.intraday.base import IntradayStrategy
+from src.strategies.data_driven.hong_filter_mixin import HongFilterMixin
 
-class ModifiedRSINeutralATRStrategy(IntradayStrategy):
+class ModifiedRSINeutralATRStrategy(HongFilterMixin, IntradayStrategy):
     """9시에서 14시 사이 RSI 중립, VWAP 위, ATR 높음, 2연속 양봉인 경우 진입하는 전략."""
+
+    # 종일: 좋은 일봉자리만
+    HONG_PREFERRED_POSITIONS = {"신고가", "전고점돌파"}
+    HONG_MIN_CAP_BIL = 5000
+    HONG_MIN_INST_BIL = 50
 
     def __init__(self):
         super().__init__(name="modified_rsi_neutral_atr")
@@ -34,6 +40,10 @@ class ModifiedRSINeutralATRStrategy(IntradayStrategy):
         bullish_candle = closes > opens
         ind["bullish_candle"] = bullish_candle
 
+        # 거래대금 (홍인기 필터용)
+        ind["bar_trading_value"] = closes * ind["volume"]
+        ind["cum_trading_value"] = np.cumsum(ind["bar_trading_value"])
+
         return ind
 
     def check_entry_fast(self, code, bar_idx, indicators):
@@ -41,6 +51,15 @@ class ModifiedRSINeutralATRStrategy(IntradayStrategy):
             return None
         n = indicators["n_bars"]
         if bar_idx >= n:
+            return None
+
+        # === 홍인기 필터 ===
+        passes, hong_reason = self.passes_hong_filter()
+        if not passes:
+            return None
+
+        # === 당일 누적 거래대금 필터 ===
+        if not self.passes_intraday_value_filter(bar_idx, indicators):
             return None
 
         atr = indicators["atr_10_pct"]
@@ -65,9 +84,10 @@ class ModifiedRSINeutralATRStrategy(IntradayStrategy):
             return None
 
         return {
-            "reason": f"rsi_neutral={rsi[bar_idx]:.2f}, atr={atr[bar_idx]:.4f}",
+            "reason": f"rsi_neutral={rsi[bar_idx]:.2f}, atr={atr[bar_idx]:.4f}, hong={hong_reason}",
             "stop_loss": self.stop_loss_pct,
             "take_profit": self.take_profit_pct,
+            "confidence": 1.0 * self.hong_confidence_boost(),
         }
 
     def check_exit_fast(self, position, bar_idx, indicators):

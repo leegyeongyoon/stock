@@ -1,7 +1,8 @@
 import { TrendingUp, AlertTriangle, Star } from "lucide-react";
 import type { LeadingSector } from "@/lib/api";
 
-function formatTradingValue(value: number): string {
+function formatTradingValue(value: number | undefined | null): string {
+  if (value == null) return "-";
   if (value >= 1_0000_0000) return `${(value / 1_0000_0000).toFixed(1)}조`;
   if (value >= 1_0000) return `${(value / 1_0000).toFixed(0)}억`;
   return `${value.toLocaleString()}만`;

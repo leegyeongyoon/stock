@@ -5,12 +5,8 @@ import { getStrategyDetail, toggleStrategy } from "@/lib/api";
 import StrategyDetailCard from "@/components/strategies/StrategyDetailCard";
 
 const STRATEGY_NAMES = [
-  "morning_rsi_neutral_atr",
-  "lunch_rsi_neutral_atr_volume",
   "modified_rsi_neutral_atr",
-  "afternoon_from_morning",
-  "afternoon_rsi_neutral_atr_volume",
-  "morning_wide_rsi",
+  "morning_rsi_neutral_atr",
 ];
 
 export default function StrategiesPage() {
@@ -38,7 +34,7 @@ export default function StrategiesPage() {
         <h2 className="text-lg font-bold">전략별 모니터링</h2>
         <p className="text-xs text-slate-500">15초마다 자동 갱신</p>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {STRATEGY_NAMES.map((name, i) => (
           <StrategyDetailCard
             key={name}

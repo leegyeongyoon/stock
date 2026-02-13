@@ -35,6 +35,7 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
         strategy,
         data: dict[str, pd.DataFrame],
         show_progress: bool = True,
+        daily_context: dict = None,
     ) -> tuple[IntradayMetrics, list[IntradayTrade]]:
         logger.info(f"[V2] Starting intraday backtest for {strategy.name}")
         logger.info(f"Initial capital: {self.config.initial_capital:,}원")
@@ -75,6 +76,12 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
             ts_to_idx: dict[str, dict] = {}  # code -> {timestamp: bar_idx}
 
             for code, day_df in day_data.items():
+                # daily_context 주입 (홍인기 필터용)
+                ctx = None
+                if daily_context and code in daily_context:
+                    ctx = daily_context[code].get(current_date)
+                strategy.set_daily_context(code, current_date, ctx)
+
                 ind = strategy.precompute_day(day_df)
                 indicators[code] = ind
                 ts_to_idx[code] = {ts: i for i, ts in enumerate(ind["timestamps"])}
@@ -148,10 +155,12 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
                         day_pnl += trade.pnl
                         del positions[code]
 
-                # --- Check for new entries ---
+                # --- Check for new entries (with priority ranking) ---
                 if len(positions) < self.config.max_positions:
                     available_capital = capital * self.config.position_size
 
+                    # 모든 시그널 수집
+                    pending_signals = []
                     for code in day_data:
                         if code in positions:
                             continue
@@ -161,32 +170,44 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
                         idx = ts_to_idx[code][ts]
                         ind = indicators[code]
 
+                        # daily_context 설정 (코드별)
+                        if daily_context and code in daily_context:
+                            ctx = daily_context[code].get(current_date)
+                            strategy.set_daily_context(code, current_date, ctx)
+
                         signal = strategy.check_entry_fast(code, idx, ind)
                         if signal:
-                            price = float(ind["close"][idx])
-                            quantity = int(available_capital / price)
+                            confidence = signal.get("confidence", 1.0)
+                            pending_signals.append((code, idx, ind, signal, confidence))
 
-                            if quantity > 0:
-                                stop_loss_price = price * (1 - signal.get("stop_loss", 0.02))
-                                take_profit_price = price * (1 + signal.get("take_profit", 0.03))
+                    # 확신도 내림차순 정렬
+                    pending_signals.sort(key=lambda x: x[4], reverse=True)
 
-                                positions[code] = IntradayPosition(
-                                    code=code,
-                                    entry_price=price,
-                                    entry_time=ts,
-                                    quantity=quantity,
-                                    strategy_name=strategy.name,
-                                    stop_loss=stop_loss_price,
-                                    take_profit=take_profit_price,
-                                    entry_reason=signal.get("reason", ""),
-                                    entry_bar_idx=idx,
-                                )
+                    for code, idx, ind, signal, _ in pending_signals:
+                        if len(positions) >= self.config.max_positions:
+                            break
 
-                                commission = price * quantity * self.config.commission_rate
-                                capital -= commission
+                        price = float(ind["close"][idx])
+                        quantity = int(available_capital / price)
 
-                                if len(positions) >= self.config.max_positions:
-                                    break
+                        if quantity > 0:
+                            stop_loss_price = price * (1 - signal.get("stop_loss", 0.02))
+                            take_profit_price = price * (1 + signal.get("take_profit", 0.03))
+
+                            positions[code] = IntradayPosition(
+                                code=code,
+                                entry_price=price,
+                                entry_time=ts,
+                                quantity=quantity,
+                                strategy_name=strategy.name,
+                                stop_loss=stop_loss_price,
+                                take_profit=take_profit_price,
+                                entry_reason=signal.get("reason", ""),
+                                entry_bar_idx=idx,
+                            )
+
+                            commission = price * quantity * self.config.commission_rate
+                            capital -= commission
 
             # Close remaining positions at end of day
             for code in list(positions.keys()):

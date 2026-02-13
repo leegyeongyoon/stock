@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Trading Settings
-    max_position_size: float = 0.1     # 10% per position
+    max_position_size: float = 0.40    # 40% per position (그리드서치 최적)
     max_daily_loss: float = 0.03       # 3% daily loss limit
-    max_positions: int = 10            # Maximum concurrent positions
+    max_positions: int = 3             # Maximum concurrent positions
     initial_capital: int = 5_000_000   # 500만원 (라이브 기본)
 
     # Backtest Settings
