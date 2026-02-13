@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import FilterStatusPanel from "@/components/gylee/FilterStatusPanel";
 import GyleeTradingPanel from "@/components/gylee/GyleeTradingPanel";
+import GyleeConvictionPanel from "@/components/gylee/ConvictionPanel";
 import BacktestComparison from "@/components/gylee/BacktestComparison";
 import StrategyConditions from "@/components/gylee/StrategyConditions";
 
@@ -188,8 +189,11 @@ export default function GyleePage() {
         </div>
       </div>
 
-      {/* 1. 필터 현황 */}
-      <FilterStatusPanel />
+      {/* 1. 필터 현황 + 확신도 순위 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <FilterStatusPanel />
+        <GyleeConvictionPanel />
+      </div>
 
       {/* 2. 자동매매 + 거래내역 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
