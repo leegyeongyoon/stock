@@ -19,6 +19,7 @@ from src.engine.strategy_runner import STRATEGY_META, StrategyRunner
 from src.engine.trade_store import TradeStore
 from src.engine.hongstyle_runner import HongStyleRunner
 from src.engine.gylee_runner import GyleeRunner
+from src.engine.dd_strategy_runner import DDStrategyRunner
 from src.pipeline.data_manager import DataManager
 from src.pipeline.stock_universe import StockUniverse
 
@@ -79,6 +80,9 @@ class TradingEngine:
 
         # 경윤 수정 매매법 Runner
         self.gylee_runner = GyleeRunner(self)
+
+        # DD (데이터드리븐) 전략 Runner
+        self.dd_runner = DDStrategyRunner(self)
 
         # Tasks
         self._main_loop_task: asyncio.Task | None = None
@@ -175,6 +179,13 @@ class TradingEngine:
             except Exception as e:
                 logger.warning(f"경윤 자동매매 자동 시작 실패: {e}")
 
+            # DD 전략 자동 시작
+            try:
+                await self.start_dd()
+                logger.info("DD 전략 자동 시작 완료")
+            except Exception as e:
+                logger.warning(f"DD 전략 자동 시작 실패: {e}")
+
         except Exception as e:
             self.state = EngineState.ERROR
             self.broker_connected = False
@@ -206,6 +217,10 @@ class TradingEngine:
         if self.gylee_runner and self.gylee_runner.enabled:
             await self.gylee_runner.stop()
 
+        # Stop DD Runner
+        if self.dd_runner and self.dd_runner.enabled:
+            await self.dd_runner.stop()
+
         # Cancel open orders
         if self.order_manager:
             cancelled = await self.order_manager.cancel_all_open()
@@ -232,11 +247,13 @@ class TradingEngine:
         logger.critical("!!! 긴급 정지 !!!")
         await self._emit_system("EMERGENCY_STOP", "긴급 정지 발동", severity="CRITICAL")
 
-        # 홍인기/경윤 Runner 중지
+        # 홍인기/경윤/DD Runner 중지
         if self.hongstyle_runner and self.hongstyle_runner.enabled:
             await self.hongstyle_runner.stop()
         if self.gylee_runner and self.gylee_runner.enabled:
             await self.gylee_runner.stop()
+        if self.dd_runner and self.dd_runner.enabled:
+            await self.dd_runner.stop()
 
         # Close all positions at market (기존보유 포함 전체 청산)
         if self.position_manager and self.order_manager:
@@ -438,6 +455,8 @@ class TradingEngine:
                         continue  # HongStyleRunner 자체 모니터에서 처리
                     if pos.strategy_name.startswith("경윤_"):
                         continue  # GyleeRunner 자체 모니터에서 처리
+                    if pos.strategy_name.startswith("DD_"):
+                        continue  # DDStrategyRunner 자체 모니터에서 처리
 
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
@@ -505,6 +524,12 @@ class TradingEngine:
             await self.gylee_runner.stop()
         if self.gylee_runner:
             self.gylee_runner.reset_daily()
+
+        # DD Runner 중지 + 일일 리셋
+        if self.dd_runner and self.dd_runner.enabled:
+            await self.dd_runner.stop()
+        if self.dd_runner:
+            self.dd_runner.reset_daily()
 
         # Cancel all open orders
         await self.order_manager.cancel_all_open()
@@ -1202,3 +1227,23 @@ class TradingEngine:
         if not self.gylee_runner:
             return {"enabled": False, "state": "IDLE"}
         return self.gylee_runner.get_status()
+
+    # ── DD 전략 제어 ─────────────────────────────────────
+
+    async def start_dd(self) -> dict:
+        """DD 전략 자동매매 시작."""
+        if not self.dd_runner:
+            return {"success": False, "message": "DD Runner 미초기화"}
+        return await self.dd_runner.start()
+
+    async def stop_dd(self) -> dict:
+        """DD 전략 자동매매 중지."""
+        if not self.dd_runner:
+            return {"success": False, "message": "DD Runner 미초기화"}
+        return await self.dd_runner.stop()
+
+    def get_dd_status(self) -> dict:
+        """DD 전략 상태."""
+        if not self.dd_runner:
+            return {"enabled": False}
+        return self.dd_runner.get_status()

@@ -378,3 +378,67 @@ GYLEE_STRATEGY_GUIDE = [
 async def get_gylee_strategy_guide():
     """경윤 전략 가이드."""
     return GYLEE_STRATEGY_GUIDE
+
+
+# ── DD 전략 (데이터드리븐 전략1+3) ─────────────────────
+
+
+@router.post("/dd/start")
+async def start_dd_trading():
+    """DD 전략 자동매매 시작."""
+    try:
+        engine = get_engine()
+        result = await engine.start_dd()
+        return result
+    except Exception as e:
+        logger.error(f"DD 전략 시작 실패: {e}")
+        return {"success": False, "message": str(e)}
+
+
+@router.post("/dd/stop")
+async def stop_dd_trading():
+    """DD 전략 자동매매 중지."""
+    try:
+        engine = get_engine()
+        result = await engine.stop_dd()
+        return result
+    except Exception as e:
+        logger.error(f"DD 전략 중지 실패: {e}")
+        return {"success": False, "message": str(e)}
+
+
+@router.get("/dd/status")
+async def get_dd_status():
+    """DD 전략 상태."""
+    try:
+        engine = get_engine()
+        return engine.get_dd_status()
+    except Exception as e:
+        logger.error(f"DD 상태 조회 실패: {e}")
+        return {"enabled": False}
+
+
+@router.get("/dd/events")
+async def get_dd_events():
+    """DD 전략 이벤트 로그."""
+    try:
+        engine = get_engine()
+        if not engine.dd_runner:
+            return []
+        return engine.dd_runner.get_events(limit=50)
+    except Exception as e:
+        logger.error(f"DD 이벤트 조회 실패: {e}")
+        return []
+
+
+@router.get("/dd/trades")
+async def get_dd_trades():
+    """DD 전략 오늘 거래."""
+    try:
+        engine = get_engine()
+        if not engine.dd_runner:
+            return []
+        return engine.dd_runner.get_trades()
+    except Exception as e:
+        logger.error(f"DD 거래 조회 실패: {e}")
+        return []

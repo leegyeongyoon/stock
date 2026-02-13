@@ -17,6 +17,7 @@ from typing import Optional
 import numpy as np
 from loguru import logger
 
+from src.config.settings import settings
 from src.engine.hongstyle_runner import HongStyleRunner
 from src.strategies.hongstyle.daily_filter_provider import (
     DailyFilterProvider,
@@ -550,9 +551,14 @@ class GyleeRunner(HongStyleRunner):
                 # 5. 진입 실행 (품질순, 시간순)
                 v6_entries.sort(key=lambda x: (-x["quality"], x["time"]))
 
-                gylee_pos_count = len(self._get_hong_positions_raw())
+                # 공유 포지션 한도: 전략 전체 (기존보유 제외)
+                total_strategy_pos = sum(
+                    1
+                    for pos in self.engine.position_manager.positions.values()
+                    if pos.strategy_name != "기존보유"
+                )
                 for e in v6_entries:
-                    if gylee_pos_count >= self.MAX_POSITIONS:
+                    if total_strategy_pos >= settings.max_positions:
                         break
                     if e["code"] in self._v6_entered_today:
                         continue
@@ -584,7 +590,7 @@ class GyleeRunner(HongStyleRunner):
                         quality=e["quality"],
                     )
                     self._v6_entered_today.add(e["code"])
-                    gylee_pos_count += 1
+                    total_strategy_pos += 1
 
                 # 대시보드용 순위 구성
                 self._build_display_ranking(result, top20, v6_entries)
