@@ -232,7 +232,13 @@ class TradingEngine:
         logger.critical("!!! 긴급 정지 !!!")
         await self._emit_system("EMERGENCY_STOP", "긴급 정지 발동", severity="CRITICAL")
 
-        # Close all positions at market
+        # 홍인기/경윤 Runner 중지
+        if self.hongstyle_runner and self.hongstyle_runner.enabled:
+            await self.hongstyle_runner.stop()
+        if self.gylee_runner and self.gylee_runner.enabled:
+            await self.gylee_runner.stop()
+
+        # Close all positions at market (기존보유 포함 전체 청산)
         if self.position_manager and self.order_manager:
             for code, pos in list(self.position_manager.positions.items()):
                 await self.order_manager.submit_order(
@@ -242,6 +248,31 @@ class TradingEngine:
                     order_type=OrderType.MARKET,
                     strategy_name=pos.strategy_name,
                 )
+                # PM에서도 포지션 정리 + 거래 기록
+                trade = self.position_manager.close_position(
+                    code, pos.current_price, "긴급정지"
+                )
+                if trade and self.trade_store:
+                    self.trade_store.save_trade({
+                        "stock_code": trade.stock_code,
+                        "stock_name": trade.stock_name,
+                        "strategy_name": trade.strategy_name,
+                        "side": trade.side,
+                        "quantity": trade.quantity,
+                        "entry_price": trade.entry_price,
+                        "exit_price": trade.exit_price,
+                        "entry_time": trade.entry_time.isoformat(),
+                        "exit_time": trade.exit_time.isoformat(),
+                        "pnl": trade.pnl,
+                        "pnl_pct": trade.pnl_pct,
+                        "exit_reason": trade.exit_reason,
+                    })
+
+        # 전략 전체 비활성화
+        if self.strategy_runner:
+            for name in self.strategy_runner.strategy_names:
+                if self.strategy_runner.is_enabled(name):
+                    self.strategy_runner.toggle_strategy(name)
 
         await self.stop()
 

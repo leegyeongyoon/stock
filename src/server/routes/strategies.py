@@ -48,3 +48,20 @@ async def toggle_strategy(
 
     new_state = engine.strategy_runner.toggle_strategy(name)
     return {"name": name, "enabled": new_state}
+
+
+@router.put("/all/disable")
+async def disable_all_strategies(
+    engine: TradingEngine = Depends(get_engine),
+):
+    """Disable all strategies at once."""
+    if not engine.strategy_runner:
+        raise HTTPException(status_code=503, detail="엔진이 실행 중이 아닙니다")
+
+    disabled = []
+    for name in engine.strategy_runner.strategy_names:
+        if engine.strategy_runner.is_enabled(name):
+            engine.strategy_runner.toggle_strategy(name)
+            disabled.append(name)
+
+    return {"disabled": disabled, "count": len(disabled)}
