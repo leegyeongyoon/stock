@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 import pandas as pd
@@ -152,6 +152,14 @@ class HongStyleEngine:
                     logger.warning(f"테마 데이터 조회 실패: {e}")
                     theme_data = []
 
+            # 1-b. 종목 가격 데이터 (없으면 pykrx에서 당일 거래대금 상위 조회)
+            if top_stocks is None:
+                try:
+                    top_stocks = await self._fetch_top_stocks_from_pykrx()
+                except Exception as e:
+                    logger.warning(f"pykrx 종목 데이터 조회 실패: {e}")
+                    top_stocks = []
+
             # 2. 주도 섹터 분석
             leading_sectors = await self.sector_analyzer.analyze_leading_sectors(
                 theme_data=theme_data,
@@ -230,6 +238,39 @@ class HongStyleEngine:
                 trading_rules={},
                 is_caution_day=True,
             )
+
+    async def _fetch_top_stocks_from_pykrx(self) -> list[dict]:
+        """pykrx에서 당일 거래대금 상위 종목 조회 (장중 실시간 데이터)"""
+        from pykrx import stock as pykrx_stock
+
+        def _fetch():
+            today = date.today().strftime("%Y%m%d")
+            df = pykrx_stock.get_market_ohlcv_by_ticker(today, market="ALL")
+            if df.empty:
+                return []
+
+            # 거래대금 상위 100개
+            top = df.nlargest(100, "거래대금")
+            stocks = []
+            for code, row in top.iterrows():
+                try:
+                    name = pykrx_stock.get_market_ticker_name(code)
+                except Exception:
+                    name = code
+                stocks.append({
+                    "code": code,
+                    "name": name,
+                    "price": int(row["종가"]),
+                    "change_rate": float(row["등락률"]),
+                    "volume": int(row["거래량"]),
+                    "trading_value": int(row["거래대금"]),
+                    "market_cap": int(row.get("시가총액", 0)),
+                })
+            return stocks
+
+        stocks = await asyncio.to_thread(_fetch)
+        logger.info(f"pykrx 거래대금 TOP100 조회: {len(stocks)}종목")
+        return stocks
 
     async def _analyze_single_stock(
         self,
