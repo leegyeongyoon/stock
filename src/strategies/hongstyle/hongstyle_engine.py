@@ -126,6 +126,10 @@ class HongStyleEngine:
         self.daily_chart_analyzer = DailyChartAnalyzer()
         self.pattern_detector = PatternDetector()
         self.signal_generator = SignalGenerator()
+        # pykrx 종목 데이터 캐시 (10분)
+        self._top_stocks_cache: list[dict] = []
+        self._top_stocks_cache_time: Optional[datetime] = None
+        self._TOP_STOCKS_CACHE_TTL = 600  # 10분
 
     async def run_analysis(
         self,
@@ -240,12 +244,33 @@ class HongStyleEngine:
             )
 
     async def _fetch_top_stocks_from_pykrx(self) -> list[dict]:
-        """pykrx에서 당일 거래대금 상위 종목 조회 (장중 실시간 데이터)"""
+        """pykrx에서 당일 거래대금 상위 종목 조회 (캐시 10분).
+
+        최적화: get_market_price_change_by_ticker 1회 호출로
+        종목명 + 거래대금 + 가격 모두 취득 (기존 101회 → 1회).
+        """
+        # 캐시 유효하면 즉시 반환
+        if (
+            self._top_stocks_cache
+            and self._top_stocks_cache_time
+            and (datetime.now() - self._top_stocks_cache_time).total_seconds()
+            < self._TOP_STOCKS_CACHE_TTL
+        ):
+            logger.debug(
+                f"pykrx 캐시 사용: {len(self._top_stocks_cache)}종목 "
+                f"({self._top_stocks_cache_time.strftime('%H:%M:%S')})"
+            )
+            return self._top_stocks_cache
+
         from pykrx import stock as pykrx_stock
 
         def _fetch():
             today = date.today().strftime("%Y%m%d")
-            df = pykrx_stock.get_market_ohlcv_by_ticker(today, market="ALL")
+
+            # 1회 호출로 종목명 + 거래대금 + 등락률 + 가격 모두 취득
+            df = pykrx_stock.get_market_price_change_by_ticker(
+                today, today, market="ALL"
+            )
             if df.empty:
                 return []
 
@@ -253,22 +278,20 @@ class HongStyleEngine:
             top = df.nlargest(100, "거래대금")
             stocks = []
             for code, row in top.iterrows():
-                try:
-                    name = pykrx_stock.get_market_ticker_name(code)
-                except Exception:
-                    name = code
                 stocks.append({
                     "code": code,
-                    "name": name,
+                    "name": str(row["종목명"]),
                     "price": int(row["종가"]),
                     "change_rate": float(row["등락률"]),
                     "volume": int(row["거래량"]),
                     "trading_value": int(row["거래대금"]),
-                    "market_cap": int(row.get("시가총액", 0)),
+                    "market_cap": 0,
                 })
             return stocks
 
         stocks = await asyncio.to_thread(_fetch)
+        self._top_stocks_cache = stocks
+        self._top_stocks_cache_time = datetime.now()
         logger.info(f"pykrx 거래대금 TOP100 조회: {len(stocks)}종목")
         return stocks
 
