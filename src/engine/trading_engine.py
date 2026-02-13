@@ -604,24 +604,77 @@ class TradingEngine:
         logger.warning(f"계좌 동기화 실패 ({max_retries}회 시도): {last_error}")
 
     async def _periodic_balance_sync(self) -> None:
-        """주기적으로 KIS 계좌를 재동기화 (초기 동기화 실패 시 복구용)."""
+        """주기적으로 KIS 계좌를 재동기화 (초기 동기화 실패 시 복구용).
+
+        - 미동기화 상태: 전체 재동기화
+        - 동기화 완료 상태: 현재가 갱신 + 누락 종목 자동 복구
+        """
         await asyncio.sleep(60)  # 첫 실행은 60초 후
         while self.state == EngineState.RUNNING:
             try:
                 if not getattr(self, '_balance_synced', False):
                     logger.info("계좌 미동기화 상태 → 재동기화 시도")
                     await self._sync_balance(max_retries=2)
-                elif len(self.position_manager.positions) > 0:
-                    # 보유종목이 있으면 현재가 갱신
+                else:
                     try:
                         balance = await self.client.get_balance()
+
+                        # 1) 현재가 갱신
                         for h in balance.holdings:
                             if h.current_price > 0 and self.position_manager.has_position(h.stock_code):
                                 self.position_manager.update_price(
                                     h.stock_code, int(h.current_price)
                                 )
+
+                        # 2) KIS에 있지만 position_manager에 없는 종목 자동 복구
+                        for h in balance.holdings:
+                            if h.quantity <= 0:
+                                continue
+                            if self.position_manager.has_position(h.stock_code):
+                                continue
+
+                            # 누락된 종목 발견 → 기존보유로 등록
+                            logger.warning(
+                                f"KIS 보유종목 누락 발견: {h.stock_name} ({h.stock_code}) "
+                                f"{h.quantity}주 → 자동 복구"
+                            )
+                            self.position_manager.open_position(
+                                stock_code=h.stock_code,
+                                stock_name=h.stock_name,
+                                strategy_name="기존보유",
+                                quantity=h.quantity,
+                                price=int(h.avg_price),
+                            )
+                            # open_position이 cash를 차감하므로 올바른 현금으로 재계산
+                            holdings_eval = int(sum(
+                                hh.eval_amount for hh in balance.holdings
+                            ))
+                            actual_cash = int(
+                                balance.total_deposit - balance.purchase_total
+                            )
+                            if actual_cash < 0:
+                                actual_cash = 0
+                            self.position_manager.cash = actual_cash
+
+                            if h.current_price > 0:
+                                self.position_manager.update_price(
+                                    h.stock_code, int(h.current_price)
+                                )
+
+                        # 3) 현금 정합성 체크 (KIS 기준으로 보정)
+                        if balance.purchase_total > 0:
+                            kis_cash = int(
+                                balance.total_deposit - balance.purchase_total
+                            )
+                            if kis_cash >= 0 and abs(self.position_manager.cash - kis_cash) > 100000:
+                                logger.warning(
+                                    f"현금 불일치 보정: "
+                                    f"{self.position_manager.cash:,} → {kis_cash:,}"
+                                )
+                                self.position_manager.cash = kis_cash
+
                     except Exception as e:
-                        logger.debug(f"현재가 갱신 실패 (무시): {e}")
+                        logger.debug(f"주기적 동기화 실패 (무시): {e}")
             except Exception as e:
                 logger.warning(f"주기적 동기화 오류: {e}")
             await asyncio.sleep(120)  # 2분 간격
