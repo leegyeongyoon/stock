@@ -1,13 +1,18 @@
-"""경윤 수정 매매법 Runner.
+"""경윤 v6.2 매매법 Runner.
 
-HongStyleRunner를 상속하여 3개 필터(시총/기관/눌림)를 _scan_loop에 삽입.
-포지션 모니터링(SL/TP)은 부모 그대로 재사용.
+HongStyleRunner를 상속하여 v6.2 품질점수 시스템 적용.
+- 품질점수 60+, 70-79 스킵
+- TOP2~5 진입 (TOP1 스킵)
+- 등락률 6%+ 필터
+- 오버나잇 홀딩 (점수 >= 60)
+시뮬레이션(simulate_combined_v2.py)과 동일한 로직.
 """
 
 import asyncio
-from datetime import datetime, time
+from datetime import datetime, time, date, timedelta
 from typing import Optional
 
+import numpy as np
 from loguru import logger
 
 from src.engine.hongstyle_runner import HongStyleRunner
@@ -18,20 +23,36 @@ from src.strategies.hongstyle.daily_filter_provider import (
 
 
 class GyleeRunner(HongStyleRunner):
-    """경윤 수정 매매법 Runner - HongStyleRunner + 3개 필터."""
+    """경윤 v6.2 매매법 Runner - 품질점수 + TOP2~5 + 등락률 필터."""
 
     STRATEGY_PREFIX = "경윤_"
+
+    # v6.2 파라미터 (simulate_combined_v2.py 동일)
+    V6_SKIP_TOP_N = 1           # TOP1 스킵
+    V6_ENTER_TOP_N = 4          # TOP2~5 진입
+    V6_MIN_DAILY_CHANGE = 6.0   # 등락률 6%+
+    V6_MIN_QUALITY = 60         # 품질점수 60+
+    V6_MIN_CONFIDENCE = 0.70    # 최소 확신도
+    V6_MIN_CAP_BIL = 5000       # 시총 5000억+
+    V6_MIN_INST = 50            # 기관순매수 50억+
+    V6_MAX_INST = 200           # 기관순매수 200억 이하
 
     def __init__(self, engine):
         super().__init__(engine)
         self.filter_provider: DailyFilterProvider = get_daily_filter_provider()
+
+        # v6.2 상태
+        self._quality_scores: dict = {}  # {code: quality_score}
+        self._leader_ranking: list = []  # 오전 모멘텀 TOP20
+        self._v6_universe: set = set()
 
         # 필터 통계 (대시보드용)
         self._filter_stats: dict = {
             "total_candidates": 0,
             "cap_filtered": 0,
             "inst_filtered": 0,
-            "pullback_filtered": 0,
+            "change_filtered": 0,
+            "quality_filtered": 0,
             "passed": 0,
         }
 
@@ -53,9 +74,9 @@ class GyleeRunner(HongStyleRunner):
         self._scan_task = asyncio.create_task(self._scan_loop())
         self._monitor_task = asyncio.create_task(self._position_monitor_loop())
 
-        self._add_event("GYLEE_STARTED", "경윤 수정 매매법 시작")
-        logger.info("경윤 수정 매매법 시작")
-        return {"success": True, "message": "경윤 수정 매매법 시작"}
+        self._add_event("GYLEE_STARTED", "경윤 v6.2 매매법 시작")
+        logger.info("경윤 v6.2 매매법 시작")
+        return {"success": True, "message": "경윤 v6.2 매매법 시작"}
 
     async def stop(self) -> dict:
         """경윤 자동매매 중지."""
@@ -70,12 +91,12 @@ class GyleeRunner(HongStyleRunner):
 
         self._scan_task = None
         self._monitor_task = None
-        self._add_event("GYLEE_STOPPED", "경윤 수정 매매법 중지")
-        logger.info("경윤 수정 매매법 중지")
-        return {"success": True, "message": "경윤 수정 매매법 중지"}
+        self._add_event("GYLEE_STOPPED", "경윤 v6.2 매매법 중지")
+        logger.info("경윤 v6.2 매매법 중지")
+        return {"success": True, "message": "경윤 v6.2 매매법 중지"}
 
     async def _scan_loop(self):
-        """3분 간격 스캔 루프 - 부모 로직 + 3개 필터."""
+        """3분 간격 스캔 루프 - v6.2 품질점수 기반."""
         while self.enabled:
             try:
                 if self._day_stopped:
@@ -90,7 +111,7 @@ class GyleeRunner(HongStyleRunner):
                     continue
 
                 self._last_scan_time = now
-                self._add_event("SCAN", f"경윤 스캔 시작 ({now.strftime('%H:%M:%S')})")
+                self._add_event("SCAN", f"경윤 v6.2 스캔 시작 ({now.strftime('%H:%M:%S')})")
 
                 # 분석 실행
                 result = await self.hongstyle_engine.run_analysis()
@@ -100,7 +121,7 @@ class GyleeRunner(HongStyleRunner):
                     await asyncio.sleep(180)
                     continue
 
-                # ── 확신도 순위 계산 (부모와 동일) ──
+                # ── v6.2 확신도 순위 + 품질점수 계산 ──
                 ranking = []
                 for sa in result.stock_analyses:
                     sig = sa.entry_signal
@@ -108,8 +129,14 @@ class GyleeRunner(HongStyleRunner):
                     score = self._calc_conviction_score(
                         sig.confidence, ki, sa.is_leader
                     )
+
+                    # v6.2 품질점수 계산
+                    quality = self._calc_v6_quality_score(sa)
+                    self._quality_scores[sa.code] = quality
+
                     is_buyable = (
-                        sig.action == "buy" and sig.confidence >= self.MIN_CONFIDENCE
+                        sig.action == "buy"
+                        and sig.confidence >= self.V6_MIN_CONFIDENCE
                     )
 
                     if sig.confidence >= self.CONFIDENCE_THRESHOLD and ki >= self.KI_THRESHOLD:
@@ -137,17 +164,19 @@ class GyleeRunner(HongStyleRunner):
                         "alloc_label": alloc_label,
                         "is_buyable": is_buyable,
                         "is_top": False,
+                        "quality_score": quality,
                         "patterns": [p.pattern_name for p in sa.patterns],
                     })
 
-                # ── 3개 필터 적용 ──
+                # ── v6.2 필터 적용 ──
                 buyable_pre = [r for r in ranking if r["is_buyable"]]
                 self._filter_stats["total_candidates"] = len(buyable_pre)
 
                 buyable = []
                 cap_filtered = 0
                 inst_filtered = 0
-                pullback_filtered = 0
+                change_filtered = 0
+                quality_filtered = 0
 
                 for item in buyable_pre:
                     code = item["stock_code"]
@@ -163,13 +192,22 @@ class GyleeRunner(HongStyleRunner):
                             inst_filtered += 1
                             continue
 
-                    # 필터 3: 눌림매매 → 95%깊이 + 오전거래량 체크
-                    if item["method"] == "눌림매매":
-                        if not self._check_pullback_quality(code):
-                            pullback_filtered += 1
-                            continue
+                    # 필터 3: 등락률 6%+ (v6.2 핵심)
+                    daily_change = self._get_daily_change_rate(code)
+                    if daily_change < self.V6_MIN_DAILY_CHANGE:
+                        change_filtered += 1
+                        continue
 
-                    # 필터 4: 시간대 필터 (돌파=오전, 눌림=오후)
+                    # 필터 4: 품질점수 60+, 70-79 스킵 (v6.2 핵심)
+                    quality = item["quality_score"]
+                    if quality < self.V6_MIN_QUALITY:
+                        quality_filtered += 1
+                        continue
+                    if 70 <= quality <= 79:
+                        quality_filtered += 1
+                        continue
+
+                    # 필터 5: 시간대 필터 (돌파=오전, 눌림=오후)
                     if item["method"] == "돌파매매":
                         if not (self.MORNING_START <= current_time <= self.MORNING_END):
                             continue
@@ -181,17 +219,31 @@ class GyleeRunner(HongStyleRunner):
 
                 self._filter_stats["cap_filtered"] = cap_filtered
                 self._filter_stats["inst_filtered"] = inst_filtered
-                self._filter_stats["pullback_filtered"] = pullback_filtered
+                self._filter_stats["change_filtered"] = change_filtered
+                self._filter_stats["quality_filtered"] = quality_filtered
                 self._filter_stats["passed"] = len(buyable)
 
                 # 확신도순 정렬
                 buyable.sort(key=lambda x: x["score"], reverse=True)
 
-                # TOP N 선정
+                # v6.2: TOP1 스킵, TOP2~5 선정
                 top_codes = set()
-                for i, item in enumerate(buyable[:self.TOP_N_ONLY]):
+                entered = 0
+                skipped = 0
+                for item in buyable:
+                    if skipped < self.V6_SKIP_TOP_N:
+                        skipped += 1
+                        self._add_event(
+                            "SKIP_TOP1",
+                            f"TOP1 스킵: {item['stock_name']} "
+                            f"(점수={item['score']:.3f}, 품질={item['quality_score']})",
+                        )
+                        continue
+                    if entered >= self.V6_ENTER_TOP_N:
+                        break
                     item["is_top"] = True
                     top_codes.add(item["stock_code"])
+                    entered += 1
 
                 # 전체 순위 재정렬
                 ranking.sort(key=lambda x: x["score"], reverse=True)
@@ -201,7 +253,7 @@ class GyleeRunner(HongStyleRunner):
                 self._conviction_ranking = ranking
                 self._top_codes = top_codes
 
-                # ── TOP 5 중 진입 실행 ──
+                # ── TOP2~5 중 진입 실행 ──
                 gylee_pos_count = len(self._get_hong_positions_raw())
                 for item in buyable:
                     if item["stock_code"] not in top_codes:
@@ -211,11 +263,12 @@ class GyleeRunner(HongStyleRunner):
                     if self.engine.position_manager.has_position(item["stock_code"]):
                         continue
 
-                    adjusted_confidence = item["confidence"]
-                    if not (self.MORNING_START <= current_time <= self.MORNING_END):
-                        adjusted_confidence -= 0.1
-                    if adjusted_confidence < self.MIN_CONFIDENCE:
-                        continue
+                    self._add_event(
+                        "V6_ENTRY",
+                        f"v6.2 진입: {item['stock_name']} "
+                        f"품질={item['quality_score']}점 "
+                        f"[{item['method']}] 확신={item['confidence']:.0%}",
+                    )
 
                     await self._execute_buy(
                         stock_code=item["stock_code"],
@@ -230,9 +283,133 @@ class GyleeRunner(HongStyleRunner):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"경윤 스캔 루프 오류: {e}")
+                logger.error(f"경윤 v6.2 스캔 루프 오류: {e}")
                 self._add_event("ERROR", f"스캔 오류: {e}", severity="WARNING")
                 await asyncio.sleep(60)
+
+    def _calc_v6_quality_score(self, stock_analysis) -> int:
+        """v6.2 품질점수 계산 (100점 만점).
+
+        시뮬레이션 v6_calc_quality_score()와 동일한 로직:
+        1. 시가총액 (15점)
+        2. 기관순매수 (15점) - 전일 기준
+        3. 당일 등락률 (20점)
+        4. 오전 등락률 (20점)
+        5. 종가 강도 (20점)
+        6. 리더 순위 (10점)
+        """
+        score = 0
+        sa = stock_analysis
+
+        # 1. 시가총액 (15점) - filter_provider에서 가져옴
+        cap_bil = 0
+        stock_info = None
+        if self.filter_provider.is_loaded:
+            stock_info = self.filter_provider.get_stock_info(sa.code)
+            if stock_info:
+                cap_bil = stock_info.get("cap_bil", 0)
+        if cap_bil >= 30000:
+            score += 15
+        elif cap_bil >= 10000:
+            score += 10
+        elif cap_bil >= 5000:
+            score += 5
+
+        # 2. 기관순매수 - 전일 (15점)
+        inst = 0
+        if stock_info:
+            inst = stock_info.get("inst_bil", 0)
+        if inst >= 150:
+            score += 15
+        elif inst >= 100:
+            score += 10
+        elif inst >= 50:
+            score += 5
+
+        # 3. 당일 등락률 (20점)
+        daily_change = self._get_daily_change_rate(sa.code)
+        if daily_change >= 15:
+            score += 20
+        elif daily_change >= 10:
+            score += 15
+        elif daily_change >= 6:
+            score += 10
+
+        # 4. 오전 등락률 (20점) - 5분봉에서 계산
+        morning_change = self._get_morning_change(sa.code)
+        if morning_change >= 15:
+            score += 20
+        elif morning_change >= 10:
+            score += 15
+        elif morning_change >= 5:
+            score += 10
+
+        # 5. 종가 강도 (20점) - 당일 고저 대비 현재가
+        close_strength = self._get_close_strength(sa.code)
+        if close_strength >= 90:
+            score += 20
+        elif close_strength >= 75:
+            score += 15
+        elif close_strength >= 60:
+            score += 10
+
+        # 6. 리더 순위 (10점) - 대장주 보너스
+        if sa.is_leader:
+            score += 10
+
+        return score
+
+    def _get_daily_change_rate(self, code: str) -> float:
+        """당일 등락률 조회 (실시간 데이터)."""
+        try:
+            if not self.engine.data_manager:
+                return 0
+            bars = self.engine.data_manager.aggregator.get_bars(code)
+            if not bars or len(bars) < 2:
+                return 0
+            open_price = bars[0].open
+            current_price = bars[-1].close
+            if open_price <= 0:
+                return 0
+            return (current_price / open_price - 1) * 100
+        except Exception:
+            return 0
+
+    def _get_morning_change(self, code: str) -> float:
+        """오전 등락률 (09:00~12:00)."""
+        try:
+            if not self.engine.data_manager:
+                return 0
+            bars = self.engine.data_manager.aggregator.get_bars(code)
+            if not bars:
+                return 0
+            morning = [b for b in bars if b.timestamp.hour < 12]
+            if len(morning) < 2:
+                return 0
+            open_price = morning[0].open
+            close_price = morning[-1].close
+            if open_price <= 0:
+                return 0
+            return (close_price / open_price - 1) * 100
+        except Exception:
+            return 0
+
+    def _get_close_strength(self, code: str) -> float:
+        """종가 강도: (현재가 - 저가) / (고가 - 저가) * 100."""
+        try:
+            if not self.engine.data_manager:
+                return 50
+            bars = self.engine.data_manager.aggregator.get_bars(code)
+            if not bars:
+                return 50
+            high = max(b.high for b in bars)
+            low = min(b.low for b in bars)
+            current = bars[-1].close
+            if high <= low:
+                return 50
+            return (current - low) / (high - low) * 100
+        except Exception:
+            return 50
 
     async def _execute_buy(
         self, stock_code: str, stock_name: str, signal, ki_score: float
@@ -289,6 +466,7 @@ class GyleeRunner(HongStyleRunner):
                 if self.engine.data_manager:
                     self.engine.data_manager.add_priority_codes({stock_code})
 
+                quality = self._quality_scores.get(stock_code, 0)
                 trade_info = {
                     "type": "buy",
                     "stock_code": stock_code,
@@ -298,6 +476,7 @@ class GyleeRunner(HongStyleRunner):
                     "price": price,
                     "confidence": signal.confidence,
                     "ki_score": ki_score,
+                    "quality_score": quality,
                     "time": datetime.now().isoformat(),
                 }
                 self._trades_today.append(trade_info)
@@ -305,79 +484,21 @@ class GyleeRunner(HongStyleRunner):
                 self._add_event(
                     "BUY",
                     f"매수: {stock_name} {qty}주 @{price:,.0f} "
-                    f"[{signal.method}] 확신도={signal.confidence:.0%}",
+                    f"[{signal.method}] 확신도={signal.confidence:.0%} "
+                    f"품질={quality}점",
                 )
 
                 await self.engine._emit_position_update()
                 await self.engine._emit_order(order)
 
                 logger.info(
-                    f"경윤 매수: {stock_name}({stock_code}) "
-                    f"{qty}주 @{price:,.0f} [{signal.method}]"
+                    f"경윤 v6.2 매수: {stock_name}({stock_code}) "
+                    f"{qty}주 @{price:,.0f} [{signal.method}] 품질={quality}"
                 )
 
         except Exception as e:
             logger.error(f"경윤 매수 실행 실패 ({stock_code}): {e}")
             self._add_event("ERROR", f"매수 실패: {stock_name} - {e}", severity="WARNING")
-
-    def _check_pullback_quality(self, code: str) -> bool:
-        """눌림매매 품질 체크: 95%깊이(5%+하락) + 오전거래량 >= 중간값.
-
-        BarAggregator에서 당일 5분봉을 가져와
-        오전고점 대비 눌림 깊이와 오전 거래량을 계산한다.
-        데이터 부족 시 보수적으로 차단(False).
-        """
-        try:
-            if not self.engine.data_manager:
-                return False
-            bars = self.engine.data_manager.aggregator.get_bars(code)
-            if len(bars) < 10:
-                return False
-
-            # 오전 봉 (09:00~12:00)
-            morning_bars = [
-                b for b in bars if b.timestamp.hour < 12
-            ]
-            if len(morning_bars) < 5:
-                return False
-
-            morning_high = max(b.high for b in morning_bars)
-            morning_vol = sum(b.volume for b in morning_bars)
-
-            # 현재 가격 (마지막 봉의 close)
-            current_price = bars[-1].close
-
-            # 깊이 계산: (고점 - 현재가) / 고점 * 100
-            if morning_high <= 0:
-                return False
-            depth_pct = (morning_high - current_price) / morning_high * 100
-
-            # 전체 종목 오전 거래량 중간값 계산
-            all_morning_vols = []
-            for other_code in self._top_codes:
-                other_bars = self.engine.data_manager.aggregator.get_bars(other_code)
-                other_morning = [
-                    b for b in other_bars if b.timestamp.hour < 12
-                ]
-                if other_morning:
-                    all_morning_vols.append(
-                        sum(b.volume for b in other_morning)
-                    )
-
-            median_vol = (
-                sorted(all_morning_vols)[len(all_morning_vols) // 2]
-                if all_morning_vols
-                else morning_vol + 1  # 중간값 계산 불가 시 차단
-            )
-
-            return DailyFilterProvider.passes_pullback_filter(
-                depth_pct=depth_pct,
-                morning_vol=morning_vol,
-                median_vol=median_vol,
-            )
-        except Exception as e:
-            logger.debug(f"눌림 품질 체크 실패 ({code}): {e}")
-            return False
 
     def _get_hong_positions_raw(self):
         """경윤 전략 포지션만 필터."""
@@ -411,11 +532,12 @@ class GyleeRunner(HongStyleRunner):
                 self._last_scan_time.isoformat() if self._last_scan_time else None
             ),
             "max_positions": self.MAX_POSITIONS,
-            "top_n": self.TOP_N_ONLY,
+            "top_n": f"TOP{self.V6_SKIP_TOP_N+1}~{self.V6_SKIP_TOP_N+self.V6_ENTER_TOP_N}",
             "high_alloc": self.HIGH_CONFIDENCE_PCT,
             "low_alloc": self.LOW_CONFIDENCE_PCT,
             "filter_loaded": self.filter_provider.is_loaded,
             "filter_date": self.filter_provider.data_date,
+            "v6_version": "6.2",
         }
 
     def get_filter_stats(self) -> dict:
@@ -427,7 +549,7 @@ class GyleeRunner(HongStyleRunner):
             "filters": [
                 {
                     "name": "시가총액 5000억+",
-                    "description": "소형주(잡주) 제거. WR 42%→52%",
+                    "description": "소형주 제거",
                     "condition": "시가총액 >= 5,000억원",
                     "enabled": True,
                     "pass_count": provider_stats.get("market_cap_pass", 0),
@@ -435,53 +557,39 @@ class GyleeRunner(HongStyleRunner):
                 },
                 {
                     "name": "전일 기관 순매수 50~200억",
-                    "description": "기관 수급 확인. WR 52%→57%",
+                    "description": "기관 수급 확인",
                     "condition": "50억 <= 기관순매수 <= 200억",
                     "enabled": True,
                     "pass_count": provider_stats.get("inst_filter_pass", 0),
                     "pass_rate": provider_stats.get("inst_filter_rate", 0),
                 },
                 {
-                    "name": "눌림 95%깊이 + 오전거래량",
-                    "description": "나쁜 눌림 제거. 53건→5건",
-                    "condition": "눌림깊이 >= 5% AND 오전거래량 >= 중간값",
+                    "name": "당일 등락률 6%+",
+                    "description": "v6.2 강한 종목만 진입",
+                    "condition": "당일 등락률 >= 6%",
                     "enabled": True,
-                    "pass_count": 0,
-                    "pass_rate": 0,
+                },
+                {
+                    "name": "품질점수 60+, 70-79 스킵",
+                    "description": "v6.2 품질점수 시스템",
+                    "condition": "품질 >= 60 AND NOT(70~79)",
+                    "enabled": True,
+                },
+                {
+                    "name": "TOP1 스킵, TOP2~5 진입",
+                    "description": "v6.2 1등 회피, 2~5등 진입",
+                    "condition": "확신도 순위 2~5위만",
+                    "enabled": True,
                 },
             ],
             "entry_conditions": {
-                "universe": "거래대금 TOP100 또는 등락률 +3% 종목",
-                "leaders": "오전 모멘텀 TOP20 선별 (거래량×상승률)",
-                "breakout": {
-                    "name": "돌파매매",
-                    "time": "09:30~11:00",
-                    "conditions": [
-                        "신고가 돌파 (52주/역대 98%+)",
-                        "전고점 돌파 (20~60일 저항선)",
-                        "빈집 구간 돌파 (거래량 하위 25%)",
-                    ],
-                },
-                "pullback": {
-                    "name": "눌림매매",
-                    "time": "13:00~14:30",
-                    "conditions": [
-                        "바닥반등 (20%+ 하락 후 MA20 돌파)",
-                        "오전고점 95% 깊이 이상 눌림",
-                        "오전 거래량 >= 중간값",
-                    ],
-                },
-                "skip_patterns": [
-                    "뉴스빵 (비주도 섹터 뉴스)",
-                    "깊은눌림 (50%+ 되돌림)",
-                    "끼소진 (변동성 80%+ 소진)",
-                    "3파동 완성",
-                    "가분수 (3연속 양봉+거래량 3배)",
-                    "거래량고점 (최대거래량+윗꼬리음봉)",
-                ],
-                "min_confidence": 0.5,
-                "min_ki": 20,
-                "top_n": self.TOP_N_ONLY,
+                "version": "v6.2",
+                "min_daily_change": f"{self.V6_MIN_DAILY_CHANGE}%+",
+                "min_quality": self.V6_MIN_QUALITY,
+                "skip_quality_range": "70~79",
+                "skip_top_n": self.V6_SKIP_TOP_N,
+                "enter_top_n": self.V6_ENTER_TOP_N,
+                "min_confidence": self.V6_MIN_CONFIDENCE,
                 "max_positions": self.MAX_POSITIONS,
             },
             "risk_rules": {
@@ -489,7 +597,7 @@ class GyleeRunner(HongStyleRunner):
                 "take_profit": f"+{self.TAKE_PROFIT_PCT*100:.0f}% (70% 분매)",
                 "breakeven_cut": "분매 후 원가 복귀 → 잔여 전량",
                 "consecutive_stop": f"{self.MAX_CONSECUTIVE_LOSSES}연속 손절 → 당일종료",
-                "position_sizing": "확신 50% / 보통 30%",
+                "position_sizing": f"확신 {self.HIGH_CONFIDENCE_PCT:.0%} / 보통 {self.LOW_CONFIDENCE_PCT:.0%}",
             },
         }
 
