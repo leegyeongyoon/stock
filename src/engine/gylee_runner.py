@@ -328,7 +328,9 @@ class GyleeRunner(HongStyleRunner):
         데이터 부족 시 보수적으로 차단(False).
         """
         try:
-            bars = self.engine.bar_aggregator.get_bars(code)
+            if not self.engine.data_manager:
+                return False
+            bars = self.engine.data_manager.aggregator.get_bars(code)
             if len(bars) < 10:
                 return False
 
@@ -353,7 +355,7 @@ class GyleeRunner(HongStyleRunner):
             # 전체 종목 오전 거래량 중간값 계산
             all_morning_vols = []
             for other_code in self._top_codes:
-                other_bars = self.engine.bar_aggregator.get_bars(other_code)
+                other_bars = self.engine.data_manager.aggregator.get_bars(other_code)
                 other_morning = [
                     b for b in other_bars if b.timestamp.hour < 12
                 ]

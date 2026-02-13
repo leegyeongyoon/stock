@@ -168,6 +168,13 @@ class TradingEngine:
             await self._emit_system("ENGINE_STARTED", "트레이딩 엔진 시작")
             logger.info("=== 트레이딩 엔진 시작 완료 ===")
 
+            # 경윤 자동매매 자동 시작
+            try:
+                await self.start_gylee()
+                logger.info("경윤 자동매매 자동 시작 완료")
+            except Exception as e:
+                logger.warning(f"경윤 자동매매 자동 시작 실패: {e}")
+
         except Exception as e:
             self.state = EngineState.ERROR
             self.broker_connected = False
