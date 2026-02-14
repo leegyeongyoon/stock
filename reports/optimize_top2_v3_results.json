@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-02-13T17:50:33.007099",
+  "model": "gpt-4o",
+  "rounds": 5,
+  "strategies": {
+    "1": {
+      "improved": true,
+      "is_before": 7.45,
+      "is_after": 11.23,
+      "oos_before": 7.3,
+      "oos_after": 8.77,
+      "wr_before": 50.0,
+      "wr_after": 54.43,
+      "rounds_applied": 2
+    },
+    "3": {
+      "improved": false,
+      "is_before": 30.03,
+      "is_after": 30.03,
+      "oos_before": 6.64,
+      "oos_after": 6.64,
+      "wr_before": 54.11,
+      "wr_after": 54.11,
+      "rounds_applied": 0
+    }
+  },
+  "portfolio_before": 17.405416519550123,
+  "portfolio_after": 17.405416519550123
+}
