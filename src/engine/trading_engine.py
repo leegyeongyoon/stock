@@ -149,11 +149,17 @@ class TradingEngine:
                 on_execution=self._on_execution_received,
             )
 
-            # 6. Sync balance
-            await self._sync_balance()
+            # 6. Sync balance (실패해도 계속 진행)
+            try:
+                await self._sync_balance()
+            except Exception as e:
+                logger.warning(f"잔고 동기화 실패 (무시하고 계속): {e}")
 
-            # 7. Recover state from DB
-            await self._recover_state_from_db()
+            # 7. Recover state from DB (실패해도 계속 진행)
+            try:
+                await self._recover_state_from_db()
+            except Exception as e:
+                logger.warning(f"DB 상태 복구 실패 (무시하고 계속): {e}")
 
             # 8. Start main loop
             self.state = EngineState.RUNNING

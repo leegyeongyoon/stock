@@ -2,7 +2,7 @@
 
 Automatically starts the engine before market open and stops after close.
 Schedule (KST, weekdays only):
-    08:50  Auto-start engine
+    08:30  Auto-start engine (경윤 + DD 전략 포함)
     15:35  Auto-stop engine
 """
 
@@ -79,10 +79,10 @@ class TradingScheduler:
         self._scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
         self._enabled = True
 
-        # 08:50 월-금: 엔진 자동 시작
+        # 08:30 월-금: 엔진 자동 시작 (경윤 + DD 전략 포함)
         self._scheduler.add_job(
             self._auto_start,
-            CronTrigger(hour=8, minute=50, day_of_week="mon-fri", timezone="Asia/Seoul"),
+            CronTrigger(hour=8, minute=30, day_of_week="mon-fri", timezone="Asia/Seoul"),
             id="auto_start",
             name="장전 엔진 자동 시작",
             replace_existing=True,
@@ -97,7 +97,7 @@ class TradingScheduler:
             replace_existing=True,
         )
 
-        logger.info("TradingScheduler 초기화 완료 (08:50 시작 / 15:35 종료)")
+        logger.info("TradingScheduler 초기화 완료 (08:30 시작 / 15:35 종료)")
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -156,7 +156,7 @@ class TradingScheduler:
             return
 
         now = datetime.now().time()
-        market_start = time(8, 50)
+        market_start = time(8, 30)
         market_end = time(15, 20)
 
         if market_start <= now <= market_end:

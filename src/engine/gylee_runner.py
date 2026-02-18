@@ -65,13 +65,16 @@ class GyleeRunner(HongStyleRunner):
         if self.enabled:
             return {"success": False, "message": "이미 실행 중"}
 
-        # 필터 데이터 갱신
-        refresh_result = await self.filter_provider.refresh()
-        if not refresh_result.get("success"):
-            logger.warning(
-                f"필터 데이터 로드 실패: {refresh_result.get('error')}, "
-                "필터 없이 시작합니다"
-            )
+        # 필터 데이터 갱신 (실패해도 무조건 시작)
+        try:
+            refresh_result = await self.filter_provider.refresh()
+            if not refresh_result.get("success"):
+                logger.warning(
+                    f"필터 데이터 로드 실패: {refresh_result.get('error')}, "
+                    "필터 없이 시작합니다"
+                )
+        except Exception as e:
+            logger.warning(f"필터 데이터 로드 중 예외 발생: {e}, 필터 없이 시작합니다")
 
         self.enabled = True
         self._day_stopped = False
