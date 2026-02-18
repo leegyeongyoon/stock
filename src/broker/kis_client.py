@@ -90,7 +90,11 @@ class KISClient:
         async with self._semaphore:
             resp = await self._client.get(path, headers=headers, params=params or {})
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            # 잔고 조회 디버그 로깅
+            if "balance" in path.lower() or "8434" in tr_id:
+                logger.info(f"KIS 잔고 API 응답: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}, output2={data.get('output2', [])[:1]}")
+            return data
 
     async def _post(
         self, path: str, tr_id: str, body: dict | None = None
@@ -288,6 +292,14 @@ class KISClient:
             "CTX_AREA_NK100": "",
         }
         data = await self._get(BALANCE_PATH, self._tr_balance(), params)
+
+        # KIS API 에러 체크 (rt_cd="0"이 성공)
+        rt_cd = data.get("rt_cd", "1")
+        if rt_cd != "0":
+            msg = data.get("msg1", "알 수 없는 오류")
+            logger.warning(f"KIS 잔고 조회 실패: rt_cd={rt_cd}, msg={msg}")
+            raise RuntimeError(f"KIS 잔고 조회 실패: {msg}")
+
         output1 = data.get("output1", [])
         output2 = data.get("output2", [{}])
 
