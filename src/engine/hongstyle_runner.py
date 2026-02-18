@@ -12,6 +12,7 @@ from loguru import logger
 
 from src.strategies.hongstyle.hongstyle_engine import get_hongstyle_engine
 from src.strategies.hongstyle.signal_generator import SignalGenerator, EntrySignal
+from src.engine.scheduler import is_market_hours
 
 
 class HongStyleRunner:
@@ -259,6 +260,11 @@ class HongStyleRunner:
         """
         while self.enabled:
             try:
+                # 장 시간 외에는 SL/TP 체크 안 함 (휴장일/시간외 손절 방지)
+                if not is_market_hours():
+                    await asyncio.sleep(5)
+                    continue
+
                 hong_positions = self._get_hong_positions_raw()
                 if not hong_positions:
                     await asyncio.sleep(5)

@@ -16,6 +16,7 @@ from typing import Optional
 from loguru import logger
 
 from src.config.settings import settings
+from src.engine.scheduler import is_market_hours
 from src.strategies.data_driven.intraday_strategy_1 import (
     MorningRSINeutralATRStrategy,
 )
@@ -254,6 +255,11 @@ class DDStrategyRunner:
         """
         while self.enabled:
             try:
+                # 장 시간 외에는 SL/TP 체크 안 함 (휴장일/시간외 손절 방지)
+                if not is_market_hours():
+                    await asyncio.sleep(5)
+                    continue
+
                 dd_positions = self._get_dd_positions()
                 if not dd_positions:
                     await asyncio.sleep(5)

@@ -22,6 +22,7 @@ from src.engine.gylee_runner import GyleeRunner
 from src.engine.dd_strategy_runner import DDStrategyRunner
 from src.pipeline.data_manager import DataManager
 from src.pipeline.stock_universe import StockUniverse
+from src.engine.scheduler import is_market_hours, is_trading_day
 
 
 class EngineState(str, Enum):
@@ -452,6 +453,11 @@ class TradingEngine:
                                 self.position_manager.update_price(code, fallback)
 
                 # Check SL/TP (홍인기 포지션은 HongStyleRunner가 자체 관리)
+                # 장 시간 외에는 SL/TP 체크 안 함 (휴장일/시간외 손절 방지)
+                if not is_market_hours():
+                    await asyncio.sleep(5)
+                    continue
+
                 to_close = self.risk_manager.check_stop_loss_tp()
                 for code, reason in to_close:
                     pos = self.position_manager.get_position(code)

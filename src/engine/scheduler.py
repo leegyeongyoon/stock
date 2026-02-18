@@ -44,6 +44,7 @@ KOREAN_HOLIDAYS: set[date] = {
     date(2026, 2, 16),  # 설날 연휴
     date(2026, 2, 17),  # 설날
     date(2026, 2, 18),  # 설날 연휴
+    date(2026, 2, 19),  # 설날 대체휴일 (2/15 일요일 대체)
     date(2026, 3, 1),   # 삼일절 (일요일→3/2 대체)
     date(2026, 3, 2),   # 삼일절 대체휴일
     date(2026, 5, 1),   # 근로자의 날
@@ -69,6 +70,16 @@ def is_trading_day(d: date | None = None) -> bool:
     if d in KOREAN_HOLIDAYS:
         return False
     return True
+
+
+def is_market_hours() -> bool:
+    """Check if current time is within market trading hours (09:00 ~ 15:30 KST)."""
+    if not is_trading_day():
+        return False
+    now = datetime.now()
+    market_open = time(9, 0)
+    market_close = time(15, 30)
+    return market_open <= now.time() <= market_close
 
 
 class TradingScheduler:
