@@ -1,5 +1,6 @@
 """Analysis and reporting API routes."""
 
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +8,8 @@ from fastapi import APIRouter, Depends, Query
 from src.engine.strategy_runner import STRATEGY_META
 from src.engine.trading_engine import TradingEngine
 from src.server.dependencies import get_engine
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -363,32 +366,61 @@ async def get_kis_executions(
             start_date=q_start, end_date=q_end,
         )
     except Exception as e:
+        logger.error(f"KIS 체결내역 조회 실패: {e}")
         return {"trades": [], "open_positions": [], "error": str(e)}
 
-    matched, open_buys, unmatched_sells = _match_executions(items)
+    buy_count = sum(1 for it in items if it.side == "매수")
+    sell_count = sum(1 for it in items if it.side == "매도")
+    buy_codes = {it.stock_code for it in items if it.side == "매수"}
+    sell_codes = {it.stock_code for it in items if it.side == "매도"}
+    logger.info(
+        f"KIS 체결내역 ({q_start}~{q_end}): 총 {len(items)}건 "
+        f"(매수 {buy_count}, 매도 {sell_count}), "
+        f"매수종목={buy_codes}, 매도종목={sell_codes}"
+    )
 
-    # 2) 매칭 안 되는 매도 → 1년 전까지 매수 탐색 (1회 호출)
+    matched, open_buys, unmatched_sells = _match_executions(items)
+    logger.info(
+        f"1차 매칭 결과: 매칭 {len(matched)}건, "
+        f"미매도 {len(open_buys)}건, 미매칭매도 {len(unmatched_sells)}건"
+    )
+
+    # 2) 매칭 안 되는 매도 → 메인 조회 이전 기간에서 매수 탐색
     if unmatched_sells:
-        dt = datetime.strptime(q_start, "%Y%m%d")
-        hist_start = (dt - timedelta(days=365)).strftime("%Y%m%d")
-        hist_end = (dt - timedelta(days=1)).strftime("%Y%m%d")
+        # q_end 기준으로 이전 기간 검색 (메인 쿼리와 겹치지 않게)
+        dt_end = datetime.strptime(q_start, "%Y%m%d")
+        hist_start = (dt_end - timedelta(days=365)).strftime("%Y%m%d")
+        hist_end = (dt_end - timedelta(days=1)).strftime("%Y%m%d")
+
+        need_codes = {s["stock_code"] for s in unmatched_sells}
+        logger.info(
+            f"과거 매수 검색: {hist_start}~{hist_end}, "
+            f"필요종목={need_codes}"
+        )
 
         try:
             hist_items = await client.get_executions(
                 start_date=hist_start, end_date=hist_end,
             )
-            need_codes = {s["stock_code"] for s in unmatched_sells}
             hist_buys = [
                 it for it in hist_items
                 if it.side == "매수" and it.stock_code in need_codes
             ]
+            logger.info(
+                f"과거 매수 결과: 총 {len(hist_items)}건 조회, "
+                f"매수 {len(hist_buys)}건 (관련 종목)"
+            )
             if hist_buys:
                 extra, unmatched_sells = _match_sells_with_buys(
                     unmatched_sells, hist_buys,
                 )
                 matched.extend(extra)
-        except Exception:
-            pass  # 역방향 실패해도 기본 결과는 반환
+                logger.info(
+                    f"과거 매수 매칭: {len(extra)}건 추가 매칭, "
+                    f"여전히 미매칭 {len(unmatched_sells)}건"
+                )
+        except Exception as e:
+            logger.error(f"과거 매수 검색 실패: {e}", exc_info=True)
 
     # 3) 그래도 매칭 안 된 매도 → 매도 정보만이라도 표시
     for sell in unmatched_sells:
@@ -407,10 +439,23 @@ async def get_kis_executions(
         })
 
     matched.sort(key=lambda x: x["sell_time"], reverse=True)
+
+    debug_info = {
+        "query_range": f"{q_start}~{q_end}",
+        "total_items": len(items),
+        "buys": buy_count,
+        "sells": sell_count,
+        "buy_codes": sorted(buy_codes),
+        "sell_codes": sorted(sell_codes),
+        "matched_trades": len(matched) - len(unmatched_sells),
+        "unmatched_sells": len(unmatched_sells),
+    }
+
     return {
         "trades": matched,
         "open_positions": open_buys,
         "raw_count": len(items),
+        "_debug": debug_info,
     }
 
 
