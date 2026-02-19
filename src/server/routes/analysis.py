@@ -367,10 +367,10 @@ async def get_kis_executions(
 
     matched, open_buys, unmatched_sells = _match_executions(items)
 
-    # 2) 매칭 안 되는 매도 → 한 번에 90일 전까지만 조회 (빠르게)
+    # 2) 매칭 안 되는 매도 → 1년 전까지 매수 탐색 (1회 호출)
     if unmatched_sells:
         dt = datetime.strptime(q_start, "%Y%m%d")
-        hist_start = (dt - timedelta(days=90)).strftime("%Y%m%d")
+        hist_start = (dt - timedelta(days=365)).strftime("%Y%m%d")
         hist_end = (dt - timedelta(days=1)).strftime("%Y%m%d")
 
         try:
