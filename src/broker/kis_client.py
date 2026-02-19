@@ -343,6 +343,7 @@ class KISClient:
         executions: list[ExecutionInfo] = []
         ctx_fk100 = ""
         ctx_nk100 = ""
+        is_first = True
 
         while True:
             params = {
@@ -353,7 +354,7 @@ class KISClient:
                 "SLL_BUY_DVSN_CD": "00",
                 "INQR_DVSN": "00",
                 "PDNO": "",
-                "CCLD_DVSN": "00",
+                "CCLD_DVSN": "01",
                 "ORD_GNO_BRNO": "",
                 "ODNO": "",
                 "INQR_DVSN_3": "00",
@@ -363,9 +364,36 @@ class KISClient:
             }
 
             try:
-                data = await self._get(CCLD_PATH, self._tr_ccld(), params)
+                await self._rate_limit()
+                headers = self.auth.get_auth_headers()
+                headers["tr_id"] = self._tr_ccld()
+                headers["tr_cont"] = "" if is_first else "N"
+                is_first = False
+
+                async with self._semaphore:
+                    resp = await self._client.get(
+                        CCLD_PATH, headers=headers, params=params,
+                    )
+
+                if resp.status_code != 200:
+                    body = resp.text
+                    logger.warning(
+                        f"체결내역 조회 HTTP {resp.status_code} "
+                        f"({start}~{end}): {body[:500]}"
+                    )
+                    break
+
+                data = resp.json()
+                rt_cd = data.get("rt_cd", "")
+                if rt_cd != "0":
+                    logger.warning(
+                        f"체결내역 조회 실패 rt_cd={rt_cd}, "
+                        f"msg={data.get('msg1', '')}"
+                    )
+                    break
+
             except Exception as e:
-                logger.warning(f"체결내역 조회 실패 ({start}~{end}): {e}")
+                logger.warning(f"체결내역 조회 예외 ({start}~{end}): {e}")
                 break
 
             output1 = data.get("output1", [])
