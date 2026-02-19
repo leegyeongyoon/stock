@@ -1,5 +1,7 @@
 """Analysis and reporting API routes."""
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 
 from src.engine.strategy_runner import STRATEGY_META
@@ -195,10 +197,25 @@ async def get_trade_history(
     order: str = Query("desc"),
 ):
     """거래내역 전체 목록 (필터/정렬)."""
-    # 저장된 거래 + 오늘 거래
+    # DB에서 모든 거래 로드 (오늘 포함)
     stored = engine.trade_store.load_all_trades()
+
+    # 메모리의 오늘 거래 중 DB에 아직 없는 것만 추가 (중복 방지)
+    stored_today_codes = set()
+    today_str = date.today().isoformat()
+    for t in stored:
+        exit_time = t.get("exit_time", "")
+        if isinstance(exit_time, str) and exit_time.startswith(today_str):
+            stored_today_codes.add(
+                (t.get("stock_code", ""), t.get("exit_time", ""))
+            )
+
     today = engine.get_trades_today()
-    all_trades = stored + today
+    new_today = [
+        t for t in today
+        if (t.get("stock_code", ""), t.get("exit_time", "")) not in stored_today_codes
+    ]
+    all_trades = stored + new_today
 
     # 필터
     if strategy:

@@ -162,6 +162,18 @@ class TradingEngine:
             except Exception as e:
                 logger.warning(f"DB 상태 복구 실패 (무시하고 계속): {e}")
 
+            # 7-1. Recover today's trade history from DB
+            try:
+                recovered_trades = self.position_manager.recover_trades_from_db()
+                if recovered_trades > 0:
+                    self.add_log(
+                        "RECOVERY",
+                        f"오늘 거래내역 {recovered_trades}건 DB에서 복구 "
+                        f"(일일손익: {self.position_manager.daily_pnl:+,.0f}원)",
+                    )
+            except Exception as e:
+                logger.warning(f"거래내역 복구 실패 (무시하고 계속): {e}")
+
             # 8. Start main loop
             self.state = EngineState.RUNNING
             self._main_loop_task = asyncio.create_task(self._main_loop())

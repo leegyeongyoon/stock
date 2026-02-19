@@ -304,6 +304,58 @@ class PositionManager:
             self._db_update_counter = 0
             self._sync_prices_to_db()
 
+    def recover_trades_from_db(self) -> int:
+        """Recover today's completed trades from DB on restart.
+
+        Populates _trades and _daily_pnl so dashboard shows correct
+        trade history and performance data after server restart.
+        Returns number of trades recovered.
+        """
+        if not self._enable_db:
+            return 0
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LiveTradeRepository
+
+            with get_session() as session:
+                repo = LiveTradeRepository(session)
+                db_trades = repo.get_today()
+
+                if not db_trades:
+                    logger.info("DB에 복구할 오늘 거래내역 없음")
+                    return 0
+
+                recovered = 0
+                for t in db_trades:
+                    trade = ClosedTrade(
+                        stock_code=t.stock_code,
+                        stock_name=t.stock_name or t.stock_code,
+                        strategy_name=t.strategy_name or "",
+                        side=t.side,
+                        quantity=t.quantity,
+                        entry_price=float(t.entry_price) if t.entry_price else 0.0,
+                        exit_price=float(t.price) if t.price else 0.0,
+                        entry_time=t.entry_time or t.traded_at,
+                        exit_time=t.traded_at,
+                        pnl=float(t.pnl) if t.pnl else 0.0,
+                        pnl_pct=float(t.pnl_pct) if t.pnl_pct else 0.0,
+                        exit_reason=t.exit_reason or "",
+                        order_id=str(t.order_id) if t.order_id else "",
+                    )
+                    self._trades.append(trade)
+                    self._daily_pnl += trade.pnl
+                    recovered += 1
+
+                logger.info(
+                    f"DB에서 오늘 거래 {recovered}건 복구 "
+                    f"(일일손익: {self._daily_pnl:+,.0f}원)"
+                )
+                return recovered
+
+        except Exception as e:
+            logger.warning(f"거래내역 DB 복구 실패 (무시): {e}")
+            return 0
+
     def reset_daily(self) -> None:
         """Reset daily counters for a new trading day."""
         self._daily_pnl = 0.0
