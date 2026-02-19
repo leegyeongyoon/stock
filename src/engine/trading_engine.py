@@ -594,22 +594,24 @@ class TradingEngine:
                 # 보유종목 KIS 평가금액 합계
                 holdings_eval = int(sum(h.eval_amount for h in balance.holdings))
 
-                # 현금 계산: KIS 모의투자에서 예수금(dnca_tot_amt)은 매수해도 안 줄어듦
-                # → 예수금 - 매입금액합계 = 실제 가용 현금
-                if balance.purchase_total > 0:
-                    # 매입금액합계(pchs_amt_smtl_amt) 사용: 가장 정확
-                    actual_cash = int(balance.total_deposit - balance.purchase_total)
-                elif holdings_eval > 0:
-                    # 폴백: 예수금 - 보유종목 평가금액 (근사값)
-                    actual_cash = int(balance.total_deposit - holdings_eval)
+                # 현금 계산: KIS tot_evlu_amt(총평가금액) 또는 nass_amt(순자산) 사용
+                # 모의투자에서 예수금-매입금액 방식은 매입금액이 누적되어 부정확
+                if balance.total_eval > 0:
+                    # KIS 총평가금액 - 보유종목평가 = 실제 가용 현금
+                    total_equity = int(balance.total_eval)
+                    actual_cash = total_equity - holdings_eval
+                elif balance.net_asset > 0:
+                    # 폴백: KIS 순자산 사용
+                    total_equity = int(balance.net_asset)
+                    actual_cash = total_equity - holdings_eval
                 else:
+                    # 최종 폴백: 예수금 사용
                     actual_cash = int(balance.total_deposit)
+                    total_equity = actual_cash + holdings_eval
 
                 if actual_cash < 0:
                     actual_cash = 0
-
-                # 총자산 = 현금 + 평가금액
-                total_equity = actual_cash + holdings_eval
+                    total_equity = holdings_eval
                 self.position_manager.cash = actual_cash
 
                 # 기존 보유 종목이 있으면 포지션으로 등록
@@ -713,31 +715,36 @@ class TradingEngine:
                                 quantity=h.quantity,
                                 price=int(h.avg_price),
                             )
-                            # open_position이 cash를 차감하므로 올바른 현금으로 재계산
+                            # open_position이 cash를 차감하므로 KIS 기준으로 재계산
                             holdings_eval = int(sum(
                                 hh.eval_amount for hh in balance.holdings
                             ))
-                            actual_cash = int(
-                                balance.total_deposit - balance.purchase_total
-                            )
-                            if actual_cash < 0:
-                                actual_cash = 0
-                            self.position_manager.cash = actual_cash
+                            if balance.total_eval > 0:
+                                kis_cash = int(balance.total_eval) - holdings_eval
+                            else:
+                                kis_cash = int(balance.total_deposit) - holdings_eval
+                            if kis_cash < 0:
+                                kis_cash = 0
+                            self.position_manager.cash = kis_cash
 
                             if h.current_price > 0:
                                 self.position_manager.update_price(
                                     h.stock_code, int(h.current_price)
                                 )
 
-                        # 3) 현금 정합성 체크 (KIS 기준으로 보정)
-                        if balance.purchase_total > 0:
-                            kis_cash = int(
-                                balance.total_deposit - balance.purchase_total
-                            )
-                            if kis_cash >= 0 and abs(self.position_manager.cash - kis_cash) > 100000:
+                        # 3) 현금 정합성 체크 (KIS 총평가금액 기준으로 보정)
+                        holdings_eval = int(sum(
+                            hh.eval_amount for hh in balance.holdings
+                        ))
+                        if balance.total_eval > 0:
+                            kis_cash = int(balance.total_eval) - holdings_eval
+                            if kis_cash < 0:
+                                kis_cash = 0
+                            if abs(self.position_manager.cash - kis_cash) > 100000:
                                 logger.warning(
                                     f"현금 불일치 보정: "
-                                    f"{self.position_manager.cash:,} → {kis_cash:,}"
+                                    f"{self.position_manager.cash:,} → {kis_cash:,} "
+                                    f"(KIS 총평가={balance.total_eval:,})"
                                 )
                                 self.position_manager.cash = kis_cash
 
