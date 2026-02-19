@@ -334,40 +334,35 @@ async def get_kis_executions(
 
         matched, open_buys, unmatched_sells = _match_executions(items)
 
-        # 2) 매칭 안 되는 매도가 있으면 시작일 기준 60일 전까지 매수 찾기
+        # 2) 매칭 안 되는 매도 → 90일씩 최대 1년 전까지 매수 탐색
         if unmatched_sells:
             need_codes = {s["stock_code"] for s in unmatched_sells}
             dt = datetime.strptime(q_start, "%Y%m%d")
-            start_60 = (dt - timedelta(days=60)).strftime("%Y%m%d")
-            end_prev = (dt - timedelta(days=1)).strftime("%Y%m%d")
 
-            hist_items = await _do_fetch(client, start_60, end_prev)
-            if not isinstance(hist_items, dict):
+            for step in range(4):  # 90일 x 4 = 360일
+                chunk_end = dt - timedelta(days=1 + step * 90)
+                chunk_start = dt - timedelta(days=90 + step * 90)
+                hist_items = await _do_fetch(
+                    client,
+                    chunk_start.strftime("%Y%m%d"),
+                    chunk_end.strftime("%Y%m%d"),
+                )
+                if isinstance(hist_items, dict):
+                    break
+
                 hist_buys = [
                     it for it in hist_items
                     if it.side == "매수" and it.stock_code in need_codes
                 ]
-                extra_matched, still_unmatched = _match_sells_with_buys(
-                    unmatched_sells, hist_buys,
-                )
-                matched.extend(extra_matched)
-                unmatched_sells = still_unmatched
+                if hist_buys:
+                    extra_matched, unmatched_sells = _match_sells_with_buys(
+                        unmatched_sells, hist_buys,
+                    )
+                    matched.extend(extra_matched)
+                    need_codes = {s["stock_code"] for s in unmatched_sells}
 
-            # 3) 그래도 매칭 안 된 매도 → 매수가 불명으로 표시
-            for sell in unmatched_sells:
-                matched.append({
-                    "stock_code": sell["stock_code"],
-                    "stock_name": sell["stock_name"],
-                    "quantity": sell["quantity"],
-                    "buy_price": 0,
-                    "sell_price": sell["price"],
-                    "buy_amount": 0,
-                    "sell_amount": sell["price"] * sell["quantity"],
-                    "pnl": 0,
-                    "pnl_pct": 0,
-                    "buy_time": "",
-                    "sell_time": sell["order_time"],
-                })
+                if not unmatched_sells:
+                    break
 
         matched.sort(key=lambda x: x["sell_time"], reverse=True)
         return {
