@@ -306,24 +306,47 @@ async def get_kis_executions(
     engine: TradingEngine = Depends(get_engine),
     date: str | None = Query(None, description="조회일 YYYY-MM-DD"),
 ):
-    """KIS 실제 체결내역 조회."""
-    if not engine.client:
-        return {"executions": [], "error": "브로커 미연결"}
+    """KIS 실제 체결내역 조회 (엔진 상태 무관)."""
+    query_date = date.replace("-", "") if date else None
 
+    # 엔진 클라이언트가 있으면 그대로 사용
+    if engine.client:
+        try:
+            items = await engine.client.get_executions(
+                start_date=query_date, end_date=query_date,
+            )
+            return {"executions": [item.model_dump() for item in items]}
+        except Exception as e:
+            return {"executions": [], "error": str(e)}
+
+    # 엔진 미시작 → 임시 KIS 클라이언트로 직접 조회
+    from src.broker.kis_auth import KISAuth
+    from src.broker.kis_client import KISClient
+    from src.config.settings import settings
+
+    if not settings.kis_app_key:
+        return {"executions": [], "error": "KIS API 키 미설정"}
+
+    tmp_client = None
     try:
-        query_date = None
-        if date:
-            query_date = date.replace("-", "")
-
-        items = await engine.client.get_executions(
-            start_date=query_date,
-            end_date=query_date,
+        auth = KISAuth(
+            app_key=settings.kis_app_key,
+            app_secret=settings.kis_app_secret,
+            account_no=settings.kis_account_no,
+            is_mock=settings.kis_is_mock,
         )
-        return {
-            "executions": [item.model_dump() for item in items],
-        }
+        tmp_client = KISClient(auth)
+        await tmp_client.start()
+
+        items = await tmp_client.get_executions(
+            start_date=query_date, end_date=query_date,
+        )
+        return {"executions": [item.model_dump() for item in items]}
     except Exception as e:
         return {"executions": [], "error": str(e)}
+    finally:
+        if tmp_client:
+            await tmp_client.stop()
 
 
 @router.get("/stocks/{code}")
