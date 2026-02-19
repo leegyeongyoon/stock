@@ -307,29 +307,57 @@ async def get_kis_executions(
     date: str | None = Query(None, description="조회일 YYYY-MM-DD"),
 ):
     """KIS 실제 체결내역 조회 → 매수/매도 매칭하여 종목별 수익 계산."""
-    query_date = date.replace("-", "") if date else None
+    from datetime import datetime, timedelta
 
-    items = await _fetch_kis_executions(engine, query_date)
-    if isinstance(items, dict):
-        return items  # error response
+    target = date.replace("-", "") if date else datetime.now().strftime("%Y%m%d")
 
-    matched, open_buys = _match_executions(items)
-    return {
-        "trades": matched,
-        "open_positions": open_buys,
-        "raw_count": len(items),
-    }
+    client = _get_kis_client(engine)
+    if isinstance(client, dict):
+        return client  # error
+
+    try:
+        # 1) 해당일 체결내역
+        items = await _do_fetch(client, target, target)
+        if isinstance(items, dict):
+            return items
+
+        matched, open_buys, unmatched_sells = _match_executions(items)
+
+        # 2) 매칭 안 되는 매도가 있으면 30일 전까지 매수 찾기
+        if unmatched_sells:
+            need_codes = {s["stock_code"] for s in unmatched_sells}
+            dt = datetime.strptime(target, "%Y%m%d")
+            start_30 = (dt - timedelta(days=30)).strftime("%Y%m%d")
+            end_prev = (dt - timedelta(days=1)).strftime("%Y%m%d")
+
+            hist_items = await _do_fetch(client, start_30, end_prev)
+            if not isinstance(hist_items, dict):
+                # 필요한 종목의 매수만 추출
+                hist_buys = [
+                    it for it in hist_items
+                    if it.side == "매수" and it.stock_code in need_codes
+                ]
+                if hist_buys:
+                    extra_matched = _match_sells_with_buys(
+                        unmatched_sells, hist_buys,
+                    )
+                    matched.extend(extra_matched)
+
+        matched.sort(key=lambda x: x["sell_time"], reverse=True)
+        return {
+            "trades": matched,
+            "open_positions": open_buys,
+            "raw_count": len(items),
+        }
+    finally:
+        if not engine.client and hasattr(client, "stop"):
+            await client.stop()
 
 
-async def _fetch_kis_executions(engine, query_date):
-    """엔진 client 또는 임시 client로 체결내역 조회."""
+def _get_kis_client(engine):
+    """엔진 client 반환, 없으면 임시 client 생성."""
     if engine.client:
-        try:
-            return await engine.client.get_executions(
-                start_date=query_date, end_date=query_date,
-            )
-        except Exception as e:
-            return {"trades": [], "open_positions": [], "error": str(e)}
+        return engine.client
 
     from src.broker.kis_auth import KISAuth
     from src.broker.kis_client import KISClient
@@ -338,28 +366,29 @@ async def _fetch_kis_executions(engine, query_date):
     if not settings.kis_app_key:
         return {"trades": [], "open_positions": [], "error": "KIS API 키 미설정"}
 
-    tmp_client = None
+    auth = KISAuth(
+        app_key=settings.kis_app_key,
+        app_secret=settings.kis_app_secret,
+        account_no=settings.kis_account_no,
+        is_mock=settings.kis_is_mock,
+    )
+    return KISClient(auth)
+
+
+async def _do_fetch(client, start_date, end_date):
+    """KIS 체결내역 조회 wrapper."""
     try:
-        auth = KISAuth(
-            app_key=settings.kis_app_key,
-            app_secret=settings.kis_app_secret,
-            account_no=settings.kis_account_no,
-            is_mock=settings.kis_is_mock,
-        )
-        tmp_client = KISClient(auth)
-        await tmp_client.start()
-        return await tmp_client.get_executions(
-            start_date=query_date, end_date=query_date,
+        if not hasattr(client, "_client") or client._client is None:
+            await client.start()
+        return await client.get_executions(
+            start_date=start_date, end_date=end_date,
         )
     except Exception as e:
         return {"trades": [], "open_positions": [], "error": str(e)}
-    finally:
-        if tmp_client:
-            await tmp_client.stop()
 
 
-def _match_executions(items) -> tuple[list[dict], list[dict]]:
-    """매수/매도를 FIFO 매칭하여 거래 쌍 + 미매도 포지션 반환."""
+def _match_executions(items):
+    """매수/매도 FIFO 매칭. 반환: (matched, open_buys, unmatched_sells)."""
     from collections import defaultdict
 
     buys: dict[str, list] = defaultdict(list)
@@ -380,13 +409,14 @@ def _match_executions(items) -> tuple[list[dict], list[dict]]:
         else:
             sells[item.stock_code].append(entry)
 
-    # 시간순 정렬
     for code in buys:
         buys[code].sort(key=lambda x: x["order_time"])
     for code in sells:
         sells[code].sort(key=lambda x: x["order_time"])
 
     matched = []
+    unmatched_sells = []
+
     for code, sell_list in sells.items():
         buy_list = buys.get(code, [])
         buy_idx = 0
@@ -398,14 +428,13 @@ def _match_executions(items) -> tuple[list[dict], list[dict]]:
             while sell_qty > 0 and buy_idx < len(buy_list):
                 buy = buy_list[buy_idx]
                 avail = buy["quantity"] if buy_remain == 0 else buy_remain
-
                 match_qty = min(avail, sell_qty)
+
                 pnl = (sell["price"] - buy["price"]) * match_qty
                 pnl_pct = (
                     (sell["price"] - buy["price"]) / buy["price"] * 100
                     if buy["price"] > 0 else 0
                 )
-
                 matched.append({
                     "stock_code": code,
                     "stock_name": sell["stock_name"] or buy["stock_name"],
@@ -422,29 +451,20 @@ def _match_executions(items) -> tuple[list[dict], list[dict]]:
 
                 sell_qty -= match_qty
                 remaining = avail - match_qty
-
                 if remaining <= 0:
                     buy_idx += 1
                     buy_remain = 0
                 else:
                     buy_remain = remaining
 
+            # 매칭 안 된 매도 잔량
             if sell_qty > 0:
-                matched.append({
-                    "stock_code": code,
-                    "stock_name": sell["stock_name"],
+                unmatched_sells.append({
+                    **sell,
                     "quantity": sell_qty,
-                    "buy_price": 0,
-                    "sell_price": sell["price"],
-                    "buy_amount": 0,
-                    "sell_amount": sell["price"] * sell_qty,
-                    "pnl": 0,
-                    "pnl_pct": 0,
-                    "buy_time": "",
-                    "sell_time": sell["order_time"],
                 })
 
-        # 매칭 안 된 매수 잔량을 buys에 반영
+        # 매칭 안 된 매수 잔량 반영
         if buy_idx < len(buy_list):
             if buy_remain > 0:
                 buy_list[buy_idx] = {
@@ -472,8 +492,61 @@ def _match_executions(items) -> tuple[list[dict], list[dict]]:
                     "buy_time": buy["order_time"],
                 })
 
-    matched.sort(key=lambda x: x["sell_time"], reverse=True)
-    return matched, open_positions
+    return matched, open_positions, unmatched_sells
+
+
+def _match_sells_with_buys(unmatched_sells, hist_buys):
+    """매칭 안 된 매도를 과거 매수와 FIFO 매칭."""
+    from collections import defaultdict
+
+    buys: dict[str, list] = defaultdict(list)
+    for item in hist_buys:
+        buys[item.stock_code].append({
+            "stock_code": item.stock_code,
+            "stock_name": item.stock_name,
+            "quantity": item.quantity,
+            "price": item.price,
+            "order_time": item.order_time,
+        })
+
+    for code in buys:
+        buys[code].sort(key=lambda x: x["order_time"])
+
+    matched = []
+    for sell in unmatched_sells:
+        code = sell["stock_code"]
+        buy_list = buys.get(code, [])
+        sell_qty = sell["quantity"]
+
+        while sell_qty > 0 and buy_list:
+            buy = buy_list[0]
+            match_qty = min(buy["quantity"], sell_qty)
+
+            pnl = (sell["price"] - buy["price"]) * match_qty
+            pnl_pct = (
+                (sell["price"] - buy["price"]) / buy["price"] * 100
+                if buy["price"] > 0 else 0
+            )
+            matched.append({
+                "stock_code": code,
+                "stock_name": sell["stock_name"] or buy["stock_name"],
+                "quantity": match_qty,
+                "buy_price": buy["price"],
+                "sell_price": sell["price"],
+                "buy_amount": buy["price"] * match_qty,
+                "sell_amount": sell["price"] * match_qty,
+                "pnl": pnl,
+                "pnl_pct": round(pnl_pct, 2),
+                "buy_time": buy["order_time"],
+                "sell_time": sell["order_time"],
+            })
+
+            sell_qty -= match_qty
+            buy["quantity"] -= match_qty
+            if buy["quantity"] <= 0:
+                buy_list.pop(0)
+
+    return matched
 
 
 @router.get("/stocks/{code}")
