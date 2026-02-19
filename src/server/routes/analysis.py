@@ -301,6 +301,38 @@ async def cleanup_trade_history():
         return {"success": False, "error": str(e)}
 
 
+_shared_kis_client = None
+
+
+async def _get_or_create_client(engine):
+    """엔진 client를 우선 사용, 없으면 공유 client 1개 재사용."""
+    global _shared_kis_client
+
+    if engine.client:
+        return engine.client
+
+    from src.broker.kis_auth import KISAuth
+    from src.broker.kis_client import KISClient
+    from src.config.settings import settings
+
+    if not settings.kis_app_key:
+        return None
+
+    if _shared_kis_client and _shared_kis_client._client:
+        return _shared_kis_client
+
+    auth = KISAuth(
+        app_key=settings.kis_app_key,
+        app_secret=settings.kis_app_secret,
+        account_no=settings.kis_account_no,
+        is_mock=settings.kis_is_mock,
+    )
+    client = KISClient(auth)
+    await client.start()
+    _shared_kis_client = client
+    return client
+
+
 @router.get("/kis-executions")
 async def get_kis_executions(
     engine: TradingEngine = Depends(get_engine),
@@ -311,7 +343,6 @@ async def get_kis_executions(
     """KIS 실제 체결내역 조회 → 매수/매도 매칭하여 종목별 수익 계산."""
     from datetime import datetime, timedelta
 
-    # start_date/end_date가 있으면 범위 조회, 아니면 date 단일 조회
     if start_date and end_date:
         q_start = start_date.replace("-", "")
         q_end = end_date.replace("-", "")
@@ -322,90 +353,65 @@ async def get_kis_executions(
         q_start = datetime.now().strftime("%Y%m%d")
         q_end = q_start
 
-    client = _get_kis_client(engine)
-    if isinstance(client, dict):
-        return client  # error
+    client = await _get_or_create_client(engine)
+    if not client:
+        return {"trades": [], "open_positions": [], "error": "KIS API 키 미설정"}
 
     try:
         # 1) 해당 기간 체결내역
-        items = await _do_fetch(client, q_start, q_end)
-        if isinstance(items, dict):
-            return items
-
-        matched, open_buys, unmatched_sells = _match_executions(items)
-
-        # 2) 매칭 안 되는 매도 → 90일씩 최대 1년 전까지 매수 탐색
-        if unmatched_sells:
-            need_codes = {s["stock_code"] for s in unmatched_sells}
-            dt = datetime.strptime(q_start, "%Y%m%d")
-
-            for step in range(4):  # 90일 x 4 = 360일
-                chunk_end = dt - timedelta(days=1 + step * 90)
-                chunk_start = dt - timedelta(days=90 + step * 90)
-                hist_items = await _do_fetch(
-                    client,
-                    chunk_start.strftime("%Y%m%d"),
-                    chunk_end.strftime("%Y%m%d"),
-                )
-                if isinstance(hist_items, dict):
-                    break
-
-                hist_buys = [
-                    it for it in hist_items
-                    if it.side == "매수" and it.stock_code in need_codes
-                ]
-                if hist_buys:
-                    extra_matched, unmatched_sells = _match_sells_with_buys(
-                        unmatched_sells, hist_buys,
-                    )
-                    matched.extend(extra_matched)
-                    need_codes = {s["stock_code"] for s in unmatched_sells}
-
-                if not unmatched_sells:
-                    break
-
-        matched.sort(key=lambda x: x["sell_time"], reverse=True)
-        return {
-            "trades": matched,
-            "open_positions": open_buys,
-            "raw_count": len(items),
-        }
-    finally:
-        if not engine.client and hasattr(client, "stop"):
-            await client.stop()
-
-
-def _get_kis_client(engine):
-    """엔진 client 반환, 없으면 임시 client 생성."""
-    if engine.client:
-        return engine.client
-
-    from src.broker.kis_auth import KISAuth
-    from src.broker.kis_client import KISClient
-    from src.config.settings import settings
-
-    if not settings.kis_app_key:
-        return {"trades": [], "open_positions": [], "error": "KIS API 키 미설정"}
-
-    auth = KISAuth(
-        app_key=settings.kis_app_key,
-        app_secret=settings.kis_app_secret,
-        account_no=settings.kis_account_no,
-        is_mock=settings.kis_is_mock,
-    )
-    return KISClient(auth)
-
-
-async def _do_fetch(client, start_date, end_date):
-    """KIS 체결내역 조회 wrapper."""
-    try:
-        if not hasattr(client, "_client") or client._client is None:
-            await client.start()
-        return await client.get_executions(
-            start_date=start_date, end_date=end_date,
+        items = await client.get_executions(
+            start_date=q_start, end_date=q_end,
         )
     except Exception as e:
         return {"trades": [], "open_positions": [], "error": str(e)}
+
+    matched, open_buys, unmatched_sells = _match_executions(items)
+
+    # 2) 매칭 안 되는 매도 → 한 번에 90일 전까지만 조회 (빠르게)
+    if unmatched_sells:
+        dt = datetime.strptime(q_start, "%Y%m%d")
+        hist_start = (dt - timedelta(days=90)).strftime("%Y%m%d")
+        hist_end = (dt - timedelta(days=1)).strftime("%Y%m%d")
+
+        try:
+            hist_items = await client.get_executions(
+                start_date=hist_start, end_date=hist_end,
+            )
+            need_codes = {s["stock_code"] for s in unmatched_sells}
+            hist_buys = [
+                it for it in hist_items
+                if it.side == "매수" and it.stock_code in need_codes
+            ]
+            if hist_buys:
+                extra, unmatched_sells = _match_sells_with_buys(
+                    unmatched_sells, hist_buys,
+                )
+                matched.extend(extra)
+        except Exception:
+            pass  # 역방향 실패해도 기본 결과는 반환
+
+    # 3) 그래도 매칭 안 된 매도 → 매도 정보만이라도 표시
+    for sell in unmatched_sells:
+        matched.append({
+            "stock_code": sell["stock_code"],
+            "stock_name": sell["stock_name"],
+            "quantity": sell["quantity"],
+            "buy_price": 0,
+            "sell_price": sell["price"],
+            "buy_amount": 0,
+            "sell_amount": sell["price"] * sell["quantity"],
+            "pnl": 0,
+            "pnl_pct": 0,
+            "buy_time": "",
+            "sell_time": sell["order_time"],
+        })
+
+    matched.sort(key=lambda x: x["sell_time"], reverse=True)
+    return {
+        "trades": matched,
+        "open_positions": open_buys,
+        "raw_count": len(items),
+    }
 
 
 def _match_executions(items):
