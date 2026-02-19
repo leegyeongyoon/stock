@@ -336,6 +336,59 @@ async def _get_or_create_client(engine):
     return client
 
 
+async def _fetch_executions_by_day(client, q_start: str, q_end: str):
+    """날짜 범위의 체결내역을 일별로 개별 조회하여 병합.
+
+    KIS 모의투자 서버는 날짜 범위 조회 시 일부 데이터만 반환하므로,
+    각 영업일별로 개별 API 콜을 해서 모든 데이터를 확보한다.
+    """
+    from datetime import datetime, timedelta
+
+    dt_start = datetime.strptime(q_start, "%Y%m%d")
+    dt_end = datetime.strptime(q_end, "%Y%m%d")
+
+    # 1일 조회면 그대로 호출
+    if dt_start == dt_end:
+        return await client.get_executions(
+            start_date=q_start, end_date=q_end,
+        )
+
+    # 복수일: 각 날짜별로 개별 조회
+    all_items = []
+    seen_order_ids: set[str] = set()
+    current = dt_start
+
+    while current <= dt_end:
+        # 주말 스킵 (토=5, 일=6)
+        if current.weekday() >= 5:
+            current += timedelta(days=1)
+            continue
+
+        day_str = current.strftime("%Y%m%d")
+        try:
+            day_items = await client.get_executions(
+                start_date=day_str, end_date=day_str,
+            )
+            # 중복 제거 (order_id 기준)
+            for item in day_items:
+                if item.order_id and item.order_id in seen_order_ids:
+                    continue
+                if item.order_id:
+                    seen_order_ids.add(item.order_id)
+                all_items.append(item)
+
+            logger.info(
+                f"일별 조회 {day_str}: {len(day_items)}건 "
+                f"(누적 {len(all_items)}건)"
+            )
+        except Exception as e:
+            logger.warning(f"일별 조회 실패 {day_str}: {e}")
+
+        current += timedelta(days=1)
+
+    return all_items
+
+
 @router.get("/kis-executions")
 async def get_kis_executions(
     engine: TradingEngine = Depends(get_engine),
@@ -361,36 +414,29 @@ async def get_kis_executions(
         return {"trades": [], "open_positions": [], "error": "KIS API 키 미설정"}
 
     try:
-        # 1) 해당 기간 체결내역
-        items = await client.get_executions(
-            start_date=q_start, end_date=q_end,
-        )
+        items = await _fetch_executions_by_day(client, q_start, q_end)
     except Exception as e:
         logger.error(f"KIS 체결내역 조회 실패: {e}")
         return {"trades": [], "open_positions": [], "error": str(e)}
 
     buy_count = sum(1 for it in items if it.side == "매수")
     sell_count = sum(1 for it in items if it.side == "매도")
-    buy_codes = {it.stock_code for it in items if it.side == "매수"}
-    sell_codes = {it.stock_code for it in items if it.side == "매도"}
     logger.info(
         f"KIS 체결내역 ({q_start}~{q_end}): 총 {len(items)}건 "
-        f"(매수 {buy_count}, 매도 {sell_count}), "
-        f"매수종목={buy_codes}, 매도종목={sell_codes}"
+        f"(매수 {buy_count}, 매도 {sell_count})"
     )
 
     matched, open_buys, unmatched_sells = _match_executions(items)
     logger.info(
-        f"1차 매칭 결과: 매칭 {len(matched)}건, "
+        f"1차 매칭: 매칭 {len(matched)}건, "
         f"미매도 {len(open_buys)}건, 미매칭매도 {len(unmatched_sells)}건"
     )
 
-    # 2) 매칭 안 되는 매도 → 메인 조회 이전 기간에서 매수 탐색
+    # 2) 매칭 안 되는 매도 → 메인 조회 이전 기간에서 매수 탐색 (일별 조회)
     if unmatched_sells:
-        # q_end 기준으로 이전 기간 검색 (메인 쿼리와 겹치지 않게)
-        dt_end = datetime.strptime(q_start, "%Y%m%d")
-        hist_start = (dt_end - timedelta(days=365)).strftime("%Y%m%d")
-        hist_end = (dt_end - timedelta(days=1)).strftime("%Y%m%d")
+        dt_start = datetime.strptime(q_start, "%Y%m%d")
+        hist_start = (dt_start - timedelta(days=30)).strftime("%Y%m%d")
+        hist_end = (dt_start - timedelta(days=1)).strftime("%Y%m%d")
 
         need_codes = {s["stock_code"] for s in unmatched_sells}
         logger.info(
@@ -399,16 +445,16 @@ async def get_kis_executions(
         )
 
         try:
-            hist_items = await client.get_executions(
-                start_date=hist_start, end_date=hist_end,
+            hist_items = await _fetch_executions_by_day(
+                client, hist_start, hist_end,
             )
             hist_buys = [
                 it for it in hist_items
                 if it.side == "매수" and it.stock_code in need_codes
             ]
             logger.info(
-                f"과거 매수 결과: 총 {len(hist_items)}건 조회, "
-                f"매수 {len(hist_buys)}건 (관련 종목)"
+                f"과거 매수 결과: {len(hist_items)}건 중 "
+                f"관련 매수 {len(hist_buys)}건"
             )
             if hist_buys:
                 extra, unmatched_sells = _match_sells_with_buys(
@@ -416,8 +462,8 @@ async def get_kis_executions(
                 )
                 matched.extend(extra)
                 logger.info(
-                    f"과거 매수 매칭: {len(extra)}건 추가 매칭, "
-                    f"여전히 미매칭 {len(unmatched_sells)}건"
+                    f"과거 매칭: +{len(extra)}건, "
+                    f"미매칭 {len(unmatched_sells)}건 남음"
                 )
         except Exception as e:
             logger.error(f"과거 매수 검색 실패: {e}", exc_info=True)
@@ -440,22 +486,16 @@ async def get_kis_executions(
 
     matched.sort(key=lambda x: x["sell_time"], reverse=True)
 
-    debug_info = {
-        "query_range": f"{q_start}~{q_end}",
-        "total_items": len(items),
-        "buys": buy_count,
-        "sells": sell_count,
-        "buy_codes": sorted(buy_codes),
-        "sell_codes": sorted(sell_codes),
-        "matched_trades": len(matched) - len(unmatched_sells),
-        "unmatched_sells": len(unmatched_sells),
-    }
-
     return {
         "trades": matched,
         "open_positions": open_buys,
         "raw_count": len(items),
-        "_debug": debug_info,
+        "_debug": {
+            "query_range": f"{q_start}~{q_end}",
+            "total_items": len(items),
+            "buys": buy_count,
+            "sells": sell_count,
+        },
     }
 
 

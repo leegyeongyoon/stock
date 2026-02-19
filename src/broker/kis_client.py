@@ -398,15 +398,23 @@ class KISClient:
 
             output1 = data.get("output1", [])
 
+            page_buys = 0
+            page_sells = 0
             for item in output1:
                 qty = int(item.get("tot_ccld_qty", 0))
                 if qty <= 0:
                     continue
+                side_code = item.get("sll_buy_dvsn_cd", "")
+                is_buy = side_code == "02"
+                if is_buy:
+                    page_buys += 1
+                else:
+                    page_sells += 1
                 executions.append(ExecutionInfo(
                     order_id=item.get("odno", ""),
                     stock_code=item.get("pdno", ""),
                     stock_name=item.get("prdt_name", ""),
-                    side="매수" if item.get("sll_buy_dvsn_cd") == "02" else "매도",
+                    side="매수" if is_buy else "매도",
                     quantity=qty,
                     price=int(item.get("avg_prvs", 0)),
                     total_amount=int(item.get("tot_ccld_amt", 0)),
@@ -419,6 +427,12 @@ class KISClient:
             tr_cont = data.get("tr_cont", "")
             next_fk = data.get("ctx_area_fk100", "").strip()
             next_nk = data.get("ctx_area_nk100", "").strip()
+
+            logger.info(
+                f"체결내역 페이지 ({start}~{end}): "
+                f"output1={len(output1)}건 (매수{page_buys}/매도{page_sells}), "
+                f"tr_cont={tr_cont!r}, fk={next_fk!r}"
+            )
 
             if tr_cont not in ("M", "F") or not next_fk:
                 break
