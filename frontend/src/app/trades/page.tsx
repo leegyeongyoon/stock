@@ -64,7 +64,8 @@ export default function TradesPage() {
   const winRate = trades.length > 0 ? (wins / trades.length) * 100 : 0;
   const avgPnl = trades.length > 0 ? totalPnl / trades.length : 0;
 
-  const executions = kisData?.executions || [];
+  const kisTrades = kisData?.trades || [];
+  const kisOpen = kisData?.open_positions || [];
 
   return (
     <div className="space-y-6">
@@ -75,7 +76,7 @@ export default function TradesPage() {
         )}
         {tab === "kis" && (
           <span className="text-xs text-slate-500">
-            {executions.length}건 체결
+            {kisTrades.length}건 매매 / {kisOpen.length}건 보유
           </span>
         )}
       </div>
@@ -211,7 +212,7 @@ export default function TradesPage() {
               KIS 체결내역을 불러오는 중...
             </div>
           ) : (
-            <KisExecutionTable executions={executions} />
+            <KisExecutionTable trades={kisTrades} openPositions={kisOpen} />
           )}
         </>
       )}

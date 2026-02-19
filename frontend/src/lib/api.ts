@@ -394,26 +394,38 @@ export async function getTradeHistory(params?: {
   }>(`/api/analysis/trade-history${query ? `?${query}` : ""}`);
 }
 
-// KIS Executions
-export interface KisExecution {
-  order_id: string;
+// KIS Executions (매수/매도 매칭된 거래)
+export interface KisMatchedTrade {
   stock_code: string;
   stock_name: string;
-  side: string;
   quantity: number;
-  price: number;
-  total_amount: number;
-  executed_at: string | null;
-  order_time: string;
-  order_type: string;
-  order_quantity: number;
+  buy_price: number;
+  sell_price: number;
+  buy_amount: number;
+  sell_amount: number;
+  pnl: number;
+  pnl_pct: number;
+  buy_time: string;
+  sell_time: string;
+}
+
+export interface KisOpenPosition {
+  stock_code: string;
+  stock_name: string;
+  quantity: number;
+  buy_price: number;
+  buy_amount: number;
+  buy_time: string;
 }
 
 export async function getKisExecutions(date?: string) {
   const query = date ? `?date=${date}` : "";
-  return fetchApi<{ executions: KisExecution[]; error?: string }>(
-    `/api/analysis/kis-executions${query}`
-  );
+  return fetchApi<{
+    trades: KisMatchedTrade[];
+    open_positions: KisOpenPosition[];
+    raw_count: number;
+    error?: string;
+  }>(`/api/analysis/kis-executions${query}`);
 }
 
 // Strategy toggle
