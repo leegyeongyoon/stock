@@ -90,18 +90,18 @@ export default function GyleeTradingPanel() {
     },
   });
 
+  const mountedRef = useRef(true);
+
   const connectWebSocket = useCallback(() => {
+    if (!mountedRef.current) return;
     try {
       const wsUrl = API_BASE.replace(/^http/, "ws");
-      const ws = new WebSocket(`${wsUrl}/ws/stockking`);
+      const ws = new WebSocket(`${wsUrl}/ws/gylee`);
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as HongEvent;
-          // 경윤 이벤트만 필터
-          if (data.event_type?.startsWith("GYLEE") || data.message?.includes("경윤")) {
-            setWsEvents((prev) => [data, ...prev].slice(0, 20));
-          }
+          setWsEvents((prev) => [data, ...prev].slice(0, 20));
           queryClient.invalidateQueries({ queryKey: ["gylee-trading-status"] });
           queryClient.invalidateQueries({ queryKey: ["gylee-positions"] });
         } catch {
@@ -110,7 +110,9 @@ export default function GyleeTradingPanel() {
       };
 
       ws.onclose = () => {
-        setTimeout(connectWebSocket, 5000);
+        if (mountedRef.current) {
+          setTimeout(connectWebSocket, 5000);
+        }
       };
 
       wsRef.current = ws;
@@ -120,8 +122,10 @@ export default function GyleeTradingPanel() {
   }, [queryClient]);
 
   useEffect(() => {
+    mountedRef.current = true;
     connectWebSocket();
     return () => {
+      mountedRef.current = false;
       wsRef.current?.close();
     };
   }, [connectWebSocket]);
@@ -287,9 +291,9 @@ export default function GyleeTradingPanel() {
               <div
                 key={`${evt.timestamp}-${idx}`}
                 className={`flex items-start gap-2 text-[10px] p-1.5 rounded ${
-                  evt.severity === "error" || evt.severity === "WARNING"
+                  evt.severity?.toUpperCase() === "ERROR" || evt.severity?.toUpperCase() === "CRITICAL"
                     ? "bg-red-500/10 text-red-400"
-                    : evt.severity === "CRITICAL"
+                    : evt.severity?.toUpperCase() === "WARNING"
                     ? "bg-yellow-500/10 text-yellow-400"
                     : "bg-slate-900/40 text-slate-400"
                 }`}

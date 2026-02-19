@@ -154,7 +154,36 @@ async function postApi<T>(path: string, body?: unknown): Promise<T> {
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`);
     }
-    return res.json();
+    return await res.json();
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(`API timeout: ${path} (90000ms)`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function putApi<T>(path: string, body?: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status}`);
+    }
+    return await res.json();
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(`API timeout: ${path} (90000ms)`);
+    }
+    throw e;
   } finally {
     clearTimeout(timer);
   }
@@ -367,7 +396,7 @@ export async function getTradeHistory(params?: {
 
 // Strategy toggle
 export async function toggleStrategy(strategyName: string) {
-  return postApi<{ message: string }>(`/api/strategies/${strategyName}/toggle`);
+  return putApi<{ message: string }>(`/api/strategies/${strategyName}/toggle`);
 }
 
 // Performance types

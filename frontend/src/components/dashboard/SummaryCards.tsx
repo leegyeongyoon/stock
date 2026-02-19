@@ -2,10 +2,6 @@
 
 import type { DashboardSummary } from "@/lib/api";
 
-interface Props {
-  data: DashboardSummary | undefined;
-}
-
 function Card({
   label,
   value,

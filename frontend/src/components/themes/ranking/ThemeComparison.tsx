@@ -5,6 +5,7 @@ import type { ThemeRanking } from "@/lib/api";
 export default function ThemeComparison({
   themes,
   selectedThemes,
+  onToggleTheme,
   onClear,
 }: {
   themes: ThemeRanking[];

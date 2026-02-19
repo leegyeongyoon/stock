@@ -9,26 +9,31 @@ export function useWebSocket<T>(channel: string) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const mountedRef = useRef(true);
 
   const connect = useCallback(() => {
+    if (!mountedRef.current) return;
+
     const ws = new WebSocket(`${WS_BASE}/ws/${channel}`);
 
     ws.onopen = () => {
-      setIsConnected(true);
+      if (mountedRef.current) setIsConnected(true);
     };
 
     ws.onmessage = (event) => {
       try {
         const parsed = JSON.parse(event.data) as T;
-        setData(parsed);
+        if (mountedRef.current) setData(parsed);
       } catch {
         // ignore parse errors
       }
     };
 
     ws.onclose = () => {
-      setIsConnected(false);
-      reconnectTimer.current = setTimeout(connect, 3000);
+      if (mountedRef.current) {
+        setIsConnected(false);
+        reconnectTimer.current = setTimeout(connect, 3000);
+      }
     };
 
     ws.onerror = () => {
@@ -39,8 +44,10 @@ export function useWebSocket<T>(channel: string) {
   }, [channel]);
 
   useEffect(() => {
+    mountedRef.current = true;
     connect();
     return () => {
+      mountedRef.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };

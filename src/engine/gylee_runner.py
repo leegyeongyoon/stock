@@ -446,6 +446,7 @@ class GyleeRunner(HongStyleRunner):
 
                 # 1. 유니버스: 거래대금 TOP100 OR 등락률 >= 3%
                 universe = self._v6_select_universe()
+                self._v6_universe = universe
                 self._filter_stats["total_candidates"] = len(universe)
 
                 if not universe:
@@ -962,9 +963,11 @@ class GyleeRunner(HongStyleRunner):
             self._events = self._events[-200:]
 
         try:
+            loop = asyncio.get_running_loop()
             from src.server.websocket_hub import hub
-
-            asyncio.create_task(hub.broadcast_stockking(event))
+            loop.create_task(hub.broadcast_gylee(event))
+        except RuntimeError:
+            pass
         except Exception:
             pass
 

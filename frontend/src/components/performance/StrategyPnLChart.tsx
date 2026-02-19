@@ -18,7 +18,7 @@ interface Props {
 
 export default function StrategyPnLChart({ strategies }: Props) {
   const data = strategies.map((s) => ({
-    name: s.display_name.replace("전략", "S"),
+    name: (s.display_name?.replace("전략", "S")) ?? s.strategy_name,
     pnl: s.total_pnl,
     trades: s.trades,
     win_rate: s.win_rate,

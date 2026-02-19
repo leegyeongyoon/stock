@@ -300,7 +300,7 @@ class PositionManager:
             self.update_price(code, price)
 
         self._db_update_counter += 1
-        if self._db_update_counter >= 1:  # Every call (called every 5s from monitor)
+        if self._db_update_counter >= 3:  # Every 15s (3 calls * 5s interval)
             self._db_update_counter = 0
             self._sync_prices_to_db()
 

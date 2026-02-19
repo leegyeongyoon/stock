@@ -15,9 +15,8 @@ _scheduler: "TradingScheduler | None" = None
 
 def get_engine() -> TradingEngine:
     """Get the global TradingEngine instance."""
-    global _engine
     if _engine is None:
-        _engine = TradingEngine()
+        raise RuntimeError("TradingEngine not initialized. Call set_engine() first.")
     return _engine
 
 

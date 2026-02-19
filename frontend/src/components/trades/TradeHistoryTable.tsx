@@ -11,6 +11,20 @@ interface Props {
 
 type SortKey = "exit_time" | "pnl" | "pnl_pct" | "stock_code";
 
+const REASON_LABEL: Record<string, string> = {
+  SL: "손절",
+  TP: "익절",
+  CLOSE: "마감",
+  MANUAL: "수동",
+};
+
+const REASON_COLOR: Record<string, string> = {
+  SL: "text-red-400 bg-red-500/10",
+  TP: "text-green-400 bg-green-500/10",
+  CLOSE: "text-slate-400 bg-slate-700",
+  MANUAL: "text-yellow-400 bg-yellow-500/10",
+};
+
 export default function TradeHistoryTable({ trades, onSelectTrade }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("exit_time");
   const [sortDesc, setSortDesc] = useState(true);
@@ -95,23 +109,9 @@ export default function TradeHistoryTable({ trades, onSelectTrade }: Props) {
                   })
                 : "-";
 
-              const reasonLabel: Record<string, string> = {
-                SL: "손절",
-                TP: "익절",
-                CLOSE: "마감",
-                MANUAL: "수동",
-              };
-
-              const reasonColor: Record<string, string> = {
-                SL: "text-red-400 bg-red-500/10",
-                TP: "text-green-400 bg-green-500/10",
-                CLOSE: "text-slate-400 bg-slate-700",
-                MANUAL: "text-yellow-400 bg-yellow-500/10",
-              };
-
               return (
                 <tr
-                  key={i}
+                  key={t.id ?? `${t.stock_code}-${t.exit_time}-${i}`}
                   onClick={() => onSelectTrade(t)}
                   className={`border-b border-slate-700/30 hover:bg-slate-700/20 cursor-pointer border-l-2 ${
                     t.pnl >= 0 ? "border-l-green-500/40" : "border-l-red-500/40"
@@ -157,10 +157,10 @@ export default function TradeHistoryTable({ trades, onSelectTrade }: Props) {
                   <td className="px-4 py-2.5 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-xs ${
-                        reasonColor[t.exit_reason] || "text-slate-400 bg-slate-700"
+                        REASON_COLOR[t.exit_reason] || "text-slate-400 bg-slate-700"
                       }`}
                     >
-                      {reasonLabel[t.exit_reason] || t.exit_reason}
+                      {REASON_LABEL[t.exit_reason] || t.exit_reason}
                     </span>
                   </td>
                 </tr>

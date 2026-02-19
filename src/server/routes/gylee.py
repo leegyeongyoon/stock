@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from loguru import logger
 from sqlalchemy import text
 
+from src.engine.hongstyle_runner import HongStyleRunner
 from src.server.dependencies import get_engine
 from src.database.connection import get_session
 
@@ -125,10 +126,10 @@ async def get_gylee_conviction():
         if not engine.gylee_runner:
             return {
                 "ranking": [],
-                "top_n": 5,
-                "max_positions": 2,
-                "high_alloc_pct": 0.50,
-                "low_alloc_pct": 0.30,
+                "top_n": HongStyleRunner.TOP_N_ONLY,
+                "max_positions": HongStyleRunner.MAX_POSITIONS,
+                "high_alloc_pct": HongStyleRunner.HIGH_CONFIDENCE_PCT,
+                "low_alloc_pct": HongStyleRunner.LOW_CONFIDENCE_PCT,
                 "algorithm": algorithm,
             }
 
@@ -146,8 +147,11 @@ async def get_gylee_conviction():
     except Exception as e:
         logger.error(f"경윤 확신도 순위 조회 실패: {e}")
         return {
-            "ranking": [], "top_n": 5, "max_positions": 2,
-            "high_alloc_pct": 0.50, "low_alloc_pct": 0.30,
+            "ranking": [],
+            "top_n": HongStyleRunner.TOP_N_ONLY,
+            "max_positions": HongStyleRunner.MAX_POSITIONS,
+            "high_alloc_pct": HongStyleRunner.HIGH_CONFIDENCE_PCT,
+            "low_alloc_pct": HongStyleRunner.LOW_CONFIDENCE_PCT,
             "algorithm": {},
         }
 

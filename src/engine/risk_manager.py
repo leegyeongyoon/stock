@@ -102,6 +102,9 @@ class RiskManager:
         if self._circuit_breaker_active:
             return True
 
+        if self.pm.initial_capital == 0:
+            return False
+
         daily_loss_pct = self.pm.daily_pnl / self.pm.initial_capital
         if daily_loss_pct < -self.max_daily_loss_pct:
             self._circuit_breaker_active = True

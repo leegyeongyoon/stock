@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getThemeDetail, getThemeNews } from "@/lib/api";
 import BottomSheet from "../common/BottomSheet";
@@ -22,6 +22,10 @@ export default function ThemeDetailSheet({
 }) {
   const [activeTab, setActiveTab] = useState<"stocks" | "news" | "memo">("stocks");
   const [memoText, setMemoText] = useState(memo || "");
+
+  useEffect(() => {
+    setMemoText(memo || "");
+  }, [memo]);
 
   const { data: themeDetail, isLoading: detailLoading } = useQuery({
     queryKey: ["theme-detail-modal", themeCode],

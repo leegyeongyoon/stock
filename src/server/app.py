@@ -238,3 +238,13 @@ async def ws_stockking(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         hub.stockking.disconnect(websocket)
+
+
+@app.websocket("/ws/gylee")
+async def ws_gylee(websocket: WebSocket):
+    await hub.gylee.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        hub.gylee.disconnect(websocket)

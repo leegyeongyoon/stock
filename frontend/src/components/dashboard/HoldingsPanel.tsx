@@ -13,8 +13,8 @@ export default function HoldingsPanel({ holdings, summary }: Props) {
     return null;
   }
 
-  const totalPnl = summary?.total_unrealized_pnl || 0;
-  const totalPnlPct = summary?.total_unrealized_pnl_pct || 0;
+  const totalPnl = summary?.total_unrealized_pnl ?? 0;
+  const totalPnlPct = summary?.total_unrealized_pnl_pct ?? 0;
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700">
@@ -49,8 +49,8 @@ export default function HoldingsPanel({ holdings, summary }: Props) {
           </thead>
           <tbody>
             {holdings.map((h) => {
-              const pnl = h.pnl_amount || 0;
-              const pnlPct = h.pnl_pct || 0;
+              const pnl = h.pnl_amount ?? 0;
+              const pnlPct = h.pnl_pct ?? 0;
               return (
                 <tr
                   key={h.stock_code}

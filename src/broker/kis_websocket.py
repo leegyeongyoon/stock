@@ -88,24 +88,43 @@ class KISWebSocket:
                 f"{stock_code} 구독 실패"
             )
             return False
+        if not self._ws or not self._running:
+            logger.warning(f"WS 미연결 상태, 구독 불가: {stock_code}")
+            return False
 
-        msg = self._build_subscribe_msg(WS_TRADE, stock_code, subscribe=True)
-        await self._ws.send(json.dumps(msg))
-        self._subscribed.add(stock_code)
-        logger.debug(f"WS 구독: {stock_code} (총 {len(self._subscribed)}종목)")
-        return True
+        try:
+            msg = self._build_subscribe_msg(WS_TRADE, stock_code, subscribe=True)
+            await self._ws.send(json.dumps(msg))
+            self._subscribed.add(stock_code)
+            logger.debug(f"WS 구독: {stock_code} (총 {len(self._subscribed)}종목)")
+            return True
+        except Exception as e:
+            logger.warning(f"WS 구독 전송 실패: {stock_code} - {e}")
+            return False
 
     async def unsubscribe_trade(self, stock_code: str) -> None:
         """Unsubscribe from real-time trade data."""
         if stock_code not in self._subscribed:
             return
-        msg = self._build_subscribe_msg(WS_TRADE, stock_code, subscribe=False)
-        await self._ws.send(json.dumps(msg))
-        self._subscribed.discard(stock_code)
-        logger.debug(f"WS 해제: {stock_code} (총 {len(self._subscribed)}종목)")
+        if not self._ws or not self._running:
+            self._subscribed.discard(stock_code)
+            return
+
+        try:
+            msg = self._build_subscribe_msg(WS_TRADE, stock_code, subscribe=False)
+            await self._ws.send(json.dumps(msg))
+            self._subscribed.discard(stock_code)
+            logger.debug(f"WS 해제: {stock_code} (총 {len(self._subscribed)}종목)")
+        except Exception as e:
+            logger.warning(f"WS 해제 전송 실패: {stock_code} - {e}")
+            self._subscribed.discard(stock_code)
 
     async def subscribe_my_executions(self) -> None:
         """Subscribe to personal execution notices."""
+        if not self._ws or not self._running:
+            logger.warning("WS 미연결 상태, 체결통보 구독 불가")
+            return
+
         tr_id = WS_MY_TRADE_MOCK if self.is_mock else WS_MY_TRADE
         hts_id = self.app_key[:8] if len(self.app_key) >= 8 else self.app_key
         msg = self._build_subscribe_msg(tr_id, hts_id, subscribe=True)
@@ -174,10 +193,15 @@ class KISWebSocket:
                     ping_interval=30,
                     ping_timeout=10,
                 )
-                # Re-subscribe
+                # Re-subscribe market data
                 for code in codes:
                     await self.subscribe_trade(code)
                     await asyncio.sleep(0.1)
+                # Re-subscribe execution notices
+                try:
+                    await self.subscribe_my_executions()
+                except Exception as e:
+                    logger.warning(f"체결통보 재구독 실패: {e}")
                 logger.info(f"KIS WebSocket 재연결 성공 (시도 {attempt + 1})")
                 return
             except Exception as e:

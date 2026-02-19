@@ -44,12 +44,12 @@ function NewsCard({ news, onClick }: { news: NewsAnalysis; onClick: () => void }
           >
             {news.sentiment.includes("very_positive")
               ? "매우 긍정"
+              : news.sentiment.includes("very_negative")
+              ? "매우 부정"
               : news.sentiment.includes("positive")
               ? "긍정"
               : news.sentiment.includes("negative")
               ? "부정"
-              : news.sentiment.includes("very_negative")
-              ? "매우 부정"
               : "중립"}
           </span>
         </div>

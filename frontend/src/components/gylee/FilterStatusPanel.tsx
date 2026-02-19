@@ -32,7 +32,7 @@ function FilterCard({
         <span className="text-xs text-slate-400">{description}</span>
         <div className="text-right">
           <div className="text-lg font-bold text-white font-mono">
-            {passRate}%
+            {typeof passRate === "number" ? passRate.toFixed(1) : passRate}%
           </div>
           <div className="text-[10px] text-slate-500">{passCount}종목</div>
         </div>

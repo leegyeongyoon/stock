@@ -51,7 +51,7 @@ export default function EventLog({ events }: Props) {
 
               return (
                 <div
-                  key={i}
+                  key={`${evt.timestamp}-${evt.event_type}-${i}`}
                   className="px-4 py-2 flex items-start gap-3 text-xs hover:bg-slate-700/20"
                 >
                   <span className="text-slate-600 font-mono shrink-0 w-16">

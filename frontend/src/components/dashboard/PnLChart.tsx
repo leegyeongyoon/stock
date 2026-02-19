@@ -20,13 +20,16 @@ export default function PnLChart({ trades }: Props) {
     (acc, trade) => {
       const prev = acc.length > 0 ? acc[acc.length - 1].pnl : 0;
       const tradeTime = trade.exit_time || trade.timestamp;
-      acc.push({
-        time: tradeTime
-          ? new Date(tradeTime).toLocaleTimeString("ko-KR", {
+      const date = tradeTime ? new Date(tradeTime) : null;
+      const timeStr =
+        date && !isNaN(date.getTime())
+          ? date.toLocaleTimeString("ko-KR", {
               hour: "2-digit",
               minute: "2-digit",
             })
-          : "-",
+          : "-";
+      acc.push({
+        time: timeStr,
         pnl: prev + trade.pnl,
       });
       return acc;
@@ -45,8 +48,6 @@ export default function PnLChart({ trades }: Props) {
     );
   }
 
-  const maxPnl = Math.max(...chartData.map((d) => d.pnl));
-  const minPnl = Math.min(...chartData.map((d) => d.pnl));
   const isPositive = chartData[chartData.length - 1]?.pnl >= 0;
 
   return (

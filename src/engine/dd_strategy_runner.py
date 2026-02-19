@@ -431,6 +431,19 @@ class DDStrategyRunner:
                 strategy_name=pos.strategy_name,
             )
 
+            # 주문 거부 시 포지션 유지
+            from src.broker.kis_models import OrderStatus
+            if order.status == OrderStatus.REJECTED:
+                logger.warning(
+                    f"DD 매도 주문 거부됨: {stock_code} - 포지션 유지"
+                )
+                self._add_event(
+                    "SELL_REJECTED",
+                    f"매도 거부: {pos.stock_name} - 포지션 유지",
+                    severity="WARNING",
+                )
+                return
+
             trade = self.engine.position_manager.close_position(
                 stock_code, price, reason
             )
@@ -449,6 +462,22 @@ class DDStrategyRunner:
                     "time": datetime.now().isoformat(),
                 }
                 self._trades_today.append(trade_info)
+
+                # DB에 거래 기록 저장
+                self.engine.trade_store.save_trade({
+                    "stock_code": trade.stock_code,
+                    "stock_name": trade.stock_name,
+                    "strategy_name": trade.strategy_name,
+                    "side": trade.side,
+                    "quantity": trade.quantity,
+                    "entry_price": trade.entry_price,
+                    "exit_price": trade.exit_price,
+                    "entry_time": trade.entry_time.isoformat(),
+                    "exit_time": trade.exit_time.isoformat(),
+                    "pnl": trade.pnl,
+                    "pnl_pct": trade.pnl_pct,
+                    "exit_reason": trade.exit_reason,
+                })
 
                 await self.engine._emit_position_update()
                 await self.engine._emit_order(order)
@@ -528,9 +557,11 @@ class DDStrategyRunner:
             self._events = self._events[-200:]
 
         try:
+            loop = asyncio.get_running_loop()
             from src.server.websocket_hub import hub
-
-            asyncio.create_task(hub.broadcast_stockking(event))
+            loop.create_task(hub.broadcast_stockking(event))
+        except RuntimeError:
+            pass
         except Exception:
             pass
 

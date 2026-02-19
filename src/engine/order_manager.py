@@ -147,8 +147,19 @@ class OrderManager:
         if not order:
             return None
 
-        order.filled_quantity = filled_qty
-        order.filled_price = filled_price
+        prev_filled = order.filled_quantity
+        prev_price = order.filled_price
+
+        # 부분체결 누적 (덮어쓰기 X)
+        order.filled_quantity = prev_filled + filled_qty
+
+        # 가중평균 체결가
+        if order.filled_quantity > 0:
+            order.filled_price = (
+                (prev_price * prev_filled + filled_price * filled_qty)
+                / order.filled_quantity
+            )
+
         order.updated_at = datetime.now()
 
         if order.filled_quantity >= order.quantity:
@@ -158,7 +169,8 @@ class OrderManager:
 
         logger.info(
             f"체결 업데이트: {order.stock_code} {order.side.value} "
-            f"{filled_qty}/{order.quantity}주 @{filled_price}"
+            f"{order.filled_quantity}/{order.quantity}주 @{filled_price} "
+            f"(이번 {filled_qty}주, 누적 {order.filled_quantity}주)"
         )
 
         self._update_order_in_db(order)

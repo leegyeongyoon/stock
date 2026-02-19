@@ -18,6 +18,7 @@ from src.strategies.hongstyle.hongstyle_engine import (
 )
 from src.strategies.hongstyle.daily_chart_analyzer import DailyChartAnalyzer
 from src.analysis.stock_analyzer import get_stock_analyzer
+from src.engine.hongstyle_runner import HongStyleRunner
 from src.server.dependencies import get_engine
 from src.database.connection import get_session
 
@@ -726,10 +727,10 @@ async def get_conviction_ranking():
         if not engine.hongstyle_runner:
             return ConvictionRankingResponse(
                 ranking=[],
-                top_n=5,
-                max_positions=2,
-                high_alloc_pct=0.50,
-                low_alloc_pct=0.30,
+                top_n=HongStyleRunner.TOP_N_ONLY,
+                max_positions=HongStyleRunner.MAX_POSITIONS,
+                high_alloc_pct=HongStyleRunner.HIGH_CONFIDENCE_PCT,
+                low_alloc_pct=HongStyleRunner.LOW_CONFIDENCE_PCT,
                 algorithm=algorithm,
             )
 
@@ -747,8 +748,11 @@ async def get_conviction_ranking():
     except Exception as e:
         logger.error(f"확신도 순위 조회 실패: {e}")
         return ConvictionRankingResponse(
-            ranking=[], top_n=5, max_positions=2,
-            high_alloc_pct=0.50, low_alloc_pct=0.30,
+            ranking=[],
+            top_n=HongStyleRunner.TOP_N_ONLY,
+            max_positions=HongStyleRunner.MAX_POSITIONS,
+            high_alloc_pct=HongStyleRunner.HIGH_CONFIDENCE_PCT,
+            low_alloc_pct=HongStyleRunner.LOW_CONFIDENCE_PCT,
             algorithm={},
         )
 

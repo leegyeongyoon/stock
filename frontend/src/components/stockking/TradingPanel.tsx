@@ -88,7 +88,10 @@ export default function TradingPanel() {
     },
   });
 
+  const mountedRef = useRef(true);
+
   const connectWebSocket = useCallback(() => {
+    if (!mountedRef.current) return;
     try {
       const wsUrl = API_BASE.replace(/^http/, "ws");
       const ws = new WebSocket(`${wsUrl}/ws/stockking`);
@@ -105,7 +108,9 @@ export default function TradingPanel() {
       };
 
       ws.onclose = () => {
-        setTimeout(connectWebSocket, 5000);
+        if (mountedRef.current) {
+          setTimeout(connectWebSocket, 5000);
+        }
       };
 
       wsRef.current = ws;
@@ -115,8 +120,10 @@ export default function TradingPanel() {
   }, [queryClient]);
 
   useEffect(() => {
+    mountedRef.current = true;
     connectWebSocket();
     return () => {
+      mountedRef.current = false;
       wsRef.current?.close();
     };
   }, [connectWebSocket]);
@@ -298,9 +305,9 @@ export default function TradingPanel() {
               <div
                 key={`${evt.timestamp}-${idx}`}
                 className={`flex items-start gap-2 text-[10px] p-1.5 rounded ${
-                  evt.severity === "error"
+                  evt.severity?.toUpperCase() === "ERROR" || evt.severity?.toUpperCase() === "CRITICAL"
                     ? "bg-red-500/10 text-red-400"
-                    : evt.severity === "warning"
+                    : evt.severity?.toUpperCase() === "WARNING"
                     ? "bg-yellow-500/10 text-yellow-400"
                     : "bg-slate-900/40 text-slate-400"
                 }`}

@@ -279,10 +279,12 @@ function CompoundSimulation({ summary }: { summary: HongPerformanceSummary }) {
     return null;
   }
 
-  const avgDailyReturn =
-    summary.avg_daily_pnl / (summary.total_pnl / summary.trading_days || 1);
   const seedCapital = 10_000_000;
   const dailyRate = summary.avg_daily_pnl / seedCapital;
+
+  if (!isFinite(dailyRate) || isNaN(dailyRate)) {
+    return null;
+  }
 
   const monthly = seedCapital * Math.pow(1 + dailyRate, 22) - seedCapital;
   const quarterly = seedCapital * Math.pow(1 + dailyRate, 66) - seedCapital;

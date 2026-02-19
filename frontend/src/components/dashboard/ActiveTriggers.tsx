@@ -2,19 +2,26 @@
 
 import { useState } from "react";
 import type { DashboardStrategy } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface Props {
-  strategies: DashboardStrategy[];
+  strategies: DashboardStrategy[] | undefined;
 }
 
 export default function ActiveTriggers({ strategies }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  if (strategies.length === 0) {
+  if (!strategies) {
     return (
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 text-center text-slate-500">
         전략 로딩 중...
+      </div>
+    );
+  }
+
+  if (strategies.length === 0) {
+    return (
+      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 text-center text-slate-500">
+        등록된 전략 없음
       </div>
     );
   }

@@ -1,6 +1,7 @@
 """Main trading engine - orchestrates all components."""
 
 import asyncio
+import inspect
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import Enum
@@ -88,6 +89,7 @@ class TradingEngine:
         # Tasks
         self._main_loop_task: asyncio.Task | None = None
         self._monitor_task: asyncio.Task | None = None
+        self._balance_sync_task: asyncio.Task | None = None
         self._close_done: bool = False
 
         # Event log (in-memory, 최근 200개)
@@ -277,13 +279,17 @@ class TradingEngine:
         # Close all positions at market (기존보유 포함 전체 청산)
         if self.position_manager and self.order_manager:
             for code, pos in list(self.position_manager.positions.items()):
-                await self.order_manager.submit_order(
+                order = await self.order_manager.submit_order(
                     stock_code=code,
                     side=OrderSide.SELL,
                     quantity=pos.quantity,
                     order_type=OrderType.MARKET,
                     strategy_name=pos.strategy_name,
                 )
+                # 주문 거부 시 포지션 유지
+                if order.status == OrderStatus.REJECTED:
+                    logger.warning(f"긴급정지 매도 거부: {code} - 포지션 유지")
+                    continue
                 # PM에서도 포지션 정리 + 거래 기록
                 trade = self.position_manager.close_position(
                     code, pos.current_price, "긴급정지"
@@ -556,21 +562,28 @@ class TradingEngine:
             self.dd_runner.reset_daily()
 
         # Cancel all open orders
-        await self.order_manager.cancel_all_open()
+        if self.order_manager:
+            await self.order_manager.cancel_all_open()
 
         # Force close all positions (전략이 진입한 것만, "기존보유"는 스킵)
+        if not self.order_manager:
+            return
         for code, pos in list(self.position_manager.positions.items()):
             if pos.strategy_name == "기존보유":
                 logger.info(f"기존보유 포지션 스킵: {code} {pos.stock_name}")
                 continue
 
-            await self.order_manager.submit_order(
+            order = await self.order_manager.submit_order(
                 stock_code=code,
                 side=OrderSide.SELL,
                 quantity=pos.quantity,
                 order_type=OrderType.MARKET,
                 strategy_name=pos.strategy_name,
             )
+            # 주문 거부 시 포지션 유지
+            if order.status == OrderStatus.REJECTED:
+                logger.warning(f"장마감 매도 거부: {code} - 포지션 유지")
+                continue
             trade = self.position_manager.close_position(code, pos.current_price, "CLOSE")
             if trade:
                 self.trade_store.save_trade({
@@ -699,6 +712,9 @@ class TradingEngine:
                     await self._sync_balance(max_retries=2)
                 else:
                     try:
+                        if not self.client:
+                            await asyncio.sleep(120)
+                            continue
                         balance = await self.client.get_balance()
 
                         # 1) 현재가 갱신
@@ -906,7 +922,11 @@ class TradingEngine:
                     order_id, filled_qty, float(filled_price)
                 )
                 if order:
-                    asyncio.create_task(self._emit_order(order))
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(self._emit_order(order))
+                    except RuntimeError:
+                        pass
 
             # Update position avg price if buy
             side = execution.get("side", "")
@@ -1034,7 +1054,9 @@ class TradingEngine:
                 if asyncio.iscoroutinefunction(cb):
                     await cb(signal)
                 else:
-                    cb(signal)
+                    result = cb(signal)
+                    if inspect.isawaitable(result):
+                        await result
             except Exception as e:
                 logger.error(f"시그널 콜백 오류: {e}")
 
@@ -1045,7 +1067,9 @@ class TradingEngine:
                 if asyncio.iscoroutinefunction(cb):
                     await cb(data)
                 else:
-                    cb(data)
+                    result = cb(data)
+                    if inspect.isawaitable(result):
+                        await result
             except Exception as e:
                 logger.error(f"포지션 콜백 오류: {e}")
 
@@ -1066,7 +1090,9 @@ class TradingEngine:
                 if asyncio.iscoroutinefunction(cb):
                     await cb(data)
                 else:
-                    cb(data)
+                    result = cb(data)
+                    if inspect.isawaitable(result):
+                        await result
             except Exception as e:
                 logger.error(f"주문 콜백 오류: {e}")
 
@@ -1088,7 +1114,9 @@ class TradingEngine:
                 if asyncio.iscoroutinefunction(cb):
                     await cb(data)
                 else:
-                    cb(data)
+                    result = cb(data)
+                    if inspect.isawaitable(result):
+                        await result
             except Exception as e:
                 logger.error(f"시스템 콜백 오류: {e}")
 
