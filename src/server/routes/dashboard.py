@@ -18,9 +18,8 @@ async def get_summary(engine: TradingEngine = Depends(get_engine)):
     """Get today's trading summary."""
     summary = engine.get_dashboard_summary()
 
-    # Engine not connected → enrich portfolio from shared KIS client
-    portfolio = summary.get("portfolio", {})
-    if not engine.client and not portfolio.get("total_equity"):
+    # Engine not connected → override portfolio with real KIS balance
+    if not engine.client:
         client = await get_shared_client()
         if client:
             try:
@@ -30,7 +29,6 @@ async def get_summary(engine: TradingEngine = Depends(get_engine)):
                 summary = {
                     **summary,
                     "portfolio": {
-                        **portfolio,
                         "total_equity": eval_total,
                         "cash": cash,
                         "positions": len(balance.holdings),
