@@ -361,7 +361,13 @@ class KISClient:
                 "CTX_AREA_FK100": ctx_fk100,
                 "CTX_AREA_NK100": ctx_nk100,
             }
-            data = await self._get(CCLD_PATH, self._tr_ccld(), params)
+
+            try:
+                data = await self._get(CCLD_PATH, self._tr_ccld(), params)
+            except Exception as e:
+                logger.warning(f"체결내역 조회 실패 ({start}~{end}): {e}")
+                break
+
             output1 = data.get("output1", [])
 
             for item in output1:
