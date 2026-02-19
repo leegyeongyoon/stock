@@ -487,6 +487,8 @@ class TradingEngine:
                         continue  # GyleeRunner 자체 모니터에서 처리
                     if pos.strategy_name.startswith("DD_"):
                         continue  # DDStrategyRunner 자체 모니터에서 처리
+                    if pos.strategy_name == "기존보유":
+                        continue  # 사용자 직접 보유 종목은 자동 매도 안 함
 
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
@@ -496,6 +498,11 @@ class TradingEngine:
                         order_type=OrderType.MARKET,
                         strategy_name=pos.strategy_name,
                     )
+
+                    # 주문 거부 시 포지션 유지
+                    if sell_order.status == OrderStatus.REJECTED:
+                        logger.warning(f"SL/TP 매도 거부: {code} - 포지션 유지")
+                        continue
 
                     # Close position
                     trade = self.position_manager.close_position(

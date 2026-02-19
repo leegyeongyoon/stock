@@ -197,23 +197,34 @@ async def get_trade_history(
     order: str = Query("desc"),
 ):
     """거래내역 전체 목록 (필터/정렬)."""
+
+    def _normalize_time(t: str) -> str:
+        """timezone suffix 제거하여 비교 키 통일."""
+        if not t:
+            return ""
+        # +00:00, +09:00 등 timezone offset 제거
+        if "+" in t and t.index("+") > 10:
+            return t[: t.index("+")]
+        return t
+
     # DB에서 모든 거래 로드 (오늘 포함)
     stored = engine.trade_store.load_all_trades()
 
     # 메모리의 오늘 거래 중 DB에 아직 없는 것만 추가 (중복 방지)
-    stored_today_codes = set()
+    stored_today_keys = set()
     today_str = date.today().isoformat()
     for t in stored:
         exit_time = t.get("exit_time", "")
-        if isinstance(exit_time, str) and exit_time.startswith(today_str):
-            stored_today_codes.add(
-                (t.get("stock_code", ""), t.get("exit_time", ""))
+        if isinstance(exit_time, str) and _normalize_time(exit_time).startswith(today_str):
+            stored_today_keys.add(
+                (t.get("stock_code", ""), _normalize_time(exit_time))
             )
 
     today = engine.get_trades_today()
     new_today = [
         t for t in today
-        if (t.get("stock_code", ""), t.get("exit_time", "")) not in stored_today_codes
+        if (t.get("stock_code", ""), _normalize_time(t.get("exit_time", "")))
+        not in stored_today_keys
     ]
     all_trades = stored + new_today
 
@@ -229,6 +240,65 @@ async def get_trade_history(
         all_trades.sort(key=lambda t: t.get("exit_time", ""), reverse=reverse)
 
     return {"trades": all_trades, "total": len(all_trades)}
+
+
+@router.post("/trade-history/cleanup")
+async def cleanup_trade_history():
+    """DB 중복 거래 제거 + '기존보유' 자동매도 거래 삭제."""
+    try:
+        from src.database.connection import get_session
+        from src.database.models import LiveTrade
+        from sqlalchemy import select, delete, func
+
+        with get_session() as session:
+            # 1. 전체 건수
+            total_before = session.execute(
+                select(func.count(LiveTrade.id))
+            ).scalar() or 0
+
+            # 2. "기존보유" 자동매도 거래 삭제
+            existing_deleted = session.execute(
+                delete(LiveTrade).where(LiveTrade.strategy_name == "기존보유")
+            ).rowcount
+
+            # 3. 중복 제거 (stock_code + traded_at 동일한 것 중 하나만 남김)
+            subquery = session.execute(
+                select(
+                    LiveTrade.stock_code,
+                    LiveTrade.traded_at,
+                    func.min(LiveTrade.id).label("keep_id"),
+                    func.count(LiveTrade.id).label("cnt"),
+                ).group_by(
+                    LiveTrade.stock_code, LiveTrade.traded_at
+                ).having(func.count(LiveTrade.id) > 1)
+            ).fetchall()
+
+            dup_deleted = 0
+            for row in subquery:
+                result = session.execute(
+                    delete(LiveTrade).where(
+                        LiveTrade.stock_code == row.stock_code,
+                        LiveTrade.traded_at == row.traded_at,
+                        LiveTrade.id != row.keep_id,
+                    )
+                )
+                dup_deleted += result.rowcount
+
+            session.commit()
+
+            total_after = session.execute(
+                select(func.count(LiveTrade.id))
+            ).scalar() or 0
+
+            return {
+                "success": True,
+                "before": total_before,
+                "after": total_after,
+                "existing_deleted": existing_deleted,
+                "duplicates_deleted": dup_deleted,
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @router.get("/stocks/{code}")
