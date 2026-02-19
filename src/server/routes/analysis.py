@@ -334,24 +334,40 @@ async def get_kis_executions(
 
         matched, open_buys, unmatched_sells = _match_executions(items)
 
-        # 2) 매칭 안 되는 매도가 있으면 시작일 기준 30일 전까지 매수 찾기
+        # 2) 매칭 안 되는 매도가 있으면 시작일 기준 60일 전까지 매수 찾기
         if unmatched_sells:
             need_codes = {s["stock_code"] for s in unmatched_sells}
             dt = datetime.strptime(q_start, "%Y%m%d")
-            start_30 = (dt - timedelta(days=30)).strftime("%Y%m%d")
+            start_60 = (dt - timedelta(days=60)).strftime("%Y%m%d")
             end_prev = (dt - timedelta(days=1)).strftime("%Y%m%d")
 
-            hist_items = await _do_fetch(client, start_30, end_prev)
+            hist_items = await _do_fetch(client, start_60, end_prev)
             if not isinstance(hist_items, dict):
                 hist_buys = [
                     it for it in hist_items
                     if it.side == "매수" and it.stock_code in need_codes
                 ]
-                if hist_buys:
-                    extra_matched = _match_sells_with_buys(
-                        unmatched_sells, hist_buys,
-                    )
-                    matched.extend(extra_matched)
+                extra_matched, still_unmatched = _match_sells_with_buys(
+                    unmatched_sells, hist_buys,
+                )
+                matched.extend(extra_matched)
+                unmatched_sells = still_unmatched
+
+            # 3) 그래도 매칭 안 된 매도 → 매수가 불명으로 표시
+            for sell in unmatched_sells:
+                matched.append({
+                    "stock_code": sell["stock_code"],
+                    "stock_name": sell["stock_name"],
+                    "quantity": sell["quantity"],
+                    "buy_price": 0,
+                    "sell_price": sell["price"],
+                    "buy_amount": 0,
+                    "sell_amount": sell["price"] * sell["quantity"],
+                    "pnl": 0,
+                    "pnl_pct": 0,
+                    "buy_time": "",
+                    "sell_time": sell["order_time"],
+                })
 
         matched.sort(key=lambda x: x["sell_time"], reverse=True)
         return {
@@ -523,6 +539,7 @@ def _match_sells_with_buys(unmatched_sells, hist_buys):
         buys[code].sort(key=lambda x: x["order_time"])
 
     matched = []
+    still_unmatched = []
     for sell in unmatched_sells:
         code = sell["stock_code"]
         buy_list = buys.get(code, [])
@@ -556,7 +573,10 @@ def _match_sells_with_buys(unmatched_sells, hist_buys):
             if buy["quantity"] <= 0:
                 buy_list.pop(0)
 
-    return matched
+        if sell_qty > 0:
+            still_unmatched.append({**sell, "quantity": sell_qty})
+
+    return matched, still_unmatched
 
 
 @router.get("/stocks/{code}")

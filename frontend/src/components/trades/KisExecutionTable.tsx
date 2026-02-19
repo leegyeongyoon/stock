@@ -102,10 +102,12 @@ export default function KisExecutionTable({ trades, openPositions }: Props) {
                       {t.quantity.toLocaleString()}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs text-red-400">
-                      {t.buy_price.toLocaleString()}
+                      {t.buy_price > 0 ? t.buy_price.toLocaleString() : (
+                        <span className="text-slate-600">불명</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-600 font-mono">
-                      {fmtTime(t.buy_time)}
+                      {t.buy_time ? fmtTime(t.buy_time) : "-"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs text-blue-400">
                       {t.sell_price.toLocaleString()}
@@ -114,16 +116,22 @@ export default function KisExecutionTable({ trades, openPositions }: Props) {
                       {fmtTime(t.sell_time)}
                     </td>
                     <td
-                      className={`px-4 py-2.5 text-right font-mono text-xs font-medium ${pnlColor(t.pnl)}`}
+                      className={`px-4 py-2.5 text-right font-mono text-xs font-medium ${
+                        t.buy_price > 0 ? pnlColor(t.pnl) : "text-slate-600"
+                      }`}
                     >
-                      {t.pnl >= 0 ? "+" : ""}
-                      {t.pnl.toLocaleString()}
+                      {t.buy_price > 0 ? (
+                        <>{t.pnl >= 0 ? "+" : ""}{t.pnl.toLocaleString()}</>
+                      ) : "-"}
                     </td>
                     <td
-                      className={`px-4 py-2.5 text-right font-mono text-xs font-medium ${pnlColor(t.pnl_pct)}`}
+                      className={`px-4 py-2.5 text-right font-mono text-xs font-medium ${
+                        t.buy_price > 0 ? pnlColor(t.pnl_pct) : "text-slate-600"
+                      }`}
                     >
-                      {t.pnl_pct >= 0 ? "+" : ""}
-                      {t.pnl_pct.toFixed(2)}%
+                      {t.buy_price > 0 ? (
+                        <>{t.pnl_pct >= 0 ? "+" : ""}{t.pnl_pct.toFixed(2)}%</>
+                      ) : "-"}
                     </td>
                   </tr>
                 ))}
