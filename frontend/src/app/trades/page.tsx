@@ -14,6 +14,7 @@ import KisExecutionTable from "@/components/trades/KisExecutionTable";
 import { pnlColor } from "@/lib/utils";
 
 type Tab = "system" | "kis";
+type KisMode = "day" | "month";
 
 function todayStr() {
   const d = new Date();
@@ -23,13 +24,30 @@ function todayStr() {
   return `${y}-${m}-${day}`;
 }
 
+function thisMonthStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function monthToRange(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  const start = `${y}-${String(m).padStart(2, "0")}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { start, end };
+}
+
 export default function TradesPage() {
   const [tab, setTab] = useState<Tab>("system");
   const [strategyFilter, setStrategyFilter] = useState("");
   const [selectedTrade, setSelectedTrade] = useState<TradeHistoryItem | null>(
     null
   );
+  const [kisMode, setKisMode] = useState<KisMode>("day");
   const [kisDate, setKisDate] = useState(todayStr);
+  const [kisMonth, setKisMonth] = useState(thisMonthStr);
 
   const { data: strategiesData } = useQuery({
     queryKey: ["strategies"],
@@ -48,9 +66,17 @@ export default function TradesPage() {
     enabled: tab === "system",
   });
 
+  const kisQueryParams =
+    kisMode === "day"
+      ? { date: kisDate }
+      : {
+          start_date: monthToRange(kisMonth).start,
+          end_date: monthToRange(kisMonth).end,
+        };
+
   const { data: kisData, isLoading: kisLoading } = useQuery({
-    queryKey: ["kis-executions", kisDate],
-    queryFn: () => getKisExecutions(kisDate),
+    queryKey: ["kis-executions", kisMode, kisMode === "day" ? kisDate : kisMonth],
+    queryFn: () => getKisExecutions(kisQueryParams),
     refetchInterval: 30_000,
     enabled: tab === "kis",
   });
@@ -190,15 +216,46 @@ export default function TradesPage() {
       {/* === KIS executions tab === */}
       {tab === "kis" && (
         <>
-          {/* Date picker */}
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-slate-500">조회일:</label>
-            <input
-              type="date"
-              value={kisDate}
-              onChange={(e) => setKisDate(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500"
-            />
+          {/* Date / Month picker */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex gap-1 bg-slate-800 rounded p-0.5 border border-slate-700">
+              <button
+                onClick={() => setKisMode("day")}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  kisMode === "day"
+                    ? "bg-slate-600 text-white"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                일별
+              </button>
+              <button
+                onClick={() => setKisMode("month")}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  kisMode === "month"
+                    ? "bg-slate-600 text-white"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                월별
+              </button>
+            </div>
+
+            {kisMode === "day" ? (
+              <input
+                type="date"
+                value={kisDate}
+                onChange={(e) => setKisDate(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500"
+              />
+            ) : (
+              <input
+                type="month"
+                value={kisMonth}
+                onChange={(e) => setKisMonth(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500"
+              />
+            )}
           </div>
 
           {kisData?.error && (

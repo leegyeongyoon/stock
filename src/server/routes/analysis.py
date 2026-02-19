@@ -305,34 +305,44 @@ async def cleanup_trade_history():
 async def get_kis_executions(
     engine: TradingEngine = Depends(get_engine),
     date: str | None = Query(None, description="조회일 YYYY-MM-DD"),
+    start_date: str | None = Query(None, description="시작일 YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="종료일 YYYY-MM-DD"),
 ):
     """KIS 실제 체결내역 조회 → 매수/매도 매칭하여 종목별 수익 계산."""
     from datetime import datetime, timedelta
 
-    target = date.replace("-", "") if date else datetime.now().strftime("%Y%m%d")
+    # start_date/end_date가 있으면 범위 조회, 아니면 date 단일 조회
+    if start_date and end_date:
+        q_start = start_date.replace("-", "")
+        q_end = end_date.replace("-", "")
+    elif date:
+        q_start = date.replace("-", "")
+        q_end = q_start
+    else:
+        q_start = datetime.now().strftime("%Y%m%d")
+        q_end = q_start
 
     client = _get_kis_client(engine)
     if isinstance(client, dict):
         return client  # error
 
     try:
-        # 1) 해당일 체결내역
-        items = await _do_fetch(client, target, target)
+        # 1) 해당 기간 체결내역
+        items = await _do_fetch(client, q_start, q_end)
         if isinstance(items, dict):
             return items
 
         matched, open_buys, unmatched_sells = _match_executions(items)
 
-        # 2) 매칭 안 되는 매도가 있으면 30일 전까지 매수 찾기
+        # 2) 매칭 안 되는 매도가 있으면 시작일 기준 30일 전까지 매수 찾기
         if unmatched_sells:
             need_codes = {s["stock_code"] for s in unmatched_sells}
-            dt = datetime.strptime(target, "%Y%m%d")
+            dt = datetime.strptime(q_start, "%Y%m%d")
             start_30 = (dt - timedelta(days=30)).strftime("%Y%m%d")
             end_prev = (dt - timedelta(days=1)).strftime("%Y%m%d")
 
             hist_items = await _do_fetch(client, start_30, end_prev)
             if not isinstance(hist_items, dict):
-                # 필요한 종목의 매수만 추출
                 hist_buys = [
                     it for it in hist_items
                     if it.side == "매수" and it.stock_code in need_codes

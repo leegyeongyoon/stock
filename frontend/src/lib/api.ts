@@ -418,14 +418,22 @@ export interface KisOpenPosition {
   buy_time: string;
 }
 
-export async function getKisExecutions(date?: string) {
-  const query = date ? `?date=${date}` : "";
+export async function getKisExecutions(params?: {
+  date?: string;
+  start_date?: string;
+  end_date?: string;
+}) {
+  const sp = new URLSearchParams();
+  if (params?.start_date) sp.set("start_date", params.start_date);
+  if (params?.end_date) sp.set("end_date", params.end_date);
+  if (params?.date && !params?.start_date) sp.set("date", params.date);
+  const query = sp.toString();
   return fetchApi<{
     trades: KisMatchedTrade[];
     open_positions: KisOpenPosition[];
     raw_count: number;
     error?: string;
-  }>(`/api/analysis/kis-executions${query}`);
+  }>(`/api/analysis/kis-executions${query ? `?${query}` : ""}`);
 }
 
 // Strategy toggle
