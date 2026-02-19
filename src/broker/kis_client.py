@@ -330,41 +330,67 @@ class KISClient:
             holdings=holdings,
         )
 
-    async def get_executions(self) -> list[ExecutionInfo]:
-        """Get today's execution history (당일 체결 내역)."""
-        params = {
-            "CANO": self.auth.account_prefix,
-            "ACNT_PRDT_CD": self.auth.account_suffix,
-            "INQR_STRT_DT": datetime.now().strftime("%Y%m%d"),
-            "INQR_END_DT": datetime.now().strftime("%Y%m%d"),
-            "SLL_BUY_DVSN_CD": "00",
-            "INQR_DVSN": "00",
-            "PDNO": "",
-            "CCLD_DVSN": "00",
-            "ORD_GNO_BRNO": "",
-            "ODNO": "",
-            "INQR_DVSN_3": "00",
-            "INQR_DVSN_1": "",
-            "CTX_AREA_FK100": "",
-            "CTX_AREA_NK100": "",
-        }
-        data = await self._get(CCLD_PATH, self._tr_ccld(), params)
-        output1 = data.get("output1", [])
+    async def get_executions(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[ExecutionInfo]:
+        """Get execution history (체결 내역). Supports date range + pagination."""
+        today = datetime.now().strftime("%Y%m%d")
+        start = start_date or today
+        end = end_date or today
 
-        executions = []
-        for item in output1:
-            qty = int(item.get("tot_ccld_qty", 0))
-            if qty <= 0:
-                continue
-            executions.append(ExecutionInfo(
-                order_id=item.get("odno", ""),
-                stock_code=item.get("pdno", ""),
-                stock_name=item.get("prdt_name", ""),
-                side="매수" if item.get("sll_buy_dvsn_cd") == "02" else "매도",
-                quantity=qty,
-                price=int(item.get("avg_prvs", 0)),
-                total_amount=int(item.get("tot_ccld_amt", 0)),
-            ))
+        executions: list[ExecutionInfo] = []
+        ctx_fk100 = ""
+        ctx_nk100 = ""
+
+        while True:
+            params = {
+                "CANO": self.auth.account_prefix,
+                "ACNT_PRDT_CD": self.auth.account_suffix,
+                "INQR_STRT_DT": start,
+                "INQR_END_DT": end,
+                "SLL_BUY_DVSN_CD": "00",
+                "INQR_DVSN": "00",
+                "PDNO": "",
+                "CCLD_DVSN": "00",
+                "ORD_GNO_BRNO": "",
+                "ODNO": "",
+                "INQR_DVSN_3": "00",
+                "INQR_DVSN_1": "",
+                "CTX_AREA_FK100": ctx_fk100,
+                "CTX_AREA_NK100": ctx_nk100,
+            }
+            data = await self._get(CCLD_PATH, self._tr_ccld(), params)
+            output1 = data.get("output1", [])
+
+            for item in output1:
+                qty = int(item.get("tot_ccld_qty", 0))
+                if qty <= 0:
+                    continue
+                executions.append(ExecutionInfo(
+                    order_id=item.get("odno", ""),
+                    stock_code=item.get("pdno", ""),
+                    stock_name=item.get("prdt_name", ""),
+                    side="매수" if item.get("sll_buy_dvsn_cd") == "02" else "매도",
+                    quantity=qty,
+                    price=int(item.get("avg_prvs", 0)),
+                    total_amount=int(item.get("tot_ccld_amt", 0)),
+                    order_time=item.get("ord_tmd", ""),
+                    order_type=item.get("ord_dvsn_name", ""),
+                    order_quantity=int(item.get("ord_qty", 0)),
+                ))
+
+            # 연속조회: tr_cont가 "M" or "F"이면 다음 페이지 존재
+            tr_cont = data.get("tr_cont", "")
+            next_fk = data.get("ctx_area_fk100", "").strip()
+            next_nk = data.get("ctx_area_nk100", "").strip()
+
+            if tr_cont not in ("M", "F") or not next_fk:
+                break
+
+            ctx_fk100 = next_fk
+            ctx_nk100 = next_nk
 
         return executions
 

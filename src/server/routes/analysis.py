@@ -301,6 +301,31 @@ async def cleanup_trade_history():
         return {"success": False, "error": str(e)}
 
 
+@router.get("/kis-executions")
+async def get_kis_executions(
+    engine: TradingEngine = Depends(get_engine),
+    date: str | None = Query(None, description="조회일 YYYY-MM-DD"),
+):
+    """KIS 실제 체결내역 조회."""
+    if not engine.client:
+        return {"executions": [], "error": "브로커 미연결"}
+
+    try:
+        query_date = None
+        if date:
+            query_date = date.replace("-", "")
+
+        items = await engine.client.get_executions(
+            start_date=query_date,
+            end_date=query_date,
+        )
+        return {
+            "executions": [item.model_dump() for item in items],
+        }
+    except Exception as e:
+        return {"executions": [], "error": str(e)}
+
+
 @router.get("/stocks/{code}")
 async def get_stock_analysis(
     code: str,

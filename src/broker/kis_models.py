@@ -128,6 +128,9 @@ class ExecutionInfo(BaseModel):
     price: int
     total_amount: int
     executed_at: Optional[datetime] = None
+    order_time: str = ""        # 주문시각 (HHMMSS)
+    order_type: str = ""        # 주문구분명
+    order_quantity: int = 0     # 주문수량 (미체결 포함)
 
 
 class WSTickData(BaseModel):

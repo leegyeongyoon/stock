@@ -394,6 +394,28 @@ export async function getTradeHistory(params?: {
   }>(`/api/analysis/trade-history${query ? `?${query}` : ""}`);
 }
 
+// KIS Executions
+export interface KisExecution {
+  order_id: string;
+  stock_code: string;
+  stock_name: string;
+  side: string;
+  quantity: number;
+  price: number;
+  total_amount: number;
+  executed_at: string | null;
+  order_time: string;
+  order_type: string;
+  order_quantity: number;
+}
+
+export async function getKisExecutions(date?: string) {
+  const query = date ? `?date=${date}` : "";
+  return fetchApi<{ executions: KisExecution[]; error?: string }>(
+    `/api/analysis/kis-executions${query}`
+  );
+}
+
 // Strategy toggle
 export async function toggleStrategy(strategyName: string) {
   return putApi<{ message: string }>(`/api/strategies/${strategyName}/toggle`);
