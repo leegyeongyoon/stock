@@ -341,17 +341,24 @@ async def _fetch_executions_by_day(client, q_start: str, q_end: str):
 
     KIS 모의투자 서버는 날짜 범위 조회 시 일부 데이터만 반환하므로,
     각 영업일별로 개별 API 콜을 해서 모든 데이터를 확보한다.
+
+    Returns: (items, stats_dict) 튜플
     """
     from datetime import datetime, timedelta
 
     dt_start = datetime.strptime(q_start, "%Y%m%d")
     dt_end = datetime.strptime(q_end, "%Y%m%d")
 
+    stats = {"days_queried": 0, "days_with_data": 0, "errors": []}
+
     # 1일 조회면 그대로 호출
     if dt_start == dt_end:
-        return await client.get_executions(
+        items = await client.get_executions(
             start_date=q_start, end_date=q_end,
         )
+        stats["days_queried"] = 1
+        stats["days_with_data"] = 1 if items else 0
+        return items, stats
 
     # 복수일: 각 날짜별로 개별 조회
     all_items = []
@@ -365,10 +372,14 @@ async def _fetch_executions_by_day(client, q_start: str, q_end: str):
             continue
 
         day_str = current.strftime("%Y%m%d")
+        stats["days_queried"] += 1
         try:
             day_items = await client.get_executions(
                 start_date=day_str, end_date=day_str,
             )
+            if day_items:
+                stats["days_with_data"] += 1
+
             # 중복 제거 (order_id 기준)
             for item in day_items:
                 if item.order_id and item.order_id in seen_order_ids:
@@ -382,11 +393,20 @@ async def _fetch_executions_by_day(client, q_start: str, q_end: str):
                 f"(누적 {len(all_items)}건)"
             )
         except Exception as e:
-            logger.warning(f"일별 조회 실패 {day_str}: {e}")
+            err_msg = f"{day_str}: {e}"
+            stats["errors"].append(err_msg)
+            logger.warning(f"일별 조회 실패 {err_msg}")
 
         current += timedelta(days=1)
 
-    return all_items
+    logger.info(
+        f"일별 조회 완료 ({q_start}~{q_end}): "
+        f"{stats['days_queried']}일 조회, "
+        f"{stats['days_with_data']}일 데이터, "
+        f"총 {len(all_items)}건, "
+        f"에러 {len(stats['errors'])}건"
+    )
+    return all_items, stats
 
 
 @router.get("/kis-executions")
@@ -413,8 +433,9 @@ async def get_kis_executions(
     if not client:
         return {"trades": [], "open_positions": [], "error": "KIS API 키 미설정"}
 
+    fetch_stats = {}
     try:
-        items = await _fetch_executions_by_day(client, q_start, q_end)
+        items, fetch_stats = await _fetch_executions_by_day(client, q_start, q_end)
     except Exception as e:
         logger.error(f"KIS 체결내역 조회 실패: {e}")
         return {"trades": [], "open_positions": [], "error": str(e)}
@@ -433,6 +454,7 @@ async def get_kis_executions(
     )
 
     # 2) 매칭 안 되는 매도 → 메인 조회 이전 기간에서 매수 탐색 (일별 조회)
+    hist_stats = {}
     if unmatched_sells:
         dt_start = datetime.strptime(q_start, "%Y%m%d")
         hist_start = (dt_start - timedelta(days=30)).strftime("%Y%m%d")
@@ -445,7 +467,7 @@ async def get_kis_executions(
         )
 
         try:
-            hist_items = await _fetch_executions_by_day(
+            hist_items, hist_stats = await _fetch_executions_by_day(
                 client, hist_start, hist_end,
             )
             hist_buys = [
@@ -495,6 +517,8 @@ async def get_kis_executions(
             "total_items": len(items),
             "buys": buy_count,
             "sells": sell_count,
+            "fetch_stats": fetch_stats,
+            "hist_stats": hist_stats,
         },
     }
 
