@@ -11,6 +11,7 @@ from loguru import logger
 from src.engine.trading_engine import TradingEngine
 from src.engine.scheduler import TradingScheduler
 from src.server.dependencies import get_engine, get_scheduler, set_engine, set_scheduler
+from src.server import kis_client_manager
 from src.server.routes import analysis, dashboard, orders, positions, strategies, system, themes, stockking, gylee
 from src.server.websocket_hub import hub
 from src.analysis.theme_analyzer import get_theme_analyzer
@@ -142,6 +143,7 @@ async def lifespan(app: FastAPI):
     refresh_task.cancel()
     scheduler.stop()
     await engine.stop()
+    await kis_client_manager.cleanup()
     logger.info("FastAPI 서버 종료")
 
 

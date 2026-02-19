@@ -81,7 +81,7 @@ export default function Header() {
           >
             {state}
           </span>
-          {summary?.state === "RUNNING" && (
+          {portfolio.total_equity > 0 && (
             <span className="text-xs text-slate-500">
               자산{" "}
               <span className="text-white font-mono">
@@ -102,7 +102,7 @@ export default function Header() {
               disabled={startMutation.isPending}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {startMutation.isPending ? "연결 중..." : "매매 시작"}
+              {startMutation.isPending ? "시작 중..." : "자동매매 시작"}
             </button>
           ) : (
             <>

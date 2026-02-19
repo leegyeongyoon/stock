@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from src.engine.strategy_runner import STRATEGY_META
 from src.engine.trading_engine import TradingEngine
 from src.server.dependencies import get_engine
+from src.server.kis_client_manager import get_client_for_engine
 
 logger = logging.getLogger(__name__)
 
@@ -304,38 +305,6 @@ async def cleanup_trade_history():
         return {"success": False, "error": str(e)}
 
 
-_shared_kis_client = None
-
-
-async def _get_or_create_client(engine):
-    """엔진 client를 우선 사용, 없으면 공유 client 1개 재사용."""
-    global _shared_kis_client
-
-    if engine.client:
-        return engine.client
-
-    from src.broker.kis_auth import KISAuth
-    from src.broker.kis_client import KISClient
-    from src.config.settings import settings
-
-    if not settings.kis_app_key:
-        return None
-
-    if _shared_kis_client and _shared_kis_client._client:
-        return _shared_kis_client
-
-    auth = KISAuth(
-        app_key=settings.kis_app_key,
-        app_secret=settings.kis_app_secret,
-        account_no=settings.kis_account_no,
-        is_mock=settings.kis_is_mock,
-    )
-    client = KISClient(auth)
-    await client.start()
-    _shared_kis_client = client
-    return client
-
-
 async def _fetch_executions_by_day(client, q_start: str, q_end: str):
     """날짜 범위의 체결내역을 일별로 개별 조회하여 병합.
 
@@ -429,7 +398,7 @@ async def get_kis_executions(
         q_start = datetime.now().strftime("%Y%m%d")
         q_end = q_start
 
-    client = await _get_or_create_client(engine)
+    client = await get_client_for_engine(engine)
     if not client:
         return {"trades": [], "open_positions": [], "error": "KIS API 키 미설정"}
 
