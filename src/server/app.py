@@ -135,6 +135,13 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(_warmup_theme_cache())
     refresh_task = asyncio.create_task(_periodic_cache_refresh())
 
+    # DD 전략 자동 시작 (전략1+3+갭반전)
+    try:
+        await engine.start_dd()
+        logger.info("DD 전략 자동 시작 완료")
+    except Exception as e:
+        logger.warning(f"DD 전략 자동 시작 실패: {e}")
+
     logger.info("FastAPI 서버 시작 (스케줄러 활성화)")
     yield
 
@@ -158,9 +165,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3007",
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:3006",
+        "http://localhost:3007",
         "http://localhost:5173",
         "https://stock.honbabnono.com",
     ],

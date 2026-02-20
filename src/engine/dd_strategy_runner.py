@@ -23,6 +23,9 @@ from src.strategies.data_driven.intraday_strategy_1 import (
 from src.strategies.data_driven.intraday_strategy_3 import (
     ModifiedRSINeutralATRStrategy,
 )
+from src.strategies.data_driven.intraday_strategy_gap import (
+    OpeningGapReversalStrategy,
+)
 
 
 class DDStrategyRunner:
@@ -45,6 +48,7 @@ class DDStrategyRunner:
         self.strategies = [
             MorningRSINeutralATRStrategy(),
             ModifiedRSINeutralATRStrategy(),
+            OpeningGapReversalStrategy(),
         ]
 
         # 상태
@@ -59,6 +63,7 @@ class DDStrategyRunner:
             "signals_found": 0,
             "entries_executed": 0,
         }
+        self._daily_context: dict = {}  # {code: {date: StockDailyContext}}
 
     async def start(self) -> dict:
         """DD 자동매매 시작."""
@@ -69,9 +74,9 @@ class DDStrategyRunner:
         self._scan_task = asyncio.create_task(self._scan_loop())
         self._monitor_task = asyncio.create_task(self._position_monitor_loop())
 
-        self._add_event("DD_STARTED", "DD 전략 시작 (전략1+3)")
-        logger.info("DD 전략 Runner 시작")
-        return {"success": True, "message": "DD 전략 시작 (전략1+3)"}
+        self._add_event("DD_STARTED", "DD 전략 시작 (전략1+3+갭반전)")
+        logger.info("DD 전략 Runner 시작 (전략1+3+갭반전)")
+        return {"success": True, "message": "DD 전략 시작 (전략1+3+갭반전)"}
 
     async def stop(self) -> dict:
         """DD 자동매매 중지."""
@@ -156,8 +161,11 @@ class DDStrategyRunner:
                             continue
 
                         try:
-                            # daily_context 없이 실행 (hong_filter bypass)
-                            strategy.set_daily_context(code, now.date(), None)
+                            # daily_context 로드 (Hong Strong 등 필터용)
+                            ctx = None
+                            if code in self._daily_context:
+                                ctx = self._daily_context[code].get(now.date())
+                            strategy.set_daily_context(code, now.date(), ctx)
                             indicators = strategy.precompute_day(df)
                             last_idx = indicators["n_bars"] - 1
 
@@ -363,8 +371,8 @@ class DDStrategyRunner:
                     strategy_name=full_name,
                     quantity=qty,
                     price=current_price,
-                    stop_loss_pct=self.DD_SL,
-                    take_profit_pct=self.DD_TP,
+                    stop_loss_pct=signal.get("stop_loss", self.DD_SL),
+                    take_profit_pct=signal.get("take_profit", self.DD_TP),
                     order_id=order.order_id,
                 )
 
@@ -541,6 +549,156 @@ class DDStrategyRunner:
             "signals_found": 0,
             "entries_executed": 0,
         }
+        self._load_daily_context()
+        self._load_prev_day_data()
+        self._load_news_scores()
+
+    def _load_daily_context(self):
+        """Hong Strong 필터용 일별 컨텍스트 로드 (하루 1회).
+
+        DailyContextLoader로 시총/기관/일봉자리 등 로드.
+        갭 전략의 Hong Strong 필터에 필수.
+        """
+        try:
+            from src.strategies.data_driven.daily_context import DailyContextLoader
+
+            today = datetime.now().date()
+
+            # aggregator에서 종목 코드 수집
+            codes = []
+            if self.engine.data_manager:
+                all_bars = self.engine.data_manager.aggregator._completed_bars
+                codes = list(all_bars.keys())
+
+            if not codes:
+                # fallback: DB에서 최근 거래 종목
+                from sqlalchemy import text
+                from src.database.connection import get_backtest_engine as get_db_engine
+                db_engine = get_db_engine()
+                with db_engine.connect() as conn:
+                    rows = conn.execute(text(
+                        "SELECT DISTINCT code FROM ohlcv_daily "
+                        "WHERE date = (SELECT MAX(date) FROM ohlcv_daily)"
+                    )).fetchall()
+                codes = [r[0] for r in rows]
+
+            if not codes:
+                logger.warning("daily_context: 종목 코드 없음")
+                return
+
+            loader = DailyContextLoader()
+            from datetime import timedelta
+            start = today - timedelta(days=5)
+            self._daily_context = loader.load(codes, start, today)
+
+            ctx_count = sum(len(v) for v in self._daily_context.values())
+            logger.info(f"daily_context 로드: {len(codes)}종목, {ctx_count}건")
+
+        except Exception as e:
+            logger.error(f"daily_context 로드 실패: {e}")
+            self._daily_context = {}
+
+    def _load_prev_day_data(self):
+        """갭 전략용 전일 종가/일간 거래량 로드 (하루 1회).
+
+        avg_vol = 전일 일간 총 거래량 (전략에서 /78로 봉당 환산).
+        """
+        try:
+            from sqlalchemy import text
+            from src.database.connection import get_backtest_engine as get_db_engine
+
+            today = datetime.now().date()
+            db_engine = get_db_engine()
+
+            with db_engine.connect() as conn:
+                # 전일 종가 (가장 최근 거래일)
+                rows = conn.execute(
+                    text(
+                        "SELECT code, close, volume FROM ohlcv_daily "
+                        "WHERE date = (SELECT MAX(date) FROM ohlcv_daily WHERE date < :today)"
+                    ),
+                    {"today": today},
+                ).fetchall()
+
+            if not rows:
+                logger.warning("갭 전략: 전일 일봉 데이터 없음")
+                return
+
+            prev_day_data = {}
+            for code, close_price, volume in rows:
+                if close_price and close_price > 0:
+                    prev_day_data[code] = {
+                        today: {
+                            "close": float(close_price),
+                            "avg_vol": float(volume or 0),
+                        }
+                    }
+
+            for strategy in self.strategies:
+                if hasattr(strategy, "_prev_day_data"):
+                    strategy._prev_day_data = prev_day_data
+
+            logger.info(f"갭 전략: 전일 데이터 {len(prev_day_data)}종목 로드")
+
+        except Exception as e:
+            logger.error(f"갭 전략 전일 데이터 로드 실패: {e}")
+
+    def _load_news_scores(self):
+        """갭 전략용 뉴스 확신 점수 로드 (하루 1회, 장 시작 전).
+
+        네이버 금융에서 뉴스 크롤링 → GPT 감성분석.
+        갭다운 후보 종목만 분석하여 비용 절감.
+        """
+        try:
+            from src.news.news_score import compute_news_scores
+
+            today = datetime.now().date()
+
+            # 갭 전략에 전일 데이터가 있는 종목만 뉴스 조회
+            gap_strategy = None
+            for strategy in self.strategies:
+                if hasattr(strategy, "_news_scores"):
+                    gap_strategy = strategy
+                    break
+
+            if not gap_strategy:
+                return
+
+            # 전일 데이터가 있는 종목 중 상위 100개만 (비용 절감)
+            codes_with_data = []
+            for strategy in self.strategies:
+                if hasattr(strategy, "_prev_day_data"):
+                    codes_with_data = list(strategy._prev_day_data.keys())[:100]
+                    break
+
+            if not codes_with_data:
+                return
+
+            scores = compute_news_scores(
+                codes_with_data,
+                target_date=today,
+                max_articles=5,
+            )
+
+            if scores:
+                # {code: {date: score}} 형식으로 변환
+                news_data = {}
+                for code, score in scores.items():
+                    news_data[code] = {today: score}
+
+                for strategy in self.strategies:
+                    if hasattr(strategy, "_news_scores"):
+                        strategy._news_scores = news_data
+
+                self._add_event(
+                    "NEWS_LOADED",
+                    f"뉴스 분석: {len(scores)}종목 "
+                    f"(긍정 {sum(1 for s in scores.values() if s > 0)}건)",
+                )
+                logger.info(f"뉴스 점수 로드: {len(scores)}종목")
+
+        except Exception as e:
+            logger.warning(f"뉴스 점수 로드 실패 (무시): {e}")
 
     def _add_event(
         self, event_type: str, message: str, severity: str = "INFO"

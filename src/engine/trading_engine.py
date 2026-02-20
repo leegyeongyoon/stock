@@ -1207,11 +1207,37 @@ class TradingEngine:
 
     def get_dashboard_summary(self) -> dict:
         """Get complete dashboard summary."""
+        strategies = self.strategy_runner.get_status() if self.strategy_runner else []
+
+        # DD runner 전략 중 strategy_runner에 없는 것 추가 (갭반전 등)
+        if self.dd_runner:
+            from src.engine.strategy_runner import STRATEGY_META
+            existing_names = {s["name"] for s in strategies}
+            dd_status = self.dd_runner.get_status()
+            for s in self.dd_runner.strategies:
+                if s.name in existing_names:
+                    continue
+                meta = STRATEGY_META.get(s.name, {})
+                strategies.append({
+                    "name": s.name,
+                    "display_name": meta.get("display_name", s.name),
+                    "description": meta.get("description", ""),
+                    "time_window": meta.get("time_window", ""),
+                    "sl": meta.get("sl", "3%"),
+                    "tp": meta.get("tp", "5%"),
+                    "conditions": meta.get("conditions", []),
+                    "backtest_return": meta.get("backtest_return", ""),
+                    "backtest_wr": meta.get("backtest_wr", ""),
+                    "backtest_trades": meta.get("backtest_trades", 0),
+                    "enabled": dd_status.get("enabled", False),
+                    "signals_today": dd_status.get("trades_today", 0),
+                })
+
         return {
             "state": self.state.value,
             "portfolio": self.position_manager.get_summary() if self.position_manager else {},
             "risk": self.risk_manager.get_risk_status() if self.risk_manager else {},
-            "strategies": self.strategy_runner.get_status() if self.strategy_runner else [],
+            "strategies": strategies,
             "timestamp": datetime.now().isoformat(),
         }
 

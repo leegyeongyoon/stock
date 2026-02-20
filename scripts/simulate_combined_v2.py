@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""3개 전략 통합 포트폴리오 시뮬레이션 v2
+"""4개 전략 통합 포트폴리오 시뮬레이션 v2
 
 전략:
-  1. modified_rsi_neutral_atr (데이터드리븐 #1)
-  2. morning_rsi_neutral_atr (데이터드리븐 #2)
-  3. 경윤 v6.2 (품질 점수 기반 돌파/눌림매매)
+  1. morning_rsi_neutral_atr (데이터드리븐 #1)
+  2. modified_rsi_neutral_atr (데이터드리븐 #3)
+  3. opening_gap_reversal (갭 반전 전략 - Hong Strong 기반)
+  4. 경윤 v6.2 (품질 점수 기반 돌파/눌림매매)
 
 공유 자본금 1000만원, 최대 3종목 동시보유.
 
@@ -34,7 +35,7 @@ load_dotenv(project_root / ".env", override=True)
 
 from sqlalchemy import text
 from src.database.connection import get_backtest_engine as get_engine
-from src.strategies.data_driven import get_data_driven_strategies
+from src.strategies.data_driven import get_data_driven_strategies, get_gap_strategy
 from src.strategies.data_driven.daily_context import DailyContextLoader
 
 # ══════════════════════════════════════════════════════
@@ -472,6 +473,29 @@ def close_position(pos, exit_price, exit_time, reason):
 # ══════════════════════════════════════════════════════
 #  메인 시뮬레이션
 # ══════════════════════════════════════════════════════
+def _compute_prev_day_data_for_sim(intraday_data, daily_by_date, all_dates):
+    """갭 전략용 전일 종가 + 일간 거래량 계산.
+
+    avg_vol = 전일 일간 총 거래량 (전략에서 /78로 봉당 환산).
+    """
+    prev_day_data = {}
+    date_list = sorted(all_dates)
+    for i in range(1, len(date_list)):
+        current_date = date_list[i]
+        prev_date = date_list[i - 1]
+        prev_daily = daily_by_date.get(prev_date, {})
+        for code in intraday_data:
+            prev_info = prev_daily.get(code)
+            if prev_info and prev_info["close"] > 0:
+                if code not in prev_day_data:
+                    prev_day_data[code] = {}
+                prev_day_data[code][current_date] = {
+                    "close": prev_info["close"],
+                    "avg_vol": prev_info.get("volume", 0),
+                }
+    return prev_day_data
+
+
 def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
 
     # 날짜별 5분봉 그룹핑
@@ -495,8 +519,18 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
         if i > 0:
             prev_date_map[d] = all_dates_full[i - 1]
 
-    # DD 전략 초기화
+    # DD 전략 초기화 (전략1+3 + 갭 반전 전략)
     dd_strategies = get_data_driven_strategies()
+    gap_strategy = get_gap_strategy()
+    dd_strategies.append(gap_strategy)
+
+    # 갭 전략에 전일 데이터 주입
+    prev_day_data = _compute_prev_day_data_for_sim(
+        intraday_data, daily_by_date, all_dates_full
+    )
+    for strategy in dd_strategies:
+        if hasattr(strategy, "_prev_day_data"):
+            strategy._prev_day_data = prev_day_data
 
     # 상태
     capital = float(INITIAL_CAPITAL)
@@ -696,8 +730,8 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
                         v6_consec_loss = 0
                         continue
 
-                # SL
-                sl_pct = V6_SL if is_v6 else DD_SL
+                # SL (포지션에 저장된 SL% 사용)
+                sl_pct = pos.stop_loss_pct
                 if low_val <= pos.entry_price * (1 - sl_pct):
                     sl_price = pos.entry_price * (1 - sl_pct)
                     trade, cash_back = close_position(pos, sl_price, ts, "손절")
@@ -712,8 +746,8 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
                             v6_day_stopped = True
                     continue
 
-                # TP (DD 전량 매도)
-                tp_pct = DD_TP if not is_v6 else V6_TP
+                # TP (DD 전량 매도, 포지션에 저장된 TP% 사용)
+                tp_pct = pos.take_profit_pct
                 if not is_v6 and high_val >= pos.entry_price * (1 + tp_pct):
                     tp_price = pos.entry_price * (1 + tp_pct)
                     trade, cash_back = close_position(pos, tp_price, ts, "익절")
@@ -723,6 +757,27 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
                     day_pnl += trade.pnl
                     del positions[code]
                     continue
+
+                # DD 전략 check_exit_fast (시간청산 등)
+                if not is_v6 and code in positions:
+                    for si, strategy in enumerate(dd_strategies):
+                        if strategy.name != pos.strategy_name:
+                            continue
+                        if code not in dd_ts_to_idx[si] or ts not in dd_ts_to_idx[si][code]:
+                            break
+                        idx = dd_ts_to_idx[si][code][ts]
+                        ind = dd_indicators[si][code]
+                        exit_reason = strategy.check_exit_fast(None, idx, ind)
+                        if exit_reason:
+                            trade, cash_back = close_position(
+                                pos, close_val, ts, exit_reason
+                            )
+                            all_trades.append(trade)
+                            day_trades.append(trade)
+                            capital += cash_back
+                            day_pnl += trade.pnl
+                            del positions[code]
+                        break
 
             # ── 신규 진입 ──
             if len(positions) >= MAX_POSITIONS:
@@ -750,7 +805,8 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
                             "price": float(ind["close"][idx]),
                             "quality": int(signal.get("confidence", 1.0) * 100),
                             "alloc_pct": DD_POSITION_PCT,
-                            "sl_pct": DD_SL, "tp_pct": DD_TP,
+                            "sl_pct": signal.get("stop_loss", DD_SL),
+                            "tp_pct": signal.get("take_profit", DD_TP),
                         })
 
             # v6.2 시그널 (시간 일치하는 것만)
@@ -968,9 +1024,10 @@ def print_result(final_capital, trades, daily_records, remaining_positions, labe
 
 def main():
     print("=" * 70)
-    print("  3개 전략 통합 시뮬레이션 v2 (경윤 v6.2 반영)")
+    print("  4개 전략 통합 시뮬레이션 v2 (DD1+3 + 갭반전 + 경윤 v6.2)")
     print(f"  자본금: {INITIAL_CAPITAL:,}원 | 최대 {MAX_POSITIONS}종목")
     print(f"  DD: SL{DD_SL*100:.0f}% TP{DD_TP*100:.0f}% | 경윤: SL{V6_SL*100:.0f}% TP{V6_TP*100:.0f}%")
+    print(f"  갭반전: SL2.5% TP5% @11:30 (Hong Strong 필수)")
     print(f"  경윤 v6.2: 품질{V6_MIN_QUALITY}+, 70-79스킵, 등락률{V6_MIN_DAILY_CHANGE}%+")
     print("=" * 70)
 

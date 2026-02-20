@@ -35,7 +35,7 @@ class GyleeRunner(HongStyleRunner):
     V6_ENTER_TOP_N = 4          # TOP2~5 진입
     V6_MIN_DAILY_CHANGE = 6.0   # 등락률 6%+
     V6_MIN_QUALITY = 60         # 품질점수 60+
-    V6_MIN_CONFIDENCE = 0.70    # 최소 확신도
+    V6_MIN_CONFIDENCE = 0.70    # 최소 확신도 (돌파=0.75만 통과, 눌림=0.60은 비활성)
     V6_MIN_CAP_BIL = 5000       # 시총 5000억+
     V6_MIN_INST = 50            # 기관순매수 50억+
     V6_MAX_INST = 200           # 기관순매수 200억 이하

@@ -49,6 +49,24 @@ STRATEGY_META: dict[str, dict] = {
             "일봉자리: 신고가/전고점돌파만",
         ],
     },
+    "opening_gap_reversal": {
+        "display_name": "갭반전: 오프닝 갭 반전",
+        "description": "강한 종목 갭다운 + 첫봉 양봉 → 반등 매수 (Hong Strong 필터)",
+        "time_window": "09:05 ~ 11:30",
+        "backtest_return": "+52.09% (60일)",
+        "backtest_wr": "64.5%",
+        "backtest_trades": 121,
+        "sl": "3%",
+        "tp": "5%",
+        "conditions": [
+            "전일종가 대비 갭다운 -0.3% ~ -5%",
+            "첫 봉(09:00) 양봉 확인",
+            "첫 봉 거래량 ≥ 전일 평균 1x",
+            "bar 1~2 (09:05~09:10) 진입",
+            "Hong Strong: 신고가/전고점돌파만",
+            "시간청산: 11:30",
+        ],
+    },
 }
 
 
