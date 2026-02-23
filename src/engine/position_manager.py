@@ -374,6 +374,60 @@ class PositionManager:
 
     # ── DB Persistence Helpers ─────────────────────────────
 
+    def load_from_db(self) -> int:
+        """DB에서 포지션 복구 → 메모리 _positions에 로드.
+
+        엔진 시작 시 _sync_balance() 이전에 호출하여
+        전략 이름이 '기존보유'로 덮어씌워지는 것을 방지.
+        Returns number of positions loaded.
+        """
+        if not self._enable_db:
+            return 0
+        try:
+            from src.database.connection import get_session
+            from src.database.repositories import LivePositionRepository
+
+            with get_session() as session:
+                repo = LivePositionRepository(session)
+                db_positions = repo.get_all()
+
+                if not db_positions:
+                    logger.info("DB에 복구할 포지션 없음")
+                    return 0
+
+                loaded = 0
+                for p in db_positions:
+                    code = p.stock_code
+                    if code in self._positions:
+                        continue
+
+                    pos = LivePosition(
+                        stock_code=code,
+                        stock_name=p.stock_name or code,
+                        strategy_name=p.strategy_name or "복구",
+                        quantity=p.quantity,
+                        avg_price=float(p.avg_price) if p.avg_price else 0.0,
+                        current_price=float(p.current_price) if p.current_price else 0.0,
+                        stop_loss_pct=float(p.stop_loss_pct) if p.stop_loss_pct else 0.03,
+                        take_profit_pct=float(p.take_profit_pct) if p.take_profit_pct else 0.05,
+                        entry_time=p.entry_time or datetime.now(),
+                        partial_sold=p.partial_sold or False,
+                        original_quantity=p.original_quantity or p.quantity,
+                    )
+                    self._positions[code] = pos
+                    loaded += 1
+
+                if loaded > 0:
+                    logger.info(
+                        f"DB에서 {loaded}개 포지션 로드 완료 "
+                        f"(전략: {', '.join(p.strategy_name for p in self._positions.values())})"
+                    )
+                return loaded
+
+        except Exception as e:
+            logger.warning(f"포지션 DB 로드 실패 (무시): {e}")
+            return 0
+
     def _save_position_to_db(self, pos: LivePosition) -> None:
         if not self._enable_db:
             return
@@ -385,14 +439,19 @@ class PositionManager:
                 repo = LivePositionRepository(session)
                 repo.upsert({
                     "stock_code": pos.stock_code,
+                    "stock_name": pos.stock_name,
                     "strategy_name": pos.strategy_name,
                     "quantity": pos.quantity,
                     "avg_price": Decimal(str(pos.avg_price)),
                     "current_price": Decimal(str(pos.current_price)),
                     "unrealized_pnl": Decimal(str(pos.unrealized_pnl)),
+                    "stop_loss_pct": pos.stop_loss_pct,
+                    "take_profit_pct": pos.take_profit_pct,
                     "stop_loss_price": Decimal(str(pos.stop_loss_price)),
                     "take_profit_price": Decimal(str(pos.take_profit_price)),
                     "entry_time": pos.entry_time,
+                    "partial_sold": pos.partial_sold,
+                    "original_quantity": pos.original_quantity,
                 })
         except Exception as e:
             logger.warning(f"포지션 DB 저장 실패 (메모리 상태 유지): {e}")

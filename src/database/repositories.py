@@ -398,20 +398,32 @@ class LivePositionRepository:
         self.session = session
 
     def upsert(self, data: dict) -> None:
-        """Upsert a live position by (stock_code, strategy_name)."""
+        """Upsert a live position by stock_code (unique)."""
         stmt = insert(LivePosition).values(data)
         stmt = stmt.on_conflict_do_update(
-            constraint="uq_live_pos_code_strategy",
+            constraint="uq_live_pos_code",
             set_={
+                "stock_name": stmt.excluded.stock_name,
+                "strategy_name": stmt.excluded.strategy_name,
                 "quantity": stmt.excluded.quantity,
                 "avg_price": stmt.excluded.avg_price,
                 "current_price": stmt.excluded.current_price,
                 "unrealized_pnl": stmt.excluded.unrealized_pnl,
+                "stop_loss_pct": stmt.excluded.stop_loss_pct,
+                "take_profit_pct": stmt.excluded.take_profit_pct,
                 "stop_loss_price": stmt.excluded.stop_loss_price,
                 "take_profit_price": stmt.excluded.take_profit_price,
+                "partial_sold": stmt.excluded.partial_sold,
+                "original_quantity": stmt.excluded.original_quantity,
             },
         )
         self.session.execute(stmt)
+
+    def get_by_code(self, stock_code: str) -> Optional[LivePosition]:
+        """Get a single position by stock code."""
+        return self.session.execute(
+            select(LivePosition).where(LivePosition.stock_code == stock_code)
+        ).scalar_one_or_none()
 
     def delete_by_code(self, stock_code: str) -> None:
         """Delete position by stock code."""

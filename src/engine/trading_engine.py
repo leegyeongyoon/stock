@@ -152,17 +152,22 @@ class TradingEngine:
                 on_execution=self._on_execution_received,
             )
 
-            # 6. Sync balance (실패해도 계속 진행)
+            # 6. Load positions from DB (전략 이름 보존 — _sync_balance 이전에 호출)
+            try:
+                loaded = self.position_manager.load_from_db()
+                if loaded > 0:
+                    self.add_log(
+                        "RECOVERY",
+                        f"DB에서 {loaded}개 포지션 로드 (전략 이름 보존)",
+                    )
+            except Exception as e:
+                logger.warning(f"포지션 DB 로드 실패 (무시하고 계속): {e}")
+
+            # 7. Sync balance (실패해도 계속 진행)
             try:
                 await self._sync_balance()
             except Exception as e:
                 logger.warning(f"잔고 동기화 실패 (무시하고 계속): {e}")
-
-            # 7. Recover state from DB (실패해도 계속 진행)
-            try:
-                await self._recover_state_from_db()
-            except Exception as e:
-                logger.warning(f"DB 상태 복구 실패 (무시하고 계속): {e}")
 
             # 7-1. Recover today's trade history from DB
             try:
@@ -651,8 +656,22 @@ class TradingEngine:
                 self.position_manager.cash = actual_cash
 
                 # 기존 보유 종목이 있으면 포지션으로 등록
+                # DB에서 이미 로드된 포지션은 전략 이름을 보존
                 for h in balance.holdings:
-                    if not self.position_manager.has_position(h.stock_code):
+                    if self.position_manager.has_position(h.stock_code):
+                        # DB에서 이미 로드된 포지션: 수량/가격만 KIS 기준으로 갱신
+                        pos = self.position_manager.get_position(h.stock_code)
+                        if pos and h.quantity > 0:
+                            pos.quantity = h.quantity
+                            pos.avg_price = float(int(h.avg_price))
+                            if h.current_price > 0:
+                                pos.current_price = float(int(h.current_price))
+                            logger.info(
+                                f"DB 포지션 유지: {h.stock_code} [{pos.strategy_name}] "
+                                f"{h.quantity}주 @{int(h.avg_price):,}"
+                            )
+                    else:
+                        # DB에 없는 신규 보유종목 → "기존보유"로 등록
                         self.position_manager.open_position(
                             stock_code=h.stock_code,
                             stock_name=h.stock_name,
@@ -668,6 +687,19 @@ class TradingEngine:
                             self.position_manager.update_price(
                                 h.stock_code, int(h.current_price)
                             )
+
+                # DB 포지션이 KIS에 없는 경우 정리 (이미 매도 완료된 종목)
+                broker_codes = {h.stock_code for h in balance.holdings}
+                stale_codes = [
+                    code for code in self.position_manager.get_held_codes()
+                    if code not in broker_codes
+                ]
+                for code in stale_codes:
+                    logger.warning(
+                        f"불일치: DB 포지션 {code} 브로커에 없음 → 제거"
+                    )
+                    self.position_manager._positions.pop(code, None)
+                    self.position_manager._delete_position_from_db(code)
 
                 # 서버 재시작 시 initial_capital = 현재 총자산 → PnL 0%에서 시작
                 # 일중 거래 PnL은 이 시점 이후부터 누적
@@ -742,15 +774,28 @@ class TradingEngine:
                             if self.position_manager.has_position(h.stock_code):
                                 continue
 
-                            # 누락된 종목 발견 → 기존보유로 등록
+                            # DB에서 전략 이름 조회 시도
+                            db_strategy = None
+                            try:
+                                from src.database.connection import get_session
+                                from src.database.repositories import LivePositionRepository
+                                with get_session() as db_session:
+                                    repo = LivePositionRepository(db_session)
+                                    db_pos = repo.get_by_code(h.stock_code)
+                                    if db_pos:
+                                        db_strategy = db_pos.strategy_name
+                            except Exception:
+                                pass
+
+                            strategy_name = db_strategy or "기존보유"
                             logger.warning(
                                 f"KIS 보유종목 누락 발견: {h.stock_name} ({h.stock_code}) "
-                                f"{h.quantity}주 → 자동 복구"
+                                f"{h.quantity}주 → 자동 복구 [{strategy_name}]"
                             )
                             self.position_manager.open_position(
                                 stock_code=h.stock_code,
                                 stock_name=h.stock_name,
-                                strategy_name="기존보유",
+                                strategy_name=strategy_name,
                                 quantity=h.quantity,
                                 price=int(h.avg_price),
                             )

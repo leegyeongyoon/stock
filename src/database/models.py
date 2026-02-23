@@ -268,23 +268,28 @@ class LiveOrder(Base):
 
 
 class LivePosition(Base):
-    """Live position tracking."""
+    """Live position tracking (서버 재시작 시 전략 이름 보존용)."""
 
     __tablename__ = "live_positions"
     __table_args__ = (
-        UniqueConstraint("stock_code", "strategy_name", name="uq_live_pos_code_strategy"),
+        UniqueConstraint("stock_code", name="uq_live_pos_code"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     stock_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    stock_name: Mapped[Optional[str]] = mapped_column(String(50))
     strategy_name: Mapped[Optional[str]] = mapped_column(String(50))
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     avg_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     current_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     unrealized_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    stop_loss_pct: Mapped[Optional[float]] = mapped_column(Numeric(6, 4))
+    take_profit_pct: Mapped[Optional[float]] = mapped_column(Numeric(6, 4))
     stop_loss_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     take_profit_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     entry_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    partial_sold: Mapped[bool] = mapped_column(Boolean, default=False)
+    original_quantity: Mapped[Optional[int]] = mapped_column(Integer)
 
     def __repr__(self) -> str:
         return f"<LivePosition(stock={self.stock_code}, qty={self.quantity}, strategy={self.strategy_name})>"
