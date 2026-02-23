@@ -487,6 +487,8 @@ class TradingEngine:
                         continue  # GyleeRunner 자체 모니터에서 처리
                     if pos.strategy_name.startswith("DD_"):
                         continue  # DDStrategyRunner 자체 모니터에서 처리
+                    if pos.strategy_name == "기존보유":
+                        continue  # 동기화 포지션은 SL/TP 적용 안 함
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
                         stock_code=code,
