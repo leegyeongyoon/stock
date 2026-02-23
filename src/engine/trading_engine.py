@@ -487,9 +487,6 @@ class TradingEngine:
                         continue  # GyleeRunner 자체 모니터에서 처리
                     if pos.strategy_name.startswith("DD_"):
                         continue  # DDStrategyRunner 자체 모니터에서 처리
-                    if pos.strategy_name == "기존보유":
-                        continue  # 사용자 직접 보유 종목은 자동 매도 안 함
-
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
                         stock_code=code,
@@ -572,12 +569,17 @@ class TradingEngine:
         if self.order_manager:
             await self.order_manager.cancel_all_open()
 
-        # Force close all positions (전략이 진입한 것만, "기존보유"는 스킵)
+        # Force close all positions (모멘텀 있는 종목은 오버나이트 허용)
+        OVERNIGHT_MOMENTUM_PCT = 3.0  # 수익률 3% 이상이면 오버나이트 홀딩
         if not self.order_manager:
             return
         for code, pos in list(self.position_manager.positions.items()):
-            if pos.strategy_name == "기존보유":
-                logger.info(f"기존보유 포지션 스킵: {code} {pos.stock_name}")
+            pnl_pct = pos.unrealized_pnl_pct
+            if pnl_pct >= OVERNIGHT_MOMENTUM_PCT:
+                logger.info(
+                    f"모멘텀 오버나이트 홀딩: {code} {pos.stock_name} "
+                    f"({pos.strategy_name}) 수익률 {pnl_pct:+.2f}% >= {OVERNIGHT_MOMENTUM_PCT}%"
+                )
                 continue
 
             order = await self.order_manager.submit_order(
