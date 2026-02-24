@@ -493,7 +493,10 @@ class TradingEngine:
                     if pos.strategy_name.startswith("DD_"):
                         continue  # DDStrategyRunner 자체 모니터에서 처리
                     if pos.strategy_name == "기존보유":
-                        continue  # 동기화 포지션은 SL/TP 적용 안 함
+                        # 등록 후 5분 경과해야 SL/TP 적용 (동기화 즉시 손절 방지)
+                        elapsed = (datetime.now() - pos.entry_time).total_seconds()
+                        if elapsed < 300:
+                            continue
                     # Submit sell order
                     sell_order = await self.order_manager.submit_order(
                         stock_code=code,
