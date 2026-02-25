@@ -500,7 +500,7 @@ class TradingEngine:
                 if not hasattr(self, '_mon_count'):
                     self._mon_count = 0
                 self._mon_count += 1
-                _debug = self._mon_count <= 10
+                _debug = self._mon_count <= 3
 
                 to_close: list[tuple[str, str, float]] = []
 
@@ -518,7 +518,12 @@ class TradingEngine:
                     if pos.strategy_name.startswith("DD_"):
                         continue  # DDStrategyRunner 자체 모니터에서 처리
                     if pos.strategy_name == "기존보유":
-                        elapsed = (datetime.now() - pos.entry_time).total_seconds()
+                        now = datetime.now()
+                        entry = pos.entry_time
+                        # timezone-aware vs naive 호환
+                        if entry.tzinfo is not None:
+                            entry = entry.replace(tzinfo=None)
+                        elapsed = (now - entry).total_seconds()
                         if elapsed < 300:
                             continue
 
