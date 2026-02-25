@@ -512,21 +512,48 @@ class TradingEngine:
 
                     # 5분봉 데이터 가져오기
                     df = self.data_manager.get_today_df(code)
+                    bar_count = len(df)
 
                     if df.empty:
-                        # 봉 데이터 없음 → 실시간 가격으로 fallback (재시작 직후 등)
+                        # 봉 데이터 없음 → 실시간 가격으로 fallback
                         if pos.current_price > 0:
                             if pos.current_price <= pos.stop_loss_price:
+                                logger.info(
+                                    f"[모니터] SL 감지(fallback): {code} "
+                                    f"현재가={pos.current_price} <= SL={pos.stop_loss_price:.0f}"
+                                )
                                 to_close.append((code, "SL", pos.stop_loss_price))
                             elif pos.current_price >= pos.take_profit_price:
+                                logger.info(
+                                    f"[모니터] TP 감지(fallback): {code} "
+                                    f"현재가={pos.current_price} >= TP={pos.take_profit_price:.0f}"
+                                )
                                 to_close.append((code, "TP", pos.take_profit_price))
                         continue
 
                     # 새 봉이 완성됐는지 확인
                     latest_bar_time = df.index[-1]
                     prev = last_checked_bar.get(code)
+
                     if prev is not None and latest_bar_time <= prev:
-                        continue  # 새 봉 없음 → SL/TP 체크 스킵
+                        # 새 봉 없음 → 실시간 가격으로 안전장치 체크
+                        # (봉은 있지만 새 봉이 안 왔을 때, 현재가가 TP/SL 크게 벗어나면 즉시 처리)
+                        if pos.current_price > 0:
+                            if pos.current_price <= pos.stop_loss_price:
+                                logger.info(
+                                    f"[모니터] SL 감지(현재가): {code} "
+                                    f"현재가={pos.current_price} <= SL={pos.stop_loss_price:.0f} "
+                                    f"(봉 {bar_count}개, 마지막={latest_bar_time})"
+                                )
+                                to_close.append((code, "SL", pos.stop_loss_price))
+                            elif pos.current_price >= pos.take_profit_price:
+                                logger.info(
+                                    f"[모니터] TP 감지(현재가): {code} "
+                                    f"현재가={pos.current_price} >= TP={pos.take_profit_price:.0f} "
+                                    f"(봉 {bar_count}개, 마지막={latest_bar_time})"
+                                )
+                                to_close.append((code, "TP", pos.take_profit_price))
+                        continue
 
                     last_checked_bar[code] = latest_bar_time
 
@@ -535,8 +562,18 @@ class TradingEngine:
                     bar_high = float(df.iloc[-1]["high"])
 
                     if bar_low <= pos.stop_loss_price:
+                        logger.info(
+                            f"[모니터] SL 감지(5분봉): {code} "
+                            f"LOW={bar_low} <= SL={pos.stop_loss_price:.0f} "
+                            f"(봉시각={latest_bar_time})"
+                        )
                         to_close.append((code, "SL", pos.stop_loss_price))
                     elif bar_high >= pos.take_profit_price:
+                        logger.info(
+                            f"[모니터] TP 감지(5분봉): {code} "
+                            f"HIGH={bar_high} >= TP={pos.take_profit_price:.0f} "
+                            f"(봉시각={latest_bar_time})"
+                        )
                         to_close.append((code, "TP", pos.take_profit_price))
 
                 for code, reason, exit_price in to_close:
