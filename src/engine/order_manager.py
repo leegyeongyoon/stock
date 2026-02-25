@@ -60,8 +60,17 @@ class OrderManager:
         price: int = 0,
         order_type: OrderType = OrderType.MARKET,
         strategy_name: str = "",
+        max_retries: int = 0,
     ) -> OrderInfo:
-        """Submit a new order to KIS API."""
+        """Submit a new order to KIS API.
+
+        매도(SELL) 주문은 max_retries=3이 기본.
+        매수(BUY)는 재시도 안 함 (중복 매수 방지).
+        """
+        # 매도 주문은 자동 재시도 (안 팔리면 큰일이니까)
+        if side == OrderSide.SELL and max_retries == 0:
+            max_retries = 3
+
         async with self._lock:
             req = OrderRequest(
                 stock_code=stock_code,
@@ -85,23 +94,36 @@ class OrderManager:
                 updated_at=datetime.now(),
             )
 
-            resp: OrderResponse = await self.client.place_order(req)
+            last_error = ""
+            for attempt in range(max_retries + 1):
+                resp: OrderResponse = await self.client.place_order(req)
 
-            if resp.success:
-                order.order_id = resp.order_number
-                order.status = OrderStatus.SUBMITTED
-                self._orders[order.order_id] = order
-                logger.info(
-                    f"주문 접수: {stock_code} {side.value} {quantity}주 "
-                    f"order_id={order.order_id}"
-                )
-            else:
-                order.order_id = f"FAILED_{datetime.now().strftime('%H%M%S%f')}"
-                order.status = OrderStatus.REJECTED
-                self._orders[order.order_id] = order
-                logger.warning(
-                    f"주문 거부: {stock_code} {side.value} - {resp.message}"
-                )
+                if resp.success:
+                    order.order_id = resp.order_number
+                    order.status = OrderStatus.SUBMITTED
+                    self._orders[order.order_id] = order
+                    logger.info(
+                        f"주문 접수: {stock_code} {side.value} {quantity}주 "
+                        f"order_id={order.order_id}"
+                    )
+                    break
+                else:
+                    last_error = resp.message
+                    if attempt < max_retries:
+                        wait = 3 * (attempt + 1)
+                        logger.warning(
+                            f"주문 실패 ({attempt+1}/{max_retries+1}): "
+                            f"{stock_code} {side.value} - {last_error}, "
+                            f"{wait}초 후 재시도"
+                        )
+                        await asyncio.sleep(wait)
+                    else:
+                        order.order_id = f"FAILED_{datetime.now().strftime('%H%M%S%f')}"
+                        order.status = OrderStatus.REJECTED
+                        self._orders[order.order_id] = order
+                        logger.warning(
+                            f"주문 거부 (최종): {stock_code} {side.value} - {last_error}"
+                        )
 
             self._save_order_to_db(order)
             await self._notify(order)

@@ -88,6 +88,8 @@ class PositionManager:
         self._daily_pnl: float = 0.0
         self._enable_db = enable_db
         self._db_update_counter: int = 0
+        # 당일 청산된 종목 코드 → 청산 시각 (재등록 방지용)
+        self._recently_closed: dict[str, datetime] = {}
 
     # ── Commission constants ──────────────────────────────
     COMMISSION_RATE = 0.00015   # 0.015%
@@ -139,6 +141,14 @@ class PositionManager:
 
     def get_held_codes(self) -> set[str]:
         return set(self._positions.keys())
+
+    def is_recently_closed(self, code: str) -> bool:
+        """당일 청산된 종목인지 확인 (재등록 방지)."""
+        return code in self._recently_closed
+
+    def get_recently_closed_codes(self) -> set[str]:
+        """당일 청산된 종목 코드 세트."""
+        return set(self._recently_closed.keys())
 
     def open_position(
         self,
@@ -214,6 +224,8 @@ class PositionManager:
         )
         self._trades.append(trade)
         self._daily_pnl += pnl
+        # 청산 기록 → 당일 재등록 방지
+        self._recently_closed[code] = datetime.now()
 
         emoji = "+" if pnl > 0 else ""
         logger.info(
@@ -344,6 +356,8 @@ class PositionManager:
                     )
                     self._trades.append(trade)
                     self._daily_pnl += trade.pnl
+                    # 청산 기록 복원 (재등록 방지)
+                    self._recently_closed[t.stock_code] = t.traded_at
                     recovered += 1
 
                 logger.info(
@@ -360,6 +374,7 @@ class PositionManager:
         """Reset daily counters for a new trading day."""
         self._daily_pnl = 0.0
         self._trades.clear()
+        self._recently_closed.clear()
 
     def get_summary(self) -> dict:
         return {

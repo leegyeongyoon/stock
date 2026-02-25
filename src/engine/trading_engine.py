@@ -163,23 +163,25 @@ class TradingEngine:
             except Exception as e:
                 logger.warning(f"포지션 DB 로드 실패 (무시하고 계속): {e}")
 
-            # 7. Sync balance (실패해도 계속 진행)
-            try:
-                await self._sync_balance()
-            except Exception as e:
-                logger.warning(f"잔고 동기화 실패 (무시하고 계속): {e}")
-
-            # 7-1. Recover today's trade history from DB
+            # 6-1. Recover today's trade history BEFORE balance sync
+            #      → _recently_closed가 채워져야 _sync_balance에서 재등록 차단됨
             try:
                 recovered_trades = self.position_manager.recover_trades_from_db()
                 if recovered_trades > 0:
                     self.add_log(
                         "RECOVERY",
                         f"오늘 거래내역 {recovered_trades}건 DB에서 복구 "
-                        f"(일일손익: {self.position_manager.daily_pnl:+,.0f}원)",
+                        f"(일일손익: {self.position_manager.daily_pnl:+,.0f}원, "
+                        f"청산종목: {len(self.position_manager.get_recently_closed_codes())}개 재등록 차단)",
                     )
             except Exception as e:
                 logger.warning(f"거래내역 복구 실패 (무시하고 계속): {e}")
+
+            # 7. Sync balance (실패해도 계속 진행)
+            try:
+                await self._sync_balance()
+            except Exception as e:
+                logger.warning(f"잔고 동기화 실패 (무시하고 계속): {e}")
 
             # 8. Start main loop
             self.state = EngineState.RUNNING
@@ -451,23 +453,27 @@ class TradingEngine:
                     await self.ws.subscribe_trade(signal.stock_code)
 
     async def _position_monitor_loop(self) -> None:
-        """Monitor positions for SL/TP triggers every 5 seconds.
+        """Monitor positions for SL/TP triggers based on 5-minute bar completion.
 
-        Uses real-time current price API for held positions (most accurate).
-        Falls back to last bar close if API fails.
+        백테스트(intraday_engine_v2)와 동일한 방법론:
+        - 실시간 가격 업데이트: 5초마다 (대시보드 표시용)
+        - SL/TP 판단: 5분봉 완성 시에만 체크
+        - bar LOW <= stop_loss_price → 손절 (백테스트: low_val <= pos.stop_loss)
+        - bar HIGH >= take_profit_price → 익절 (백테스트: high_val >= pos.take_profit)
         """
+        # 종목별 마지막 체크한 5분봉 시각 (새 봉 감지용)
+        last_checked_bar: dict[str, datetime] = {}
+
         while self.state == EngineState.RUNNING:
             try:
-                # Update prices with real-time current price API
+                # 1. 실시간 가격 업데이트 (대시보드 표시용, 5초마다)
                 held_codes = list(self.position_manager.get_held_codes())
                 if held_codes:
                     live_prices = await self.data_manager.fetch_current_prices(
                         held_codes
                     )
-                    # Update from API results
                     for code, price in live_prices.items():
                         self.position_manager.update_price(code, float(price))
-                    # Fallback for codes that failed API call
                     for code in held_codes:
                         if code not in live_prices:
                             df = self.data_manager.get_today_df(code)
@@ -475,14 +481,15 @@ class TradingEngine:
                                 fallback = float(df.iloc[-1]["close"])
                                 self.position_manager.update_price(code, fallback)
 
-                # Check SL/TP (홍인기 포지션은 HongStyleRunner가 자체 관리)
-                # 장 시간 외에는 SL/TP 체크 안 함 (휴장일/시간외 손절 방지)
+                # 2. 장 시간 외에는 SL/TP 체크 안 함
                 if not is_market_hours():
                     await asyncio.sleep(5)
                     continue
 
-                to_close = self.risk_manager.check_stop_loss_tp()
-                for code, reason in to_close:
+                # 3. 5분봉 기반 SL/TP 체크 (백테스트와 동일)
+                to_close: list[tuple[str, str, float]] = []
+
+                for code in held_codes:
                     pos = self.position_manager.get_position(code)
                     if not pos:
                         continue
@@ -493,11 +500,37 @@ class TradingEngine:
                     if pos.strategy_name.startswith("DD_"):
                         continue  # DDStrategyRunner 자체 모니터에서 처리
                     if pos.strategy_name == "기존보유":
-                        # 등록 후 5분 경과해야 SL/TP 적용 (동기화 즉시 손절 방지)
                         elapsed = (datetime.now() - pos.entry_time).total_seconds()
                         if elapsed < 300:
                             continue
-                    # Submit sell order
+
+                    # 5분봉 데이터 가져오기
+                    df = self.data_manager.get_today_df(code)
+                    if df.empty:
+                        continue
+
+                    # 새 봉이 완성됐는지 확인
+                    latest_bar_time = df.index[-1]
+                    prev = last_checked_bar.get(code)
+                    if prev is not None and latest_bar_time <= prev:
+                        continue  # 새 봉 없음 → SL/TP 체크 스킵
+
+                    last_checked_bar[code] = latest_bar_time
+
+                    # bar LOW/HIGH로 SL/TP 판단 (백테스트와 동일)
+                    bar_low = float(df.iloc[-1]["low"])
+                    bar_high = float(df.iloc[-1]["high"])
+
+                    if bar_low <= pos.stop_loss_price:
+                        to_close.append((code, "SL", pos.stop_loss_price))
+                    elif bar_high >= pos.take_profit_price:
+                        to_close.append((code, "TP", pos.take_profit_price))
+
+                for code, reason, exit_price in to_close:
+                    pos = self.position_manager.get_position(code)
+                    if not pos:
+                        continue
+
                     sell_order = await self.order_manager.submit_order(
                         stock_code=code,
                         side=OrderSide.SELL,
@@ -506,19 +539,17 @@ class TradingEngine:
                         strategy_name=pos.strategy_name,
                     )
 
-                    # 주문 거부 시 포지션 유지
                     if sell_order.status == OrderStatus.REJECTED:
                         logger.warning(f"SL/TP 매도 거부: {code} - 포지션 유지")
                         continue
 
-                    # Close position
+                    # 백테스트와 동일하게 SL/TP 가격으로 청산 기록
                     trade = self.position_manager.close_position(
-                        code, pos.current_price, reason
+                        code, exit_price, reason
                     )
                     await self._emit_order(sell_order)
                     await self._emit_position_update()
 
-                    # Save to trade store
                     if trade:
                         self.trade_store.save_trade({
                             "stock_code": trade.stock_code,
@@ -535,10 +566,10 @@ class TradingEngine:
                             "exit_reason": trade.exit_reason,
                         })
 
-                    # Unsubscribe WS + remove from priority
                     if self.ws:
                         await self.ws.unsubscribe_trade(code)
                     self.data_manager.remove_priority_codes({code})
+                    last_checked_bar.pop(code, None)
 
                 # Check circuit breaker
                 self.risk_manager.check_circuit_breaker()
@@ -673,6 +704,12 @@ class TradingEngine:
                                 f"DB 포지션 유지: {h.stock_code} [{pos.strategy_name}] "
                                 f"{h.quantity}주 @{int(h.avg_price):,}"
                             )
+                    elif self.position_manager.is_recently_closed(h.stock_code):
+                        # 당일 청산된 종목 → 재등록 차단
+                        logger.info(
+                            f"당일 청산 종목 스킵: {h.stock_code} {h.stock_name} "
+                            f"(KIS 잔고에 잔존, 재등록 안 함)"
+                        )
                     else:
                         # DB에 없는 신규 보유종목 → "기존보유"로 등록
                         self.position_manager.open_position(
@@ -775,6 +812,12 @@ class TradingEngine:
                             if h.quantity <= 0:
                                 continue
                             if self.position_manager.has_position(h.stock_code):
+                                continue
+                            # 당일 청산된 종목은 복구하지 않음 (재등록 루프 방지)
+                            if self.position_manager.is_recently_closed(h.stock_code):
+                                logger.debug(
+                                    f"당일 청산 종목 복구 스킵: {h.stock_code} {h.stock_name}"
+                                )
                                 continue
 
                             # DB에서 전략 이름 조회 시도

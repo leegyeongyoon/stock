@@ -255,15 +255,18 @@ class DDStrategyRunner:
     # ══════════════════════════════════════════════════════
 
     async def _position_monitor_loop(self):
-        """5초 간격 DD 포지션 모니터.
+        """5분봉 기반 DD 포지션 모니터.
 
-        시뮬레이션과 동일:
-        - SL 3% → 전량 매도
-        - TP 5% → 전량 매도 (분매 없음)
+        백테스트(intraday_engine_v2)와 동일한 방법론:
+        - 5분봉 완성 시에만 SL/TP 체크
+        - bar LOW <= stop_loss_price → 손절
+        - bar HIGH >= take_profit_price → 익절
+        - 전량 매도 (분매 없음)
         """
+        last_checked_bar: dict[str, datetime] = {}
+
         while self.enabled:
             try:
-                # 장 시간 외에는 SL/TP 체크 안 함 (휴장일/시간외 손절 방지)
                 if not is_market_hours():
                     await asyncio.sleep(5)
                     continue
@@ -274,30 +277,52 @@ class DDStrategyRunner:
                     continue
 
                 for code, pos in dd_positions:
-                    if pos.current_price <= 0:
+                    # 5분봉 데이터 가져오기
+                    df = self.engine.data_manager.get_today_df(code)
+                    if df.empty:
                         continue
 
-                    pnl_pct = pos.unrealized_pnl_pct / 100
+                    # 새 봉이 완성됐는지 확인
+                    latest_bar_time = df.index[-1]
+                    prev = last_checked_bar.get(code)
+                    if prev is not None and latest_bar_time <= prev:
+                        continue  # 새 봉 없음 → SL/TP 체크 스킵
 
-                    # 1. 손절 (-3%)
-                    if pnl_pct <= -self.DD_SL:
-                        await self._execute_sell(code, pos.quantity, "손절")
+                    last_checked_bar[code] = latest_bar_time
+
+                    # bar LOW/HIGH로 SL/TP 판단 (백테스트와 동일)
+                    bar_low = float(df.iloc[-1]["low"])
+                    bar_high = float(df.iloc[-1]["high"])
+
+                    # 1. 손절: bar LOW가 SL 가격 이하
+                    if bar_low <= pos.stop_loss_price:
+                        pnl_pct = (pos.stop_loss_price / pos.avg_price - 1) * 100
+                        await self._execute_sell(
+                            code, pos.quantity, "손절",
+                            exit_price=pos.stop_loss_price,
+                        )
                         self._add_event(
                             "DD_SL",
                             f"DD 손절: {pos.stock_name} "
-                            f"({pnl_pct * 100:+.1f}%)",
+                            f"({pnl_pct:+.1f}%) [5분봉 LOW={bar_low:,.0f}]",
                             severity="WARNING",
                         )
+                        last_checked_bar.pop(code, None)
                         continue
 
-                    # 2. 익절 (+5%) - 전량 매도
-                    if pnl_pct >= self.DD_TP:
-                        await self._execute_sell(code, pos.quantity, "익절")
+                    # 2. 익절: bar HIGH가 TP 가격 이상
+                    if bar_high >= pos.take_profit_price:
+                        pnl_pct = (pos.take_profit_price / pos.avg_price - 1) * 100
+                        await self._execute_sell(
+                            code, pos.quantity, "익절",
+                            exit_price=pos.take_profit_price,
+                        )
                         self._add_event(
                             "DD_TP",
                             f"DD 익절: {pos.stock_name} "
-                            f"({pnl_pct * 100:+.1f}%)",
+                            f"({pnl_pct:+.1f}%) [5분봉 HIGH={bar_high:,.0f}]",
                         )
+                        last_checked_bar.pop(code, None)
                         continue
 
                 await asyncio.sleep(5)
@@ -413,9 +438,13 @@ class DDStrategyRunner:
             )
 
     async def _execute_sell(
-        self, stock_code: str, quantity: int, reason: str
+        self, stock_code: str, quantity: int, reason: str,
+        exit_price: float = 0,
     ):
-        """DD 매도 실행 (전량)."""
+        """DD 매도 실행 (전량).
+
+        exit_price: 백테스트 호환용 SL/TP 가격. 0이면 현재가 사용.
+        """
         try:
             from src.broker.kis_models import OrderSide, OrderType
 
@@ -423,7 +452,8 @@ class DDStrategyRunner:
             if not pos:
                 return
 
-            price = pos.current_price
+            # 백테스트 호환: SL/TP 가격이 지정되면 그 가격으로 청산 기록
+            price = exit_price if exit_price > 0 else pos.current_price
             if price <= 0:
                 price = (
                     await self.engine.data_manager.fetch_current_price(
