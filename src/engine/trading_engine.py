@@ -496,6 +496,28 @@ class TradingEngine:
                     continue
 
                 # 3. 5분봉 기반 SL/TP 체크 (백테스트와 동일)
+                # 디버그: 처음 5회만 이벤트 로그 (도달 확인)
+                if not hasattr(self, '_mon_count'):
+                    self._mon_count = 0
+                self._mon_count += 1
+                if self._mon_count <= 5:
+                    pos_info = []
+                    for c in held_codes:
+                        p = self.position_manager.get_position(c)
+                        if p:
+                            skip = ""
+                            if p.strategy_name.startswith("홍스타일"): skip = "홍"
+                            elif p.strategy_name.startswith("경윤_"): skip = "경"
+                            elif p.strategy_name.startswith("DD_"): skip = "DD"
+                            pos_info.append(
+                                f"{c}({p.current_price}/{p.stop_loss_price:.0f}/{p.take_profit_price:.0f})"
+                                f"{'[skip:'+skip+']' if skip else ''}"
+                            )
+                    self.add_log(
+                        "MONITOR_DEBUG",
+                        f"모니터#{self._mon_count}: held={len(held_codes)} | {' '.join(pos_info[:5])}",
+                    )
+
                 to_close: list[tuple[str, str, float]] = []
 
                 for code in held_codes:
