@@ -496,33 +496,20 @@ class TradingEngine:
                     continue
 
                 # 3. 5분봉 기반 SL/TP 체크 (백테스트와 동일)
-                # 디버그: 처음 5회만 이벤트 로그 (도달 확인)
+                # 디버그: 처음 10회만 상세 이벤트 로그
                 if not hasattr(self, '_mon_count'):
                     self._mon_count = 0
                 self._mon_count += 1
-                if self._mon_count <= 5:
-                    pos_info = []
-                    for c in held_codes:
-                        p = self.position_manager.get_position(c)
-                        if p:
-                            skip = ""
-                            if p.strategy_name.startswith("홍스타일"): skip = "홍"
-                            elif p.strategy_name.startswith("경윤_"): skip = "경"
-                            elif p.strategy_name.startswith("DD_"): skip = "DD"
-                            pos_info.append(
-                                f"{c}({p.current_price}/{p.stop_loss_price:.0f}/{p.take_profit_price:.0f})"
-                                f"{'[skip:'+skip+']' if skip else ''}"
-                            )
-                    self.add_log(
-                        "MONITOR_DEBUG",
-                        f"모니터#{self._mon_count}: held={len(held_codes)} | {' '.join(pos_info[:5])}",
-                    )
+                _debug = self._mon_count <= 10
 
                 to_close: list[tuple[str, str, float]] = []
 
                 for code in held_codes:
+                  try:
                     pos = self.position_manager.get_position(code)
                     if not pos:
+                        if _debug:
+                            self.add_log("MON_POS", f"{code}: pos=None, skip")
                         continue
                     if pos.strategy_name.startswith("홍스타일"):
                         continue  # HongStyleRunner 자체 모니터에서 처리
@@ -535,25 +522,25 @@ class TradingEngine:
                         if elapsed < 300:
                             continue
 
+                    cp = float(pos.current_price)
+                    sl = float(pos.stop_loss_price)
+                    tp = float(pos.take_profit_price)
+
                     # 5분봉 데이터 가져오기
                     df = self.data_manager.get_today_df(code)
                     bar_count = len(df)
 
                     if df.empty:
                         # 봉 데이터 없음 → 실시간 가격으로 fallback
-                        if pos.current_price > 0:
-                            if pos.current_price <= pos.stop_loss_price:
-                                logger.info(
-                                    f"[모니터] SL 감지(fallback): {code} "
-                                    f"현재가={pos.current_price} <= SL={pos.stop_loss_price:.0f}"
-                                )
-                                to_close.append((code, "SL", pos.stop_loss_price))
-                            elif pos.current_price >= pos.take_profit_price:
-                                logger.info(
-                                    f"[모니터] TP 감지(fallback): {code} "
-                                    f"현재가={pos.current_price} >= TP={pos.take_profit_price:.0f}"
-                                )
-                                to_close.append((code, "TP", pos.take_profit_price))
+                        if _debug:
+                            self.add_log("MON_POS", f"{code}: df.empty, cp={cp}, sl={sl:.0f}, tp={tp:.0f}, cp>=tp={cp>=tp}, cp<=sl={cp<=sl}")
+                        if cp > 0:
+                            if cp <= sl:
+                                logger.info(f"[모니터] SL 감지(fallback): {code} cp={cp} <= sl={sl:.0f}")
+                                to_close.append((code, "SL", sl))
+                            elif cp >= tp:
+                                logger.info(f"[모니터] TP 감지(fallback): {code} cp={cp} >= tp={tp:.0f}")
+                                to_close.append((code, "TP", tp))
                         continue
 
                     # 새 봉이 완성됐는지 확인
@@ -562,22 +549,15 @@ class TradingEngine:
 
                     if prev is not None and latest_bar_time <= prev:
                         # 새 봉 없음 → 실시간 가격으로 안전장치 체크
-                        # (봉은 있지만 새 봉이 안 왔을 때, 현재가가 TP/SL 크게 벗어나면 즉시 처리)
-                        if pos.current_price > 0:
-                            if pos.current_price <= pos.stop_loss_price:
-                                logger.info(
-                                    f"[모니터] SL 감지(현재가): {code} "
-                                    f"현재가={pos.current_price} <= SL={pos.stop_loss_price:.0f} "
-                                    f"(봉 {bar_count}개, 마지막={latest_bar_time})"
-                                )
-                                to_close.append((code, "SL", pos.stop_loss_price))
-                            elif pos.current_price >= pos.take_profit_price:
-                                logger.info(
-                                    f"[모니터] TP 감지(현재가): {code} "
-                                    f"현재가={pos.current_price} >= TP={pos.take_profit_price:.0f} "
-                                    f"(봉 {bar_count}개, 마지막={latest_bar_time})"
-                                )
-                                to_close.append((code, "TP", pos.take_profit_price))
+                        if _debug:
+                            self.add_log("MON_POS", f"{code}: no_new_bar, bars={bar_count}, cp={cp}, sl={sl:.0f}, tp={tp:.0f}, cp>=tp={cp>=tp}")
+                        if cp > 0:
+                            if cp <= sl:
+                                logger.info(f"[모니터] SL 감지(현재가): {code} cp={cp} <= sl={sl:.0f}")
+                                to_close.append((code, "SL", sl))
+                            elif cp >= tp:
+                                logger.info(f"[모니터] TP 감지(현재가): {code} cp={cp} >= tp={tp:.0f}")
+                                to_close.append((code, "TP", tp))
                         continue
 
                     last_checked_bar[code] = latest_bar_time
@@ -586,20 +566,18 @@ class TradingEngine:
                     bar_low = float(df.iloc[-1]["low"])
                     bar_high = float(df.iloc[-1]["high"])
 
-                    if bar_low <= pos.stop_loss_price:
-                        logger.info(
-                            f"[모니터] SL 감지(5분봉): {code} "
-                            f"LOW={bar_low} <= SL={pos.stop_loss_price:.0f} "
-                            f"(봉시각={latest_bar_time})"
-                        )
-                        to_close.append((code, "SL", pos.stop_loss_price))
-                    elif bar_high >= pos.take_profit_price:
-                        logger.info(
-                            f"[모니터] TP 감지(5분봉): {code} "
-                            f"HIGH={bar_high} >= TP={pos.take_profit_price:.0f} "
-                            f"(봉시각={latest_bar_time})"
-                        )
-                        to_close.append((code, "TP", pos.take_profit_price))
+                    if _debug:
+                        self.add_log("MON_POS", f"{code}: new_bar={latest_bar_time}, L={bar_low}, H={bar_high}, sl={sl:.0f}, tp={tp:.0f}, L<=sl={bar_low<=sl}, H>=tp={bar_high>=tp}")
+
+                    if bar_low <= sl:
+                        logger.info(f"[모니터] SL 감지(5분봉): {code} LOW={bar_low} <= SL={sl:.0f}")
+                        to_close.append((code, "SL", sl))
+                    elif bar_high >= tp:
+                        logger.info(f"[모니터] TP 감지(5분봉): {code} HIGH={bar_high} >= TP={tp:.0f}")
+                        to_close.append((code, "TP", tp))
+                  except Exception as pos_err:
+                    logger.error(f"[모니터] 포지션 {code} 체크 오류: {pos_err}")
+                    self.add_log("MONITOR_ERROR", f"{code} 체크 오류: {pos_err}")
 
                 if to_close:
                     self.add_log(
