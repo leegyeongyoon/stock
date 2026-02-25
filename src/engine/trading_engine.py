@@ -183,6 +183,12 @@ class TradingEngine:
             except Exception as e:
                 logger.warning(f"잔고 동기화 실패 (무시하고 계속): {e}")
 
+            # 7-1. 보유종목을 priority polling에 등록 (5분봉 데이터 수집 보장)
+            held_codes = self.position_manager.get_held_codes()
+            if held_codes:
+                self.data_manager.add_priority_codes(held_codes)
+                logger.info(f"보유종목 {len(held_codes)}개 priority polling 등록: {held_codes}")
+
             # 8. Start main loop
             self.state = EngineState.RUNNING
             self._main_loop_task = asyncio.create_task(self._main_loop())
@@ -506,7 +512,14 @@ class TradingEngine:
 
                     # 5분봉 데이터 가져오기
                     df = self.data_manager.get_today_df(code)
+
                     if df.empty:
+                        # 봉 데이터 없음 → 실시간 가격으로 fallback (재시작 직후 등)
+                        if pos.current_price > 0:
+                            if pos.current_price <= pos.stop_loss_price:
+                                to_close.append((code, "SL", pos.stop_loss_price))
+                            elif pos.current_price >= pos.take_profit_price:
+                                to_close.append((code, "TP", pos.take_profit_price))
                         continue
 
                     # 새 봉이 완성됐는지 확인

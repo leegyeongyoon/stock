@@ -279,7 +279,29 @@ class DDStrategyRunner:
                 for code, pos in dd_positions:
                     # 5분봉 데이터 가져오기
                     df = self.engine.data_manager.get_today_df(code)
+
                     if df.empty:
+                        # 봉 데이터 없음 → 실시간 가격으로 fallback (재시작 직후 등)
+                        if pos.current_price > 0:
+                            if pos.current_price <= pos.stop_loss_price:
+                                await self._execute_sell(
+                                    code, pos.quantity, "손절",
+                                    exit_price=pos.stop_loss_price,
+                                )
+                                self._add_event(
+                                    "DD_SL",
+                                    f"DD 손절(fallback): {pos.stock_name}",
+                                    severity="WARNING",
+                                )
+                            elif pos.current_price >= pos.take_profit_price:
+                                await self._execute_sell(
+                                    code, pos.quantity, "익절",
+                                    exit_price=pos.take_profit_price,
+                                )
+                                self._add_event(
+                                    "DD_TP",
+                                    f"DD 익절(fallback): {pos.stock_name}",
+                                )
                         continue
 
                     # 새 봉이 완성됐는지 확인
