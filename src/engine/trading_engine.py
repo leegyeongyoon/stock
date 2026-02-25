@@ -475,17 +475,20 @@ class TradingEngine:
                 # 1. 실시간 가격 업데이트 (대시보드 표시용, 5초마다)
                 held_codes = list(self.position_manager.get_held_codes())
                 if held_codes:
-                    live_prices = await self.data_manager.fetch_current_prices(
-                        held_codes
-                    )
-                    for code, price in live_prices.items():
-                        self.position_manager.update_price(code, float(price))
-                    for code in held_codes:
-                        if code not in live_prices:
-                            df = self.data_manager.get_today_df(code)
-                            if not df.empty:
-                                fallback = float(df.iloc[-1]["close"])
-                                self.position_manager.update_price(code, fallback)
+                    try:
+                        live_prices = await self.data_manager.fetch_current_prices(
+                            held_codes
+                        )
+                        for code, price in live_prices.items():
+                            self.position_manager.update_price(code, float(price))
+                        for code in held_codes:
+                            if code not in live_prices:
+                                df = self.data_manager.get_today_df(code)
+                                if not df.empty:
+                                    fallback = float(df.iloc[-1]["close"])
+                                    self.position_manager.update_price(code, fallback)
+                    except Exception as e:
+                        logger.warning(f"가격 업데이트 실패 (SL/TP 계속): {e}")
 
                 # 2. 장 시간 외에는 SL/TP 체크 안 함
                 if not is_market_hours():
@@ -575,6 +578,13 @@ class TradingEngine:
                             f"(봉시각={latest_bar_time})"
                         )
                         to_close.append((code, "TP", pos.take_profit_price))
+
+                if to_close:
+                    self.add_log(
+                        "MONITOR_SLTP",
+                        f"SL/TP 감지 {len(to_close)}건: "
+                        + ", ".join(f"{c}({r})" for c, r, _ in to_close),
+                    )
 
                 for code, reason, exit_price in to_close:
                     pos = self.position_manager.get_position(code)
