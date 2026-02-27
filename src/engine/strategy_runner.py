@@ -9,54 +9,18 @@ from src.pipeline.data_manager import DataManager
 from src.strategies.data_driven import get_data_driven_strategies
 from src.strategies.intraday.base import IntradayStrategy
 
-# 전략별 상세 메타데이터 (GPT-4.1 최적화 + 홍인기 필터 적용)
+# 전략별 상세 메타데이터 (2026-02-27 최적화)
+# 전략1(morning_rsi WR41.7%), 전략3(modified_rsi WR53.4%) 제거
+# 갭반전 단독 + SL 3%→4% (WR +7.4%p, MDD -5%→-3.1%)
 STRATEGY_META: dict[str, dict] = {
-    "morning_rsi_neutral_atr": {
-        "display_name": "전략1: 오전 모멘텀 (GPT-4.1)",
-        "description": "장 초반 강한 모멘텀 + 거래량 가속도 + 홍인기 필터",
-        "time_window": "09:30 ~ 11:00",
-        "backtest_return": "+11.23% (IS)",
-        "backtest_wr": "54.4%",
-        "backtest_trades": 49,
-        "sl": "3%",
-        "tp": "5%",
-        "conditions": [
-            "RSI 40~60 (중립 구간)",
-            "ATR ≥ 0.45% (변동성 확인)",
-            "거래량 ≥ 10일 평균 × 1.2",
-            "종가 > VWAP",
-            "직전 2봉 양봉",
-            "거래량 가속도 ≥ 5% (GPT-4.1)",
-            "최근3봉 ATR ≥ 0.4% (GPT-4.1)",
-            "홍인기: 시총≥5000억, 끼≥30",
-        ],
-    },
-    "modified_rsi_neutral_atr": {
-        "display_name": "전략3: 종일 VWAP 이격도",
-        "description": "장 전체에서 VWAP 위 0.2% 이상 + 홍인기 필터 (1위 전략)",
-        "time_window": "09:00 ~ 14:00",
-        "backtest_return": "+30.03% (IS)",
-        "backtest_wr": "55.3%",
-        "backtest_trades": 152,
-        "sl": "3%",
-        "tp": "5%",
-        "conditions": [
-            "RSI 40~60 (중립 구간)",
-            "ATR ≥ 0.50%",
-            "종가 > VWAP × 1.002",
-            "직전 2봉 양봉",
-            "홍인기: 시총≥5000억, 끼≥30",
-            "일봉자리: 신고가/전고점돌파만",
-        ],
-    },
     "opening_gap_reversal": {
         "display_name": "갭반전: 오프닝 갭 반전",
         "description": "강한 종목 갭다운 + 첫봉 양봉 → 반등 매수 (Hong Strong 필터)",
         "time_window": "09:05 ~ 11:30",
-        "backtest_return": "+52.09% (60일)",
-        "backtest_wr": "64.5%",
-        "backtest_trades": 121,
-        "sl": "3%",
+        "backtest_return": "+73.0% (60일, 슬리피지 0.1%)",
+        "backtest_wr": "63.8%",
+        "backtest_trades": 138,
+        "sl": "4%",
         "tp": "5%",
         "conditions": [
             "전일종가 대비 갭다운 -0.3% ~ -5%",
@@ -64,6 +28,7 @@ STRATEGY_META: dict[str, dict] = {
             "첫 봉 거래량 ≥ 전일 평균 1x",
             "bar 1~2 (09:05~09:10) 진입",
             "Hong Strong: 신고가/전고점돌파만",
+            "SL 4% / TP 5% 전량매도",
             "시간청산: 11:30",
         ],
     },
@@ -349,7 +314,7 @@ class StrategyRunner:
                 "display_name": meta.get("display_name", s.name),
                 "description": meta.get("description", ""),
                 "time_window": meta.get("time_window", ""),
-                "sl": meta.get("sl", "3%"),
+                "sl": meta.get("sl", "4%"),
                 "tp": meta.get("tp", "5%"),
                 "conditions": meta.get("conditions", []),
                 "backtest_return": meta.get("backtest_return", ""),

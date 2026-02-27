@@ -1383,7 +1383,7 @@ class TradingEngine:
                     "display_name": meta.get("display_name", s.name),
                     "description": meta.get("description", ""),
                     "time_window": meta.get("time_window", ""),
-                    "sl": meta.get("sl", "3%"),
+                    "sl": meta.get("sl", "4%"),
                     "tp": meta.get("tp", "5%"),
                     "conditions": meta.get("conditions", []),
                     "backtest_return": meta.get("backtest_return", ""),

@@ -45,6 +45,7 @@ INITIAL_CAPITAL = 10_000_000
 MAX_POSITIONS = 3
 COMMISSION = 0.00015
 TAX = 0.0023
+SLIPPAGE = 0.001  # 0.1% 슬리피지 (API 지연 반영)
 
 # ── 데이터드리븐 설정 ──
 DD_POSITION_PCT = 0.40
@@ -496,7 +497,9 @@ def _compute_prev_day_data_for_sim(intraday_data, daily_by_date, all_dates):
     return prev_day_data
 
 
-def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
+def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None,
+                   override_sl=None, override_tp=None, skip_strategies=None,
+                   gap_params=None):
 
     # 날짜별 5분봉 그룹핑
     date_code_df = {}
@@ -523,6 +526,29 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
     dd_strategies = get_data_driven_strategies()
     gap_strategy = get_gap_strategy()
     dd_strategies.append(gap_strategy)
+
+    # 전략 필터링
+    _skip = set(skip_strategies or [])
+    if _skip:
+        dd_strategies = [s for s in dd_strategies if s.name not in _skip]
+
+    # SL/TP 오버라이드 (전략 인스턴스 직접 패치)
+    if override_sl is not None:
+        for s in dd_strategies:
+            s.stop_loss_pct = override_sl
+    if override_tp is not None:
+        for s in dd_strategies:
+            s.take_profit_pct = override_tp
+
+    # 갭 전략 세부 파라미터 오버라이드
+    if gap_params:
+        for s in dd_strategies:
+            if s.name == "opening_gap_reversal":
+                for k, v in gap_params.items():
+                    if k == "exit_time":
+                        s.exit_time = v
+                    else:
+                        setattr(s, k, v)
 
     # 갭 전략에 전일 데이터 주입
     prev_day_data = _compute_prev_day_data_for_sim(
@@ -842,6 +868,9 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None):
                 if price is None or price <= 0:
                     continue
 
+                # 슬리피지 반영 (실투자 API 지연 → 불리한 가격 체결)
+                price = price * (1 + SLIPPAGE)
+
                 total_equity = capital + sum(
                     pos.entry_price * pos.quantity for pos in positions.values()
                 )
@@ -1028,6 +1057,7 @@ def main():
     print(f"  자본금: {INITIAL_CAPITAL:,}원 | 최대 {MAX_POSITIONS}종목")
     print(f"  DD: SL{DD_SL*100:.0f}% TP{DD_TP*100:.0f}% | 경윤: SL{V6_SL*100:.0f}% TP{V6_TP*100:.0f}%")
     print(f"  갭반전: SL2.5% TP5% @11:30 (Hong Strong 필수)")
+    print(f"  슬리피지: {SLIPPAGE*100:.1f}% (실투자 API 지연 반영)")
     print(f"  경윤 v6.2: 품질{V6_MIN_QUALITY}+, 70-79스킵, 등락률{V6_MIN_DAILY_CHANGE}%+")
     print("=" * 70)
 

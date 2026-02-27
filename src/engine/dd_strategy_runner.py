@@ -1,11 +1,12 @@
-"""데이터드리븐 전략 Runner - strategy 1 + strategy 3.
+"""데이터드리븐 전략 Runner - 갭 반전 전략 전용.
 
-시뮬레이션(simulate_combined_v2.py)과 동일하게
-- MorningRSINeutralATRStrategy (전략1: 09:30~11시)
-- ModifiedRSINeutralATRStrategy (전략3: 09~14시)
-를 실시간 5분봉(aggregator) 기반으로 실행.
+최적화 결과 (2026-02-27):
+- 전략1(morning_rsi) WR 41.7%, 전략3(modified_rsi) WR 53.4% → 제거
+- 갭 반전(opening_gap_reversal) WR 62.1% → 단독 실행
+- SL 3%→4% (넓은 손절로 WR +7.4%p, MDD -5%→-3.1%)
+- 경윤 v6.2는 GyleeRunner에서 별도 실행
 
-SL=3%, TP=5% (전량매도), 포지션사이징=40%.
+SL=4%, TP=5% (전량매도), 포지션사이징=40%.
 GyleeRunner와 포지션 한도 공유 (총 max_positions=3).
 """
 
@@ -17,12 +18,6 @@ from loguru import logger
 
 from src.config.settings import settings
 from src.engine.scheduler import is_market_hours
-from src.strategies.data_driven.intraday_strategy_1 import (
-    MorningRSINeutralATRStrategy,
-)
-from src.strategies.data_driven.intraday_strategy_3 import (
-    ModifiedRSINeutralATRStrategy,
-)
 from src.strategies.data_driven.intraday_strategy_gap import (
     OpeningGapReversalStrategy,
 )
@@ -33,8 +28,8 @@ class DDStrategyRunner:
 
     STRATEGY_PREFIX = "DD_"
 
-    # 시뮬레이션 동일 파라미터
-    DD_SL = 0.03           # 3% 손절
+    # 최적화 파라미터 (2026-02-27)
+    DD_SL = 0.04           # 4% 손절 (WR +7.4%p, MDD 개선)
     DD_TP = 0.05           # 5% 익절 (전량)
     DD_POSITION_PCT = 0.40  # 포지션당 40%
 
@@ -44,10 +39,8 @@ class DDStrategyRunner:
         self._scan_task: Optional[asyncio.Task] = None
         self._monitor_task: Optional[asyncio.Task] = None
 
-        # 전략 인스턴스
+        # 전략 인스턴스 (갭 반전만 - 최적화 결과)
         self.strategies = [
-            MorningRSINeutralATRStrategy(),
-            ModifiedRSINeutralATRStrategy(),
             OpeningGapReversalStrategy(),
         ]
 
@@ -74,8 +67,8 @@ class DDStrategyRunner:
         self._scan_task = asyncio.create_task(self._scan_loop())
         self._monitor_task = asyncio.create_task(self._position_monitor_loop())
 
-        self._add_event("DD_STARTED", "DD 전략 시작 (전략1+3+갭반전)")
-        logger.info("DD 전략 Runner 시작 (전략1+3+갭반전)")
+        self._add_event("DD_STARTED", "DD 전략 시작 (갭반전 SL4%)")
+        logger.info("DD 전략 Runner 시작 (갭반전 SL4%)")
         return {"success": True, "message": "DD 전략 시작 (전략1+3+갭반전)"}
 
     async def stop(self) -> dict:
@@ -108,7 +101,7 @@ class DDStrategyRunner:
     # ══════════════════════════════════════════════════════
 
     async def _scan_loop(self):
-        """3분 간격 DD 전략 스캔.
+        """1분 간격 DD 전략 스캔.
 
         모든 종목의 최신 5분봉에서 전략1/3의 진입 시그널 확인.
         시뮬레이션과 동일하게 precompute_day + check_entry_fast 사용.
@@ -132,7 +125,7 @@ class DDStrategyRunner:
                 # 포지션 한도 체크
                 total_pos = self._count_strategy_positions()
                 if total_pos >= settings.max_positions:
-                    await asyncio.sleep(180)
+                    await asyncio.sleep(60)
                     continue
 
                 # 모든 종목 스캔
@@ -239,7 +232,7 @@ class DDStrategyRunner:
                         f"진입 {entries_executed}건",
                     )
 
-                await asyncio.sleep(180)
+                await asyncio.sleep(60)
 
             except asyncio.CancelledError:
                 break
@@ -308,7 +301,41 @@ class DDStrategyRunner:
                     latest_bar_time = df.index[-1]
                     prev = last_checked_bar.get(code)
                     if prev is not None and latest_bar_time <= prev:
-                        continue  # 새 봉 없음 → SL/TP 체크 스킵
+                        # 새 봉 없음 → 실시간 가격으로 SL/TP 체크
+                        cp = pos.current_price
+                        if cp > 0:
+                            if cp <= pos.stop_loss_price:
+                                pnl_pct = (
+                                    pos.stop_loss_price / pos.avg_price - 1
+                                ) * 100
+                                await self._execute_sell(
+                                    code, pos.quantity, "손절",
+                                    exit_price=pos.stop_loss_price,
+                                )
+                                self._add_event(
+                                    "DD_SL",
+                                    f"DD 손절(실시간): {pos.stock_name} "
+                                    f"({pnl_pct:+.1f}%) "
+                                    f"[현재가={cp:,.0f}]",
+                                    severity="WARNING",
+                                )
+                                last_checked_bar.pop(code, None)
+                            elif cp >= pos.take_profit_price:
+                                pnl_pct = (
+                                    pos.take_profit_price / pos.avg_price - 1
+                                ) * 100
+                                await self._execute_sell(
+                                    code, pos.quantity, "익절",
+                                    exit_price=pos.take_profit_price,
+                                )
+                                self._add_event(
+                                    "DD_TP",
+                                    f"DD 익절(실시간): {pos.stock_name} "
+                                    f"({pnl_pct:+.1f}%) "
+                                    f"[현재가={cp:,.0f}]",
+                                )
+                                last_checked_bar.pop(code, None)
+                        continue
 
                     last_checked_bar[code] = latest_bar_time
 
