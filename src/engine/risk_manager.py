@@ -1,11 +1,14 @@
-"""3-Layer risk management for live trading.
+"""Multi-layer risk management for live trading.
 
-Phase 1: 연속손실 차단 (3SL → 당일 진입 중단)
-Phase 3: 종목 쿨다운, 일일 손실 한도 2%로 강화
+Layer 1 (Pre-Trade): 주문 전 검증
+Layer 2 (Post-Trade): 포지션 SL/TP 모니터링
+Layer 3 (Circuit Breaker): 일일 손실 한도 (2%)
+Layer 4 (SL Cooldown): SL 후 60분 쿨다운 + 포지션 축소
+Layer 5 (Stock Cooldown): 종목별 재진입 차단 + 당일 2회 제한
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from loguru import logger
 
@@ -20,21 +23,27 @@ class RiskCheck:
 
 
 class RiskManager:
-    """3-Layer risk management system.
+    """Multi-layer risk management system.
 
     Layer 1 (Pre-Trade): Check before placing orders
     Layer 2 (Post-Trade): Monitor positions after entry
     Layer 3 (Circuit Breaker): Emergency stop on daily loss limit
-    Layer 4 (Consecutive Loss): Pause after N consecutive stop-losses
+    Layer 4 (SL Cooldown): SL 후 60분 쿨다운 + 연속SL 시 포지션 50% 축소
     Layer 5 (Stock Cooldown): Block re-entry after SL on same stock
     """
+
+    # SL 후 쿨다운 시간 (분)
+    SL_COOLDOWN_MINUTES = 60
+    # 연속 N회 SL 후 포지션 크기 축소
+    POSITION_REDUCE_AFTER = 2
+    POSITION_REDUCE_SCALE = 0.5  # 50%로 축소
 
     def __init__(
         self,
         position_mgr: PositionManager,
         max_position_pct: float = 0.10,     # 종목당 최대 10%
         max_positions: int = 10,
-        max_daily_loss_pct: float = 0.02,   # 일일 최대 손실 2% (기존 3%에서 강화)
+        max_daily_loss_pct: float = 0.02,   # 일일 최대 손실 2%
         max_single_loss_pct: float = 0.05,  # 단일 종목 최대 손실 5%
     ):
         self.pm = position_mgr
@@ -45,9 +54,9 @@ class RiskManager:
         self._circuit_breaker_active = False
         self._circuit_breaker_time: datetime | None = None
 
-        # Layer 4: 연속손실 차단
+        # Layer 4: SL 후 시간 쿨다운 (연속차단 대신)
         self._consecutive_losses = 0
-        self._consecutive_loss_limit = 3  # 연속 3SL → 당일 진입 중단
+        self._sl_cooldown_until: datetime | None = None  # SL 후 쿨다운 만료 시각
 
         # Layer 5: 종목 쿨다운
         self._stock_cooldown: dict[str, datetime] = {}  # SL 종목 → 당일 재진입 차단
@@ -62,11 +71,21 @@ class RiskManager:
     def consecutive_losses(self) -> int:
         return self._consecutive_losses
 
+    @property
+    def position_scale(self) -> float:
+        """연속SL에 따른 포지션 크기 배율 (1.0 = 100%, 0.5 = 50%)."""
+        if self._consecutive_losses >= self.POSITION_REDUCE_AFTER:
+            return self.POSITION_REDUCE_SCALE
+        return 1.0
+
     def is_entry_paused(self) -> bool:
-        """연속손실 또는 서킷브레이커로 진입이 중단되었는지 확인."""
+        """쿨다운 또는 서킷브레이커로 진입이 중단되었는지 확인."""
         if self._circuit_breaker_active:
             return True
-        return self._consecutive_losses >= self._consecutive_loss_limit
+        # SL 후 시간 쿨다운 체크
+        if self._sl_cooldown_until and datetime.now() < self._sl_cooldown_until:
+            return True
+        return False
 
     # ── Layer 1: Pre-Trade Checks ──────────────────────────
 
@@ -80,11 +99,12 @@ class RiskManager:
         if self._circuit_breaker_active:
             return RiskCheck(False, "서킷브레이커 발동 - 매매 중단")
 
-        # 연속손실 차단
-        if self._consecutive_losses >= self._consecutive_loss_limit:
+        # SL 후 시간 쿨다운
+        if self._sl_cooldown_until and datetime.now() < self._sl_cooldown_until:
+            remaining = (self._sl_cooldown_until - datetime.now()).seconds // 60
             return RiskCheck(
                 False,
-                f"연속 {self._consecutive_losses}회 손절 - 당일 신규진입 중단"
+                f"SL 쿨다운 중 (잔여 {remaining}분)"
             )
 
         # Max positions
@@ -168,30 +188,38 @@ class RiskManager:
         self._circuit_breaker_active = False
         self._circuit_breaker_time = None
 
-    # ── Layer 4: 연속손실 차단 ─────────────────────────────
+    # ── Layer 4: SL 쿨다운 + 포지션 축소 ─────────────────
 
     def record_trade_result(self, exit_reason: str, stock_code: str = "") -> None:
-        """거래 결과 기록 - 연속손실 추적 및 종목 쿨다운.
+        """거래 결과 기록 - SL 후 시간 쿨다운 + 종목 쿨다운.
 
-        Args:
-            exit_reason: "SL", "손절", "TP", "익절", "CLOSE", "시간청산" 등
-            stock_code: 종목 코드 (쿨다운 적용용)
+        SL 발생 시:
+        - 60분 시간 쿨다운 (신규 진입 차단)
+        - 해당 종목 당일 재진입 차단
+        - 연속 2SL 이후 포지션 크기 50% 축소
         """
-        if exit_reason in ("SL", "손절"):
+        if exit_reason in ("SL", "손절", "Stop loss"):
             self._consecutive_losses += 1
+            # SL 후 60분 쿨다운
+            self._sl_cooldown_until = (
+                datetime.now() + timedelta(minutes=self.SL_COOLDOWN_MINUTES)
+            )
+            # 종목 쿨다운
             if stock_code:
                 self._stock_cooldown[stock_code] = datetime.now()
-            if self._consecutive_losses >= self._consecutive_loss_limit:
-                logger.warning(
-                    f"연속 {self._consecutive_losses}회 손절 → 당일 신규진입 중단"
-                )
-        elif exit_reason in ("TP", "익절"):
-            # 익절 시 연속손실 카운트 리셋
+
+            logger.warning(
+                f"[리스크] SL 발생 → {self.SL_COOLDOWN_MINUTES}분 쿨다운 "
+                f"(연속 {self._consecutive_losses}회, "
+                f"포지션 배율 {self.position_scale:.0%})"
+            )
+        elif exit_reason in ("TP", "익절", "Take profit"):
             self._consecutive_losses = 0
+            self._sl_cooldown_until = None  # TP 시 쿨다운 즉시 해제
 
         logger.info(
-            f"[리스크] 거래결과 기록: {exit_reason} "
-            f"(연속손실: {self._consecutive_losses}/{self._consecutive_loss_limit})"
+            f"[리스크] 거래결과: {exit_reason} "
+            f"(연속SL: {self._consecutive_losses}, 배율: {self.position_scale:.0%})"
         )
 
     # ── Layer 5: 종목 쿨다운 ──────────────────────────────
@@ -215,6 +243,7 @@ class RiskManager:
     def reset_daily(self) -> None:
         """일일 리셋 - 새 거래일 시작 시 호출."""
         self._consecutive_losses = 0
+        self._sl_cooldown_until = None
         self._stock_cooldown.clear()
         self._stock_entry_count.clear()
         self.reset_circuit_breaker()
@@ -225,10 +254,18 @@ class RiskManager:
     def calculate_position_size(
         self, price: float, stop_loss_pct: float = 0.03
     ) -> int:
-        """Calculate position size respecting max position weight."""
+        """Calculate position size respecting max position weight.
+
+        연속SL 시 position_scale 적용 (2연속SL 후 50% 축소).
+        """
         equity = self.pm.total_equity
-        max_value = equity * self.max_position_pct
+        max_value = equity * self.max_position_pct * self.position_scale
         max_qty = int(max_value / price) if price > 0 else 0
+        if self.position_scale < 1.0:
+            logger.info(
+                f"[리스크] 포지션 축소 적용: {self.position_scale:.0%} "
+                f"(연속SL {self._consecutive_losses}회)"
+            )
         return max_qty
 
     def get_risk_status(self) -> dict:
@@ -240,7 +277,11 @@ class RiskManager:
             "daily_loss_limit": int(-self.pm.initial_capital * self.max_daily_loss_pct),
             "total_equity": int(self.pm.total_equity),
             "consecutive_losses": self._consecutive_losses,
-            "consecutive_loss_limit": self._consecutive_loss_limit,
+            "sl_cooldown_until": (
+                self._sl_cooldown_until.isoformat()
+                if self._sl_cooldown_until else None
+            ),
+            "position_scale": self.position_scale,
             "entry_paused": self.is_entry_paused(),
             "stocks_cooled_down": list(self._stock_cooldown.keys()),
             "stock_entry_counts": dict(self._stock_entry_count),
