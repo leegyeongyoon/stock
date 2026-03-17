@@ -28,8 +28,8 @@ class DDStrategyRunner:
 
     STRATEGY_PREFIX = "DD_"
 
-    # 최적화 파라미터 (2026-02-27)
-    DD_SL = 0.04           # 4% 손절 (WR +7.4%p, MDD 개선)
+    # 적응형 SL/TP (Phase 1-2)
+    DD_SL = 0.025          # 2.5% 손절 (오전 기준, 손실당 -25k로 절감)
     DD_TP = 0.05           # 5% 익절 (전량)
     DD_POSITION_PCT = 0.40  # 포지션당 40%
 
@@ -122,6 +122,11 @@ class DDStrategyRunner:
                     await asyncio.sleep(60)
                     continue
 
+                # 연속손실 차단 확인
+                if self.engine.risk_manager.is_entry_paused():
+                    await asyncio.sleep(60)
+                    continue
+
                 # 포지션 한도 체크
                 total_pos = self._count_strategy_positions()
                 if total_pos >= settings.max_positions:
@@ -151,6 +156,10 @@ class DDStrategyRunner:
 
                         # 이미 보유 중인 종목 스킵
                         if self.engine.position_manager.has_position(code):
+                            continue
+
+                        # 종목 쿨다운 체크 (SL 후 재진입 차단)
+                        if self.engine.risk_manager.is_stock_cooled_down(code):
                             continue
 
                         try:
@@ -450,6 +459,9 @@ class DDStrategyRunner:
                     order_id=order.order_id,
                 )
 
+                # 리스크매니저 진입 기록
+                self.engine.risk_manager.record_entry(stock_code)
+
                 if self.engine.data_manager:
                     self.engine.data_manager.add_priority_codes({stock_code})
 
@@ -534,6 +546,9 @@ class DDStrategyRunner:
             trade = self.engine.position_manager.close_position(
                 stock_code, price, reason
             )
+
+            # 리스크매니저 거래 결과 기록 (연속손실 추적)
+            self.engine.risk_manager.record_trade_result(reason, stock_code)
 
             if trade:
                 trade_info = {

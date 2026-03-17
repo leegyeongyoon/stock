@@ -389,6 +389,10 @@ class TradingEngine:
         if self.risk_manager.check_circuit_breaker():
             return
 
+        # 연속손실 차단 확인
+        if self.risk_manager.is_entry_paused():
+            return
+
         held = self.position_manager.get_held_codes()
         codes = self.universe.codes
 
@@ -446,6 +450,9 @@ class TradingEngine:
                     take_profit_pct=signal.take_profit,
                     order_id=order.order_id,
                 )
+
+                # 리스크매니저 진입 기록
+                self.risk_manager.record_entry(signal.stock_code)
 
                 # Add to priority polling
                 self.data_manager.add_priority_codes({signal.stock_code})
@@ -612,6 +619,10 @@ class TradingEngine:
                     trade = self.position_manager.close_position(
                         code, exit_price, reason
                     )
+
+                    # 리스크매니저 거래 결과 기록 (연속손실 추적)
+                    self.risk_manager.record_trade_result(reason, code)
+
                     await self._emit_order(sell_order)
                     await self._emit_position_update()
 
@@ -670,6 +681,9 @@ class TradingEngine:
             await self.dd_runner.stop()
         if self.dd_runner:
             self.dd_runner.reset_daily()
+
+        # 리스크매니저 일일 리셋 (연속손실, 쿨다운 초기화)
+        self.risk_manager.reset_daily()
 
         # Cancel all open orders
         if self.order_manager:

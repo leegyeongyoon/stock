@@ -146,6 +146,12 @@ class HongStyleRunner:
                     await asyncio.sleep(180)
                     continue
 
+                # 연속손실 차단 확인
+                if self.engine.risk_manager.is_entry_paused():
+                    self._add_event("RISK_PAUSE", "연속손실 차단 - 진입 중단")
+                    await asyncio.sleep(180)
+                    continue
+
                 # ── 확신도 순위 계산 ──
                 ranking = []
                 for sa in result.stock_analyses:
@@ -213,6 +219,10 @@ class HongStyleRunner:
                     if hong_pos_count >= self.MAX_POSITIONS:
                         break
                     if self.engine.position_manager.has_position(item["stock_code"]):
+                        continue
+
+                    # 종목 쿨다운 체크 (SL 후 재진입 차단)
+                    if self.engine.risk_manager.is_stock_cooled_down(item["stock_code"]):
                         continue
 
                     # 시간대에 따른 확신도 조정
@@ -385,6 +395,9 @@ class HongStyleRunner:
                     order_id=order.order_id,
                 )
 
+                # 리스크매니저 진입 기록
+                self.engine.risk_manager.record_entry(stock_code)
+
                 # 우선 폴링 등록
                 if self.engine.data_manager:
                     self.engine.data_manager.add_priority_codes({stock_code})
@@ -461,6 +474,9 @@ class HongStyleRunner:
             trade = self.engine.position_manager.close_position(
                 stock_code, price, reason
             )
+
+            # 리스크매니저 거래 결과 기록 (연속손실 추적)
+            self.engine.risk_manager.record_trade_result(reason, stock_code)
 
             if trade:
                 trade_info = {
@@ -539,6 +555,9 @@ class HongStyleRunner:
             trade = self.engine.position_manager.partial_close_position(
                 stock_code, sell_quantity, price, reason
             )
+
+            # 리스크매니저 거래 결과 기록 (연속손실 추적)
+            self.engine.risk_manager.record_trade_result(reason, stock_code)
 
             if trade:
                 trade_info = {

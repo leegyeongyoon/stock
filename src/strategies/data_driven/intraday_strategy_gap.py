@@ -42,7 +42,7 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
         vol_ratio_min=1.0,
         vol_ratio_max=0,  # 0 = 상한 없음
         max_entry_bar=2,
-        stop_loss_pct=0.03,  # 3% (뉴스 그리드 최적)
+        stop_loss_pct=0.025,  # 2.5% (적응형 SL - 오전 기준)
         take_profit_pct=0.05,
         exit_hour=11,
         exit_minute=30,

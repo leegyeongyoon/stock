@@ -442,6 +442,12 @@ class GyleeRunner(HongStyleRunner):
                     await asyncio.sleep(180)
                     continue
 
+                # 연속손실 차단 확인
+                if self.engine.risk_manager.is_entry_paused():
+                    self._add_event("RISK_PAUSE", "연속손실 차단 - 진입 중단")
+                    await asyncio.sleep(180)
+                    continue
+
                 # ── v6.2 독립 스캔 (시뮬레이션 동일) ──
 
                 # 1. 유니버스: 거래대금 TOP100 OR 등락률 >= 3%
@@ -568,6 +574,9 @@ class GyleeRunner(HongStyleRunner):
                         continue
                     if self.engine.position_manager.has_position(e["code"]):
                         continue
+                    # 종목 쿨다운 체크 (SL 후 재진입 차단)
+                    if self.engine.risk_manager.is_stock_cooled_down(e["code"]):
+                        continue
                     if e["confidence"] < self.V6_MIN_CONFIDENCE:
                         continue
 
@@ -687,6 +696,9 @@ class GyleeRunner(HongStyleRunner):
                     take_profit_pct=self.TAKE_PROFIT_PCT,
                     order_id=order.order_id,
                 )
+
+                # 리스크매니저 진입 기록
+                self.engine.risk_manager.record_entry(stock_code)
 
                 if self.engine.data_manager:
                     self.engine.data_manager.add_priority_codes({stock_code})
