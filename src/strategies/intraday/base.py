@@ -98,6 +98,11 @@ class IntradayStrategy(ABC):
     def __init__(self, name: str):
         self.name = name
         self._daily_context = None
+        self._market_change_pct: float = 0.0  # KOSPI 전일대비 등락률
+
+    def set_market_change(self, pct: float) -> None:
+        """KOSPI 장중 등락률 설정 (전일종가 대비 %)."""
+        self._market_change_pct = pct
 
     # --- Daily context for hong-style filters ---
 

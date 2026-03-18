@@ -164,39 +164,40 @@ def load_all_data():
             "change_rate": float(row[8] or 0),
         }
 
-    # KOSPI 지수 일봉 (시장 상태 필터용)
-    kospi_daily = {}
+    # KOSPI 5분봉 (장중 실시간 시장 상태 필터용)
+    kospi_intraday = {}  # {datetime → 전일종가 대비 등락률%}
+    kospi_prev_close = {}  # {date → 전일종가}
     try:
         import yfinance as yf
-        kospi = yf.download("^KS11", start="2025-12-01", end="2026-12-31", progress=False)
-        if kospi is not None and not kospi.empty:
-            for idx, row in kospi.iterrows():
-                d = idx.date() if hasattr(idx, "date") else idx
-                prev_close = row.get("Close", 0)
-                open_price = row.get("Open", 0)
-                if isinstance(prev_close, pd.Series):
-                    prev_close = prev_close.iloc[0]
-                if isinstance(open_price, pd.Series):
-                    open_price = open_price.iloc[0]
-                kospi_daily[d] = {
-                    "open": float(open_price),
-                    "close": float(prev_close),
-                    "change_pct": float(row.get("Close", 0) / row.get("Open", 1) - 1) * 100 if float(row.get("Open", 0)) > 0 else 0,
-                }
-            # 전일종가 대비 당일 등락률 재계산
-            sorted_dates = sorted(kospi_daily.keys())
-            for i in range(1, len(sorted_dates)):
-                prev_d = sorted_dates[i - 1]
-                curr_d = sorted_dates[i]
-                prev_c = kospi_daily[prev_d]["close"]
-                curr_o = kospi_daily[curr_d]["open"]
-                if prev_c > 0:
-                    kospi_daily[curr_d]["gap_pct"] = (curr_o / prev_c - 1) * 100
-                    kospi_daily[curr_d]["day_change_pct"] = (kospi_daily[curr_d]["close"] / prev_c - 1) * 100
+        # 일봉: 전일종가 기준선
+        kospi_d = yf.download("^KS11", start="2025-10-01", end="2026-12-31", progress=False)
+        if kospi_d is not None and not kospi_d.empty:
+            sorted_idx = sorted(kospi_d.index)
+            for i in range(1, len(sorted_idx)):
+                d = sorted_idx[i].date() if hasattr(sorted_idx[i], "date") else sorted_idx[i]
+                c = kospi_d.loc[sorted_idx[i - 1], "Close"]
+                if isinstance(c, pd.Series):
+                    c = c.iloc[0]
+                kospi_prev_close[d] = float(c)
+
+        # 5분봉: 장중 가격 → 전일종가 대비 등락률
+        kospi_5m = yf.download("^KS11", period="60d", interval="5m", progress=False)
+        if kospi_5m is not None and not kospi_5m.empty:
+            if kospi_5m.index.tz is not None:
+                kospi_5m.index = kospi_5m.index.tz_convert("Asia/Seoul").tz_localize(None)
+            for idx, row in kospi_5m.iterrows():
+                d = idx.date()
+                prev_c = kospi_prev_close.get(d)
+                if prev_c and prev_c > 0:
+                    close_val = row["Close"]
+                    if isinstance(close_val, pd.Series):
+                        close_val = close_val.iloc[0]
+                    kospi_intraday[idx] = (float(close_val) / prev_c - 1) * 100
+            print(f"  KOSPI 5분봉: {len(kospi_intraday)}건, 전일종가 기준 {len(kospi_prev_close)}일")
     except Exception as e:
         print(f"  KOSPI 지수 로드 실패 (시장필터 미적용): {e}")
 
-    return intraday_data, daily_by_date, all_dates, kospi_daily
+    return intraday_data, daily_by_date, all_dates, kospi_intraday
 
 
 def _compute_prev_day_data(intraday_data, daily_by_date, all_dates):
@@ -569,7 +570,7 @@ class SimRiskManager:
 #  메인 시뮬레이션
 # ══════════════════════════════════════════════════════
 def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
-                        kospi_daily=None, verbose=True):
+                        kospi_intraday=None, verbose=True):
     """실투자 시뮬레이션 - 일별 상세 로그 출력."""
 
     # 날짜별 5분봉 그룹핑
@@ -625,13 +626,8 @@ def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
         v6_consec_loss = 0
         v6_day_stopped = False
         risk_mgr.reset_daily()
-
-        # ── 시장 상태 업데이트 (KOSPI 갭 = 당일시가/전일종가) ──
-        # 장 시작 시점에서 알 수 있는 정보만 사용 (미래편향 제거)
-        if kospi_daily and current_date in kospi_daily:
-            kd = kospi_daily[current_date]
-            gap_pct = kd.get("gap_pct", 0)
-            risk_mgr.update_market_regime(gap_pct)
+        for s in dd_strategies:
+            s.set_market_change(0.0)
 
         # ── 오버나잇 갭하락 손절 ──
         for code in list(positions.keys()):
@@ -737,6 +733,24 @@ def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
             if ct < time(9, 0) or ct > time(15, 30):
                 continue
             risk_mgr.tick_bar()
+
+            # ── KOSPI 장중 실시간 시장 상태 업데이트 ──
+            kospi_pct = None
+            if kospi_intraday:
+                # 정확한 타임스탬프 매칭 또는 가장 가까운 이전 봉
+                if ts in kospi_intraday:
+                    kospi_pct = kospi_intraday[ts]
+                else:
+                    for offset_min in [0, 5, 10, 15, 20, 30]:
+                        lookup = ts - timedelta(minutes=offset_min)
+                        if lookup in kospi_intraday:
+                            kospi_pct = kospi_intraday[lookup]
+                            break
+                if kospi_pct is not None:
+                    risk_mgr.update_market_regime(kospi_pct)
+                    # 전략들에게도 KOSPI 등락률 전달 (동적 RSI 범위용)
+                    for s in dd_strategies:
+                        s.set_market_change(kospi_pct)
 
             # 강제 청산
             if ct >= FORCE_CLOSE_TIME:
@@ -1164,11 +1178,9 @@ def main():
 
     print("\n  데이터 로딩...")
     t0 = time_module.time()
-    intraday_data, daily_by_date, all_dates, kospi_daily = load_all_data()
+    intraday_data, daily_by_date, all_dates, kospi_intraday = load_all_data()
     print(f"  5분봉: {len(intraday_data)}종목, {len(all_dates)}거래일")
     print(f"  기간: {min(all_dates)} ~ {max(all_dates)}")
-    if kospi_daily:
-        print(f"  KOSPI 지수: {len(kospi_daily)}거래일 로드")
     print(f"  로딩: {time_module.time() - t0:.1f}초")
 
     codes = list(intraday_data.keys())
@@ -1181,7 +1193,7 @@ def main():
     t0 = time_module.time()
     cap, trades, daily_records, rem, blocked = run_live_simulation(
         intraday_data, daily_by_date, daily_context, all_dates,
-        kospi_daily=kospi_daily, verbose=True
+        kospi_intraday=kospi_intraday, verbose=True
     )
     print(f"\n  완료: {time_module.time() - t0:.1f}초")
 

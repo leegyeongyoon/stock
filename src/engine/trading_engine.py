@@ -387,6 +387,9 @@ class TradingEngine:
             price = await self.client.get_current_price("069500")
             if price.change_rate != 0:
                 regime = self.risk_manager.update_market_regime(price.change_rate)
+                # 전략들에게도 KOSPI 등락률 전달 (동적 RSI 범위용)
+                for s in self.strategy_runner.strategies:
+                    s.set_market_change(price.change_rate)
                 if regime != "NORMAL":
                     self.add_log(
                         "MARKET_REGIME",
