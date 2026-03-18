@@ -164,7 +164,39 @@ def load_all_data():
             "change_rate": float(row[8] or 0),
         }
 
-    return intraday_data, daily_by_date, all_dates
+    # KOSPI 지수 일봉 (시장 상태 필터용)
+    kospi_daily = {}
+    try:
+        import yfinance as yf
+        kospi = yf.download("^KS11", start="2025-12-01", end="2026-12-31", progress=False)
+        if kospi is not None and not kospi.empty:
+            for idx, row in kospi.iterrows():
+                d = idx.date() if hasattr(idx, "date") else idx
+                prev_close = row.get("Close", 0)
+                open_price = row.get("Open", 0)
+                if isinstance(prev_close, pd.Series):
+                    prev_close = prev_close.iloc[0]
+                if isinstance(open_price, pd.Series):
+                    open_price = open_price.iloc[0]
+                kospi_daily[d] = {
+                    "open": float(open_price),
+                    "close": float(prev_close),
+                    "change_pct": float(row.get("Close", 0) / row.get("Open", 1) - 1) * 100 if float(row.get("Open", 0)) > 0 else 0,
+                }
+            # 전일종가 대비 당일 등락률 재계산
+            sorted_dates = sorted(kospi_daily.keys())
+            for i in range(1, len(sorted_dates)):
+                prev_d = sorted_dates[i - 1]
+                curr_d = sorted_dates[i]
+                prev_c = kospi_daily[prev_d]["close"]
+                curr_o = kospi_daily[curr_d]["open"]
+                if prev_c > 0:
+                    kospi_daily[curr_d]["gap_pct"] = (curr_o / prev_c - 1) * 100
+                    kospi_daily[curr_d]["day_change_pct"] = (kospi_daily[curr_d]["close"] / prev_c - 1) * 100
+    except Exception as e:
+        print(f"  KOSPI 지수 로드 실패 (시장필터 미적용): {e}")
+
+    return intraday_data, daily_by_date, all_dates, kospi_daily
 
 
 def _compute_prev_day_data(intraday_data, daily_by_date, all_dates):
@@ -426,17 +458,32 @@ def sname(code):
 #  리스크 관리
 # ══════════════════════════════════════════════════════
 class SimRiskManager:
+    """시뮬레이션용 리스크 매니저 - 라이브 RiskManager와 동일 로직.
+
+    Layer 3: 서킷브레이커 (일일 -2%)
+    Layer 4: SL 후 60분 시간 쿨다운 + 연속2SL 포지션 50% 축소
+    Layer 5: 종목 쿨다운 + 당일 2회 제한
+    Layer 6: 시장 상태 필터 (KOSPI -1% → 50% 축소, -2% → 진입 차단)
+    """
+    SL_COOLDOWN_BARS = 12  # 60분 = 12 * 5분봉
+    POSITION_REDUCE_AFTER = 2
+    POSITION_REDUCE_SCALE = 0.5
+    MARKET_CAUTION_PCT = -1.0
+    MARKET_DANGER_PCT = -2.0
+
     def __init__(self, initial_capital, max_daily_loss_pct=0.02,
-                 consecutive_loss_limit=3, max_stock_entries=2):
+                 max_stock_entries=2):
         self.initial_capital = initial_capital
         self.max_daily_loss_pct = max_daily_loss_pct
-        self.consecutive_loss_limit = consecutive_loss_limit
         self.max_stock_entries = max_stock_entries
         self._consecutive_losses = 0
         self._stock_cooldown = set()
         self._stock_entry_count = {}
         self._circuit_breaker = False
         self._day_pnl = 0.0
+        self._cooldown_bars_left = 0  # SL 후 남은 쿨다운 봉 수
+        self._market_regime = "NORMAL"
+        self._market_change_pct = 0.0
 
     def reset_daily(self):
         self._consecutive_losses = 0
@@ -444,14 +491,44 @@ class SimRiskManager:
         self._stock_entry_count.clear()
         self._circuit_breaker = False
         self._day_pnl = 0.0
+        self._cooldown_bars_left = 0
+        self._market_regime = "NORMAL"
+        self._market_change_pct = 0.0
+
+    def update_market_regime(self, kospi_change_pct):
+        """KOSPI 전일대비 등락률로 시장 상태 업데이트."""
+        self._market_change_pct = kospi_change_pct
+        if kospi_change_pct <= self.MARKET_DANGER_PCT:
+            self._market_regime = "DANGER"
+        elif kospi_change_pct <= self.MARKET_CAUTION_PCT:
+            self._market_regime = "CAUTION"
+        else:
+            self._market_regime = "NORMAL"
+
+    @property
+    def position_scale(self):
+        """연속SL + 시장상태에 따른 포지션 크기 배율."""
+        scale = 1.0
+        if self._consecutive_losses >= self.POSITION_REDUCE_AFTER:
+            scale *= self.POSITION_REDUCE_SCALE
+        if self._market_regime == "CAUTION":
+            scale *= 0.5
+        return scale
+
+    def tick_bar(self):
+        """5분봉 하나 경과 - 쿨다운 카운트다운."""
+        if self._cooldown_bars_left > 0:
+            self._cooldown_bars_left -= 1
 
     def record_trade(self, exit_reason, stock_code, pnl):
         self._day_pnl += pnl
         if exit_reason in ("손절", "SL"):
             self._consecutive_losses += 1
             self._stock_cooldown.add(stock_code)
+            self._cooldown_bars_left = self.SL_COOLDOWN_BARS
         elif exit_reason in ("익절", "TP", "1차익절"):
             self._consecutive_losses = 0
+            self._cooldown_bars_left = 0  # TP 시 쿨다운 해제
         if self._day_pnl / self.initial_capital < -self.max_daily_loss_pct:
             self._circuit_breaker = True
 
@@ -461,7 +538,9 @@ class SimRiskManager:
     def can_enter(self, stock_code):
         if self._circuit_breaker:
             return False
-        if self._consecutive_losses >= self.consecutive_loss_limit:
+        if self._cooldown_bars_left > 0:
+            return False
+        if self._market_regime == "DANGER":
             return False
         if stock_code in self._stock_cooldown:
             return False
@@ -473,10 +552,16 @@ class SimRiskManager:
         parts = []
         if self._circuit_breaker:
             parts.append("CB발동")
+        if self._market_regime != "NORMAL":
+            parts.append(f"시장{self._market_regime}({self._market_change_pct:+.1f}%)")
+        if self._cooldown_bars_left > 0:
+            parts.append(f"쿨다운{self._cooldown_bars_left*5}분")
         if self._consecutive_losses > 0:
             parts.append(f"연손{self._consecutive_losses}")
         if self._stock_cooldown:
-            parts.append(f"쿨다운{len(self._stock_cooldown)}종목")
+            parts.append(f"종목쿨{len(self._stock_cooldown)}")
+        if self.position_scale < 1.0:
+            parts.append(f"배율{self.position_scale:.0%}")
         return " | ".join(parts) if parts else "정상"
 
 
@@ -484,7 +569,7 @@ class SimRiskManager:
 #  메인 시뮬레이션
 # ══════════════════════════════════════════════════════
 def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
-                        verbose=True):
+                        kospi_daily=None, verbose=True):
     """실투자 시뮬레이션 - 일별 상세 로그 출력."""
 
     # 날짜별 5분봉 그룹핑
@@ -540,6 +625,13 @@ def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
         v6_consec_loss = 0
         v6_day_stopped = False
         risk_mgr.reset_daily()
+
+        # ── 시장 상태 업데이트 (KOSPI 갭 = 당일시가/전일종가) ──
+        # 장 시작 시점에서 알 수 있는 정보만 사용 (미래편향 제거)
+        if kospi_daily and current_date in kospi_daily:
+            kd = kospi_daily[current_date]
+            gap_pct = kd.get("gap_pct", 0)
+            risk_mgr.update_market_regime(gap_pct)
 
         # ── 오버나잇 갭하락 손절 ──
         for code in list(positions.keys()):
@@ -644,6 +736,7 @@ def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
             ct = ts.time() if hasattr(ts, "time") else ts
             if ct < time(9, 0) or ct > time(15, 30):
                 continue
+            risk_mgr.tick_bar()
 
             # 강제 청산
             if ct >= FORCE_CLOSE_TIME:
@@ -840,7 +933,7 @@ def run_live_simulation(intraday_data, daily_by_date, daily_context, all_dates,
                 total_equity = capital + sum(
                     pos.entry_price * pos.quantity for pos in positions.values()
                 )
-                invest = total_equity * p["alloc_pct"]
+                invest = total_equity * p["alloc_pct"] * risk_mgr.position_scale
                 qty = int(invest / price)
                 if qty <= 0:
                     continue
@@ -1064,16 +1157,18 @@ def main():
     print("=" * 70)
     print("  실투자 시뮬레이션 (NEW 알고리즘)")
     print(f"  자본금: {INITIAL_CAPITAL:,}원 | 최대 {MAX_POSITIONS}종목")
-    print("  시간대 9+10:45+11, 적응형 SL/TP, 연속3SL차단, 쿨다운, CB 2%")
+    print("  시간대 9+10:45+11, 적응형 SL/TP, 60분쿨다운, 시장상태필터, CB 2%")
     print("=" * 70)
 
     load_stock_names()
 
     print("\n  데이터 로딩...")
     t0 = time_module.time()
-    intraday_data, daily_by_date, all_dates = load_all_data()
+    intraday_data, daily_by_date, all_dates, kospi_daily = load_all_data()
     print(f"  5분봉: {len(intraday_data)}종목, {len(all_dates)}거래일")
     print(f"  기간: {min(all_dates)} ~ {max(all_dates)}")
+    if kospi_daily:
+        print(f"  KOSPI 지수: {len(kospi_daily)}거래일 로드")
     print(f"  로딩: {time_module.time() - t0:.1f}초")
 
     codes = list(intraday_data.keys())
@@ -1085,7 +1180,8 @@ def main():
     print(f"\n  시뮬레이션 시작...")
     t0 = time_module.time()
     cap, trades, daily_records, rem, blocked = run_live_simulation(
-        intraday_data, daily_by_date, daily_context, all_dates, verbose=True
+        intraday_data, daily_by_date, daily_context, all_dates,
+        kospi_daily=kospi_daily, verbose=True
     )
     print(f"\n  완료: {time_module.time() - t0:.1f}초")
 

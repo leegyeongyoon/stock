@@ -5,6 +5,7 @@ Layer 2 (Post-Trade): 포지션 SL/TP 모니터링
 Layer 3 (Circuit Breaker): 일일 손실 한도 (2%)
 Layer 4 (SL Cooldown): SL 후 60분 쿨다운 + 포지션 축소
 Layer 5 (Stock Cooldown): 종목별 재진입 차단 + 당일 2회 제한
+Layer 6 (Market Regime): KOSPI 지수 하락 시 진입 축소/차단
 """
 
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ class RiskManager:
     Layer 3 (Circuit Breaker): Emergency stop on daily loss limit
     Layer 4 (SL Cooldown): SL 후 60분 쿨다운 + 연속SL 시 포지션 50% 축소
     Layer 5 (Stock Cooldown): Block re-entry after SL on same stock
+    Layer 6 (Market Regime): Block/reduce entries when KOSPI index is crashing
     """
 
     # SL 후 쿨다운 시간 (분)
@@ -37,6 +39,10 @@ class RiskManager:
     # 연속 N회 SL 후 포지션 크기 축소
     POSITION_REDUCE_AFTER = 2
     POSITION_REDUCE_SCALE = 0.5  # 50%로 축소
+
+    # Layer 6: 시장 상태 필터 임계값
+    MARKET_CAUTION_PCT = -1.0   # -1% 이하: 포지션 50% 축소
+    MARKET_DANGER_PCT = -2.0    # -2% 이하: 신규 진입 완전 차단
 
     def __init__(
         self,
@@ -63,6 +69,11 @@ class RiskManager:
         self._stock_entry_count: dict[str, int] = {}     # 종목별 당일 진입 횟수
         self._max_stock_entries = 2  # 같은 종목 당일 최대 2회 진입
 
+        # Layer 6: 시장 상태
+        self._market_change_pct: float = 0.0  # KOSPI 전일대비 등락률
+        self._market_regime: str = "NORMAL"   # NORMAL / CAUTION / DANGER
+        self._market_updated_at: datetime | None = None
+
     @property
     def is_circuit_breaker_active(self) -> bool:
         return self._circuit_breaker_active
@@ -73,17 +84,25 @@ class RiskManager:
 
     @property
     def position_scale(self) -> float:
-        """연속SL에 따른 포지션 크기 배율 (1.0 = 100%, 0.5 = 50%)."""
+        """연속SL + 시장상태에 따른 포지션 크기 배율."""
+        scale = 1.0
+        # 연속SL 축소
         if self._consecutive_losses >= self.POSITION_REDUCE_AFTER:
-            return self.POSITION_REDUCE_SCALE
-        return 1.0
+            scale *= self.POSITION_REDUCE_SCALE
+        # 시장 주의 시 추가 축소
+        if self._market_regime == "CAUTION":
+            scale *= 0.5
+        return scale
 
     def is_entry_paused(self) -> bool:
-        """쿨다운 또는 서킷브레이커로 진입이 중단되었는지 확인."""
+        """쿨다운, 서킷브레이커, 또는 시장 급락으로 진입이 중단되었는지 확인."""
         if self._circuit_breaker_active:
             return True
         # SL 후 시간 쿨다운 체크
         if self._sl_cooldown_until and datetime.now() < self._sl_cooldown_until:
+            return True
+        # 시장 급락 시 완전 차단
+        if self._market_regime == "DANGER":
             return True
         return False
 
@@ -105,6 +124,13 @@ class RiskManager:
             return RiskCheck(
                 False,
                 f"SL 쿨다운 중 (잔여 {remaining}분)"
+            )
+
+        # 시장 급락 차단
+        if self._market_regime == "DANGER":
+            return RiskCheck(
+                False,
+                f"시장 급락 ({self._market_change_pct:+.1f}%) - 신규 진입 차단"
             )
 
         # Max positions
@@ -222,6 +248,44 @@ class RiskManager:
             f"(연속SL: {self._consecutive_losses}, 배율: {self.position_scale:.0%})"
         )
 
+    # ── Layer 6: 시장 상태 필터 ─────────────────────────────
+
+    def update_market_regime(self, change_pct: float) -> str:
+        """KOSPI/KODEX200 전일대비 등락률로 시장 상태 업데이트.
+
+        Args:
+            change_pct: 전일대비 등락률 (예: -2.5 = -2.5%)
+
+        Returns:
+            시장 상태 ("NORMAL" / "CAUTION" / "DANGER")
+        """
+        self._market_change_pct = change_pct
+        self._market_updated_at = datetime.now()
+
+        old_regime = self._market_regime
+        if change_pct <= self.MARKET_DANGER_PCT:
+            self._market_regime = "DANGER"
+        elif change_pct <= self.MARKET_CAUTION_PCT:
+            self._market_regime = "CAUTION"
+        else:
+            self._market_regime = "NORMAL"
+
+        if self._market_regime != old_regime:
+            logger.warning(
+                f"[리스크] 시장 상태 변경: {old_regime} → {self._market_regime} "
+                f"(KOSPI {change_pct:+.1f}%)"
+            )
+
+        return self._market_regime
+
+    @property
+    def market_regime(self) -> str:
+        return self._market_regime
+
+    @property
+    def market_change_pct(self) -> float:
+        return self._market_change_pct
+
     # ── Layer 5: 종목 쿨다운 ──────────────────────────────
 
     def record_entry(self, stock_code: str) -> None:
@@ -246,6 +310,9 @@ class RiskManager:
         self._sl_cooldown_until = None
         self._stock_cooldown.clear()
         self._stock_entry_count.clear()
+        self._market_change_pct = 0.0
+        self._market_regime = "NORMAL"
+        self._market_updated_at = None
         self.reset_circuit_breaker()
         logger.info("[리스크] 일일 리셋 완료")
 
@@ -285,4 +352,6 @@ class RiskManager:
             "entry_paused": self.is_entry_paused(),
             "stocks_cooled_down": list(self._stock_cooldown.keys()),
             "stock_entry_counts": dict(self._stock_entry_count),
+            "market_regime": self._market_regime,
+            "market_change_pct": self._market_change_pct,
         }
