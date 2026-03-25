@@ -63,13 +63,18 @@ class DDStrategyRunner:
         if self.enabled:
             return {"success": False, "message": "DD Runner 이미 실행 중"}
 
+        # 전일 데이터 + daily_context 로드 (Gap 전략 필수)
+        self._load_daily_context()
+        self._load_prev_day_data()
+        self._load_news_scores()
+
         self.enabled = True
         self._scan_task = asyncio.create_task(self._scan_loop())
         self._monitor_task = asyncio.create_task(self._position_monitor_loop())
 
-        self._add_event("DD_STARTED", "DD 전략 시작 (갭반전 SL4%)")
-        logger.info("DD 전략 Runner 시작 (갭반전 SL4%)")
-        return {"success": True, "message": "DD 전략 시작 (전략1+3+갭반전)"}
+        self._add_event("DD_STARTED", "DD 전략 시작 (갭반전 SL2.5%/TP5%)")
+        logger.info("DD 전략 Runner 시작 (갭반전 SL2.5%/TP5%)")
+        return {"success": True, "message": "DD 전략 시작 (갭반전)"}
 
     async def stop(self) -> dict:
         """DD 자동매매 중지."""

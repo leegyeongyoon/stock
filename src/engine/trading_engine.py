@@ -385,18 +385,17 @@ class TradingEngine:
             if not self.client:
                 return
             price = await self.client.get_current_price("069500")
-            if price.change_rate != 0:
-                regime = self.risk_manager.update_market_regime(price.change_rate)
-                # 전략들에게도 KOSPI 등락률 전달 (동적 RSI 범위용)
-                for s in self.strategy_runner.strategies:
-                    s.set_market_change(price.change_rate)
-                if regime != "NORMAL":
-                    self.add_log(
-                        "MARKET_REGIME",
-                        f"시장 상태: {regime} (KODEX200 {price.change_rate:+.1f}%)",
-                    )
+            regime = self.risk_manager.update_market_regime(price.change_rate)
+            # 전략들에게도 KOSPI 등락률 전달 (동적 RSI 범위용)
+            for s in self.strategy_runner.strategies:
+                s.set_market_change(price.change_rate)
+            if regime != "NORMAL":
+                self.add_log(
+                    "MARKET_REGIME",
+                    f"시장 상태: {regime} (KODEX200 {price.change_rate:+.1f}%)",
+                )
         except Exception as e:
-            logger.debug(f"시장 상태 조회 실패 (무시): {e}")
+            logger.warning(f"시장 상태 조회 실패: {e}")
 
     async def _scan_and_trade(self) -> None:
         """Scan for signals and execute trades.
