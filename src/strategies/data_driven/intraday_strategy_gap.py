@@ -5,6 +5,10 @@
 핵심 발견: Hong 신고가/전고점돌파(Hong Strong) 필터가 +14.9%p 승률 엣지.
   - Hong Strong O: 57.0% WR vs X: 42.1% WR
 
+A/B 분리 (2026-03-25):
+  - Gap-A (vol surge 1.5x): 70건, WR 58.1%, SL 2.5%, TP 5%
+  - Gap-B (vol surge 1.5x + 전일 음봉): 16건, WR 87.5%, SL 3.0%, TP 10%
+
 진입 조건:
   1. 전일종가 대비 갭다운 (gap_min ~ gap_max)
   2. 첫 봉(09:00) 양봉 (close > open)
@@ -13,10 +17,12 @@
   5. Hong 필터 (옵션): 시총 5000억+, 기관 50~200억
   6. Hong Strong 필터 (필수): 일봉자리 = 신고가 or 전고점돌파
   7. 뉴스 확신 점수 (옵션): 양호 이상
+  8. 전일 거래량 급증 (옵션): 20일 평균 대비 1.5x+
+  9. 전일 음봉 (옵션): 전일 close < open
 
 청산:
-  - SL: -2.5%
-  - TP: +5%
+  - SL: -2.5% (A) / -3.0% (B)
+  - TP: +5% (A) / +10% (B)
   - 시간 청산: 11:30까지 TP 미달 시 청산
 """
 
@@ -37,6 +43,7 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
 
     def __init__(
         self,
+        name="opening_gap_reversal",
         gap_min=-0.05,
         gap_max=-0.003,  # -0.3% (뉴스 그리드 최적)
         vol_ratio_min=1.0,
@@ -49,8 +56,11 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
         require_hong_strong=True,
         use_hong_filter=False,
         min_news_score=0,
+        require_vol_surge=False,
+        vol_surge_threshold=1.5,
+        require_prev_bearish=False,
     ):
-        super().__init__(name="opening_gap_reversal")
+        super().__init__(name=name)
 
         self.gap_min = gap_min
         self.gap_max = gap_max
@@ -63,10 +73,16 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
         self.require_hong_strong = require_hong_strong
         self.use_hong_filter = use_hong_filter
         self.min_news_score = min_news_score
+        self.require_vol_surge = require_vol_surge
+        self.vol_surge_threshold = vol_surge_threshold
+        self.require_prev_bearish = require_prev_bearish
 
         # 전일 데이터 (외부 주입)
         # 형식: {code: {date: {"close": float, "avg_vol": float}}}
         self._prev_day_data = {}
+        # 전일 OHLCV + 20일 평균 거래량 (외부 주입)
+        # 형식: {code: {date: {"open": float, "close": float, "volume": float, "avg_vol_20d": float}}}
+        self._prev_daily_ohlcv = {}
         # 뉴스 확신 점수 (외부 주입)
         # 형식: {code: {date: float}} (-1 ~ +1, 양수=긍정)
         self._news_scores = {}
@@ -76,6 +92,13 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
     def set_prev_day_data(self, data: dict):
         """전일 종가/거래량 데이터 주입."""
         self._prev_day_data = data
+
+    def set_prev_daily_ohlcv(self, data: dict):
+        """전일 OHLCV + 20일 평균 거래량 주입.
+
+        형식: {code: {date: {"open", "close", "volume", "avg_vol_20d"}}}
+        """
+        self._prev_daily_ohlcv = data
 
     def set_news_scores(self, data: dict):
         """뉴스 확신 점수 주입. {code: {date: float}}."""
@@ -188,6 +211,33 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
             if not self.passes_intraday_value_filter(bar_idx, indicators):
                 return None
 
+        # 전일 거래량 급증 필터 (옵션)
+        vol_surge_info = ""
+        if self.require_vol_surge:
+            ohlcv = (
+                self._prev_daily_ohlcv
+                .get(self._current_code, {})
+                .get(self._current_date)
+            )
+            if not ohlcv or ohlcv.get("avg_vol_20d", 0) <= 0:
+                return None
+            surge_ratio = ohlcv["volume"] / ohlcv["avg_vol_20d"]
+            if surge_ratio < self.vol_surge_threshold:
+                return None
+            vol_surge_info = f", surge={surge_ratio:.1f}x"
+
+        # 전일 음봉 필터 (옵션)
+        if self.require_prev_bearish:
+            ohlcv = (
+                self._prev_daily_ohlcv
+                .get(self._current_code, {})
+                .get(self._current_date)
+            )
+            if not ohlcv:
+                return None
+            if ohlcv["close"] >= ohlcv["open"]:
+                return None  # 전일 양봉 → 스킵
+
         # 뉴스 확신 점수 필터 (옵션)
         news_score = 0.0
         if self.min_news_score > 0 and self._news_scores:
@@ -202,7 +252,7 @@ class OpeningGapReversalStrategy(HongFilterMixin, IntradayStrategy):
         return {
             "reason": (
                 f"gap={gap_pct:.2%}, vol={vol_ratio:.1f}x, "
-                f"hong={hong_reason}"
+                f"hong={hong_reason}{vol_surge_info}"
                 + (f", news={news_score:.2f}" if news_score else "")
             ),
             "stop_loss": self.stop_loss_pct,

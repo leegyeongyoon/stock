@@ -1,13 +1,12 @@
-"""데이터드리븐 전략 Runner - 갭 반전 전략 전용.
+"""데이터드리븐 전략 Runner - 갭 반전 A/B 분리 전략.
 
-최적화 결과 (2026-02-27):
-- 전략1(morning_rsi) WR 41.7%, 전략3(modified_rsi) WR 53.4% → 제거
-- 갭 반전(opening_gap_reversal) WR 62.1% → 단독 실행
-- SL 3%→4% (넓은 손절로 WR +7.4%p, MDD -5%→-3.1%)
+A/B 분리 (2026-03-25):
+- Gap-A (vol surge 1.5x): WR 58.1%, SL 2.5%, TP 5%
+- Gap-B (vol surge 1.5x + 전일 음봉): WR 87.5%, SL 3.0%, TP 10%
+- B 우선 진입, 동일 종목 중복 방지
 - 경윤 v6.2는 GyleeRunner에서 별도 실행
 
-SL=4%, TP=5% (전량매도), 포지션사이징=40%.
-GyleeRunner와 포지션 한도 공유 (총 max_positions=3).
+포지션사이징=40%. GyleeRunner와 포지션 한도 공유 (총 max_positions=3).
 """
 
 import asyncio
@@ -18,9 +17,7 @@ from loguru import logger
 
 from src.config.settings import settings
 from src.engine.scheduler import is_market_hours
-from src.strategies.data_driven.intraday_strategy_gap import (
-    OpeningGapReversalStrategy,
-)
+from src.strategies.data_driven import get_gap_strategy_a, get_gap_strategy_b
 
 
 class DDStrategyRunner:
@@ -28,9 +25,6 @@ class DDStrategyRunner:
 
     STRATEGY_PREFIX = "DD_"
 
-    # 적응형 SL/TP (Phase 1-2)
-    DD_SL = 0.025          # 2.5% 손절 (오전 기준, 손실당 -25k로 절감)
-    DD_TP = 0.05           # 5% 익절 (전량)
     DD_POSITION_PCT = 0.40  # 포지션당 40%
 
     def __init__(self, engine):
@@ -39,9 +33,10 @@ class DDStrategyRunner:
         self._scan_task: Optional[asyncio.Task] = None
         self._monitor_task: Optional[asyncio.Task] = None
 
-        # 전략 인스턴스 (갭 반전만 - 최적화 결과)
+        # 전략 인스턴스 (B 우선 → 동일 종목에서 B가 먼저 매칭)
         self.strategies = [
-            OpeningGapReversalStrategy(),
+            get_gap_strategy_b(),  # Gap-B: WR87.5%, SL3%, TP10%
+            get_gap_strategy_a(),  # Gap-A: WR58.1%, SL2.5%, TP5%
         ]
 
         # 상태
@@ -51,6 +46,8 @@ class DDStrategyRunner:
         self._entered_today: dict[str, set] = {
             s.name: set() for s in self.strategies
         }
+        # 모든 전략 통합 진입 종목 (중복 진입 방지)
+        self._entered_today_all: set = set()
         self._scan_stats: dict = {
             "stocks_scanned": 0,
             "signals_found": 0,
@@ -66,15 +63,17 @@ class DDStrategyRunner:
         # 전일 데이터 + daily_context 로드 (Gap 전략 필수)
         self._load_daily_context()
         self._load_prev_day_data()
+        self._load_prev_daily_ohlcv()
         self._load_news_scores()
 
         self.enabled = True
         self._scan_task = asyncio.create_task(self._scan_loop())
         self._monitor_task = asyncio.create_task(self._position_monitor_loop())
 
-        self._add_event("DD_STARTED", "DD 전략 시작 (갭반전 SL2.5%/TP5%)")
-        logger.info("DD 전략 Runner 시작 (갭반전 SL2.5%/TP5%)")
-        return {"success": True, "message": "DD 전략 시작 (갭반전)"}
+        strat_names = ", ".join(s.name for s in self.strategies)
+        self._add_event("DD_STARTED", f"DD 전략 시작 ({strat_names})")
+        logger.info(f"DD 전략 Runner 시작 ({strat_names})")
+        return {"success": True, "message": f"DD 전략 시작 ({strat_names})"}
 
     async def stop(self) -> dict:
         """DD 자동매매 중지."""
@@ -153,6 +152,10 @@ class DDStrategyRunner:
                         continue
 
                     stocks_scanned += 1
+
+                    # 다른 전략에서 이미 진입한 종목 스킵 (A/B 중복 방지)
+                    if code in self._entered_today_all:
+                        continue
 
                     for si, strategy in enumerate(self.strategies):
                         # 이미 오늘 진입한 종목 스킵
@@ -234,6 +237,7 @@ class DDStrategyRunner:
                         signal=sig["signal"],
                     )
                     self._entered_today[sig["strategy_name"]].add(sig["code"])
+                    self._entered_today_all.add(sig["code"])
                     entries_executed += 1
 
                 self._scan_stats["entries_executed"] = entries_executed
@@ -643,6 +647,7 @@ class DDStrategyRunner:
         self._events.clear()
         self._last_scan_time = None
         self._entered_today = {s.name: set() for s in self.strategies}
+        self._entered_today_all = set()
         self._scan_stats = {
             "stocks_scanned": 0,
             "signals_found": 0,
@@ -650,6 +655,7 @@ class DDStrategyRunner:
         }
         self._load_daily_context()
         self._load_prev_day_data()
+        self._load_prev_daily_ohlcv()
         self._load_news_scores()
 
     def _load_daily_context(self):
@@ -741,6 +747,68 @@ class DDStrategyRunner:
 
         except Exception as e:
             logger.error(f"갭 전략 전일 데이터 로드 실패: {e}")
+
+    def _load_prev_daily_ohlcv(self):
+        """전일 OHLCV + 20일 평균 거래량 로드 (vol_surge / prev_bearish 필터용).
+
+        Gap-A: vol_surge 1.5x 필터
+        Gap-B: vol_surge 1.5x + 전일 음봉 필터
+        """
+        try:
+            from sqlalchemy import text
+            from src.database.connection import get_backtest_engine as get_db_engine
+
+            today = datetime.now().date()
+            db_engine = get_db_engine()
+
+            with db_engine.connect() as conn:
+                # 전일 OHLCV
+                prev_rows = conn.execute(
+                    text(
+                        "SELECT code, open, close, volume FROM ohlcv_daily "
+                        "WHERE date = (SELECT MAX(date) FROM ohlcv_daily WHERE date < :today)"
+                    ),
+                    {"today": today},
+                ).fetchall()
+
+                # 최근 20거래일 평균 거래량
+                avg_rows = conn.execute(
+                    text(
+                        "SELECT code, AVG(volume) FROM ohlcv_daily "
+                        "WHERE date IN ("
+                        "  SELECT DISTINCT date FROM ohlcv_daily "
+                        "  WHERE date < :today ORDER BY date DESC LIMIT 20"
+                        ") GROUP BY code"
+                    ),
+                    {"today": today},
+                ).fetchall()
+
+            if not prev_rows:
+                logger.warning("prev_daily_ohlcv: 전일 일봉 데이터 없음")
+                return
+
+            avg_vol_map = {row[0]: float(row[1] or 0) for row in avg_rows}
+
+            prev_daily_ohlcv = {}
+            for code, open_price, close_price, volume in prev_rows:
+                if close_price and close_price > 0:
+                    prev_daily_ohlcv[code] = {
+                        today: {
+                            "open": float(open_price or 0),
+                            "close": float(close_price),
+                            "volume": float(volume or 0),
+                            "avg_vol_20d": avg_vol_map.get(code, 0),
+                        }
+                    }
+
+            for strategy in self.strategies:
+                if hasattr(strategy, "_prev_daily_ohlcv"):
+                    strategy._prev_daily_ohlcv = prev_daily_ohlcv
+
+            logger.info(f"prev_daily_ohlcv 로드: {len(prev_daily_ohlcv)}종목")
+
+        except Exception as e:
+            logger.error(f"prev_daily_ohlcv 로드 실패: {e}")
 
     def _load_news_scores(self):
         """갭 전략용 뉴스 확신 점수 로드 (하루 1회, 장 시작 전).

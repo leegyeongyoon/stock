@@ -35,7 +35,10 @@ load_dotenv(project_root / ".env", override=True)
 
 from sqlalchemy import text
 from src.database.connection import get_backtest_engine as get_engine
-from src.strategies.data_driven import get_data_driven_strategies, get_gap_strategy
+from src.strategies.data_driven import (
+    get_data_driven_strategies, get_gap_strategy,
+    get_gap_strategy_a, get_gap_strategy_b,
+)
 from src.strategies.data_driven.daily_context import DailyContextLoader
 
 # ══════════════════════════════════════════════════════
@@ -497,6 +500,39 @@ def _compute_prev_day_data_for_sim(intraday_data, daily_by_date, all_dates):
     return prev_day_data
 
 
+def _compute_prev_daily_ohlcv_for_sim(daily_by_date, all_dates):
+    """전일 OHLCV + 20일 평균 거래량 (vol_surge / prev_bearish 필터용)."""
+    result = {}
+    date_list = sorted(all_dates)
+    for i in range(1, len(date_list)):
+        current_date = date_list[i]
+        prev_date = date_list[i - 1]
+        prev_daily = daily_by_date.get(prev_date, {})
+
+        lookback_dates = [d for d in date_list[:i] if d <= prev_date][-20:]
+
+        for code, info in prev_daily.items():
+            if info["close"] <= 0:
+                continue
+
+            vols = []
+            for d in lookback_dates:
+                day_info = daily_by_date.get(d, {}).get(code)
+                if day_info and day_info["volume"] > 0:
+                    vols.append(day_info["volume"])
+            avg_vol = np.mean(vols) if vols else 0
+
+            if code not in result:
+                result[code] = {}
+            result[code][current_date] = {
+                "open": info["open"],
+                "close": info["close"],
+                "volume": info["volume"],
+                "avg_vol_20d": avg_vol,
+            }
+    return result
+
+
 def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None,
                    override_sl=None, override_tp=None, skip_strategies=None,
                    gap_params=None):
@@ -522,10 +558,11 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None,
         if i > 0:
             prev_date_map[d] = all_dates_full[i - 1]
 
-    # DD 전략 초기화 (전략1+3 + 갭 반전 전략)
+    # DD 전략 초기화 (Gap-B 우선, Gap-A 후순위)
     dd_strategies = get_data_driven_strategies()
-    gap_strategy = get_gap_strategy()
-    dd_strategies.append(gap_strategy)
+    gap_b = get_gap_strategy_b()
+    gap_a = get_gap_strategy_a()
+    dd_strategies.extend([gap_b, gap_a])
 
     # 전략 필터링
     _skip = set(skip_strategies or [])
@@ -543,7 +580,7 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None,
     # 갭 전략 세부 파라미터 오버라이드
     if gap_params:
         for s in dd_strategies:
-            if s.name == "opening_gap_reversal":
+            if s.name in ("opening_gap_reversal", "gap_vol_surge", "gap_bearish_surge"):
                 for k, v in gap_params.items():
                     if k == "exit_time":
                         s.exit_time = v
@@ -554,9 +591,13 @@ def run_simulation(intraday_data, daily_by_date, daily_context, n_days=None,
     prev_day_data = _compute_prev_day_data_for_sim(
         intraday_data, daily_by_date, all_dates_full
     )
+    # 전일 OHLCV + 20일 평균 거래량 (vol_surge / prev_bearish 필터용)
+    prev_daily_ohlcv = _compute_prev_daily_ohlcv_for_sim(daily_by_date, all_dates_full)
     for strategy in dd_strategies:
         if hasattr(strategy, "_prev_day_data"):
             strategy._prev_day_data = prev_day_data
+        if hasattr(strategy, "_prev_daily_ohlcv"):
+            strategy._prev_daily_ohlcv = prev_daily_ohlcv
 
     # 상태
     capital = float(INITIAL_CAPITAL)
