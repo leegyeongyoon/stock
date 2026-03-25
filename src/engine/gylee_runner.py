@@ -434,13 +434,14 @@ class GyleeRunner(HongStyleRunner):
                     f"경윤 v6.2 스캔 ({now.strftime('%H:%M:%S')})",
                 )
 
-                # ── HongStyleEngine: 자제일 체크 + 대시보드 데이터 ──
+                # ── HongStyleEngine: 대시보드 데이터 (자제일 체크 무시) ──
+                # 경윤 v6.2는 자체 유니버스/리더 선별 로직으로 독립 판단.
+                # HongStyleEngine 자제일(섹터 분산) 기준이 너무 보수적이라
+                # 거의 매일 차단되므로 경윤에서는 무시.
                 result = await self.hongstyle_engine.run_analysis()
 
                 if result.is_caution_day:
-                    self._add_event("CAUTION", "매매 자제일 - 스킵")
-                    await asyncio.sleep(180)
-                    continue
+                    self._add_event("CAUTION_SKIP", "자제일 판정이나 경윤 v6.2 독립 진행")
 
                 # 연속손실 차단 확인
                 if self.engine.risk_manager.is_entry_paused():
