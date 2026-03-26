@@ -26,6 +26,8 @@ class DDStrategyRunner:
     STRATEGY_PREFIX = "DD_"
 
     DD_POSITION_PCT = 0.40  # 포지션당 40%
+    DD_SL = 0.025  # 기본 SL 2.5% (fallback)
+    DD_TP = 0.05   # 기본 TP 5% (fallback)
 
     def __init__(self, engine):
         self.engine = engine
@@ -143,12 +145,12 @@ class DDStrategyRunner:
                 pending_signals = []
 
                 for code, bars in all_bars.items():
-                    if not bars or len(bars) < 15:
+                    if not bars or len(bars) < 2:
                         continue
 
                     # DataFrame 변환
                     df = self.engine.data_manager.aggregator.to_dataframe(code)
-                    if df.empty or len(df) < 15:
+                    if df.empty or len(df) < 2:
                         continue
 
                     stocks_scanned += 1
