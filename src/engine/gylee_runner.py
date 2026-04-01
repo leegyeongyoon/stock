@@ -645,11 +645,21 @@ class GyleeRunner(HongStyleRunner):
                 stock_code
             )
             if price <= 0:
+                self._add_event(
+                    "BUY_FAIL",
+                    f"매수 실패: {stock_name} - 현재가 조회 실패 (price=0)",
+                    severity="WARNING",
+                )
                 return
 
             # 포지션 사이징 (confidence만 사용 - 시뮬레이션 동일)
             total_equity = self.engine.position_manager.total_equity
             if total_equity <= 0:
+                self._add_event(
+                    "BUY_FAIL",
+                    f"매수 실패: {stock_name} - equity=0",
+                    severity="WARNING",
+                )
                 return
 
             if confidence >= self.V6_MIN_CONFIDENCE:
@@ -660,6 +670,12 @@ class GyleeRunner(HongStyleRunner):
             max_amount = total_equity * alloc_pct
             qty = int(max_amount / price)
             if qty <= 0:
+                self._add_event(
+                    "BUY_FAIL",
+                    f"매수 실패: {stock_name} - 수량 0 "
+                    f"(equity={total_equity:,.0f}, price={price:,})",
+                    severity="WARNING",
+                )
                 return
 
             # 리스크 체크
@@ -685,6 +701,15 @@ class GyleeRunner(HongStyleRunner):
             )
 
             from src.broker.kis_models import OrderStatus
+
+            if order.status != OrderStatus.SUBMITTED:
+                self._add_event(
+                    "ORDER_FAIL",
+                    f"주문 거부: {stock_name} {qty}주 @{price:,} "
+                    f"status={order.status.value}",
+                    severity="WARNING",
+                )
+                return
 
             if order.status == OrderStatus.SUBMITTED:
                 self.engine.position_manager.open_position(

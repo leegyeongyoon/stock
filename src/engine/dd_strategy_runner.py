@@ -423,15 +423,33 @@ class DDStrategyRunner:
             )
             if current_price <= 0:
                 current_price = int(price)
+            if current_price <= 0:
+                self._add_event(
+                    "BUY_FAIL",
+                    f"매수 실패: {stock_name} - 현재가 조회 실패",
+                    severity="WARNING",
+                )
+                return
 
             # 포지션 사이징 (40%)
             total_equity = self.engine.position_manager.total_equity
             if total_equity <= 0:
+                self._add_event(
+                    "BUY_FAIL",
+                    f"매수 실패: {stock_name} - equity=0",
+                    severity="WARNING",
+                )
                 return
 
             max_amount = total_equity * self.DD_POSITION_PCT
             qty = int(max_amount / current_price)
             if qty <= 0:
+                self._add_event(
+                    "BUY_FAIL",
+                    f"매수 실패: {stock_name} - 수량 0 "
+                    f"(equity={total_equity:,.0f}, price={current_price:,})",
+                    severity="WARNING",
+                )
                 return
 
             # 리스크 체크
@@ -457,6 +475,15 @@ class DDStrategyRunner:
             )
 
             from src.broker.kis_models import OrderStatus
+
+            if order.status != OrderStatus.SUBMITTED:
+                self._add_event(
+                    "ORDER_FAIL",
+                    f"주문 거부: {stock_name} {qty}주 @{current_price:,} "
+                    f"status={order.status.value}",
+                    severity="WARNING",
+                )
+                return
 
             if order.status == OrderStatus.SUBMITTED:
                 self.engine.position_manager.open_position(
