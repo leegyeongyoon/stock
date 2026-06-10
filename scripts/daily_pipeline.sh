@@ -29,6 +29,7 @@ case "$MODE" in
     END=$(date +%Y-%m-%d)
     $PY scripts/auto_optimize.py --start "$START" --end "$END" --target 1.5 --stop 1.0 --cost 0.5 || \
       $PY scripts/auto_optimize.py --cache /tmp/kis_today_1m.pkl --target 1.5 --stop 1.0 --cost 0.5
+    $PY scripts/build_dashboard.py   # 대시보드 갱신
     ;;
   *)
     echo "사용법: daily_pipeline.sh [intraday|postmarket]"; exit 1 ;;
