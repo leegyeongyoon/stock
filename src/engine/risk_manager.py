@@ -10,10 +10,12 @@ Layer 6 (Market Regime): KOSPI 지수 하락 시 진입 축소/차단
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Optional
 
 from loguru import logger
 
 from src.engine.position_manager import PositionManager
+from src.risk.tier_risk import make_default_tiers
 
 
 @dataclass
@@ -73,6 +75,11 @@ class RiskManager:
         self._market_change_pct: float = 0.0  # KOSPI 전일대비 등락률
         self._market_regime: str = "NORMAL"   # NORMAL / CAUTION / DANGER
         self._market_updated_at: datetime | None = None
+
+        # 티어별 리스크(균형/공격) — 전역 6단계 위에 스택(더 엄격한 쪽이 이김)
+        self._tiers = make_default_tiers()
+        # 티어별 자본 배분(손실상한/수익잠금 % 계산 기준)
+        self._tier_allocation: dict[str, float] = {"BALANCED": 0.5, "AGGRESSIVE": 0.5}
 
     @property
     def is_circuit_breaker_active(self) -> bool:
@@ -302,6 +309,53 @@ class RiskManager:
             return True
         return False
 
+    # ── 티어별 가드레일 (균형/공격) ───────────────────────
+
+    def _tier_equity(self, tier: str) -> float:
+        """티어 손실상한/수익잠금 % 계산 기준 자본(총자본 × 배분)."""
+        return self.pm.total_equity * self._tier_allocation.get(tier, 0.5)
+
+    def check_tier_pre_trade(
+        self,
+        tier: str,
+        stock_code: str,
+        order_value: float,
+        theme: Optional[str] = None,
+    ) -> RiskCheck:
+        """전역 6단계 + 티어 캡을 함께 검사(더 엄격한 쪽이 이김)."""
+        base = self.check_pre_trade(stock_code, order_value)
+        if not base.allowed:
+            return base
+        state = self._tiers.get(tier)
+        if state is None:
+            return base  # 미지정 티어 → 전역만 적용
+        gate = state.can_enter(stock_code, theme, self._tier_equity(tier))
+        return RiskCheck(True) if gate.allowed else RiskCheck(False, gate.reason)
+
+    def record_tier_entry(self, tier: str, stock_code: str, theme: Optional[str] = None) -> None:
+        """진입 기록 - 전역 + 티어."""
+        self.record_entry(stock_code)
+        state = self._tiers.get(tier)
+        if state:
+            state.record_entry(stock_code, theme)
+
+    def record_tier_result(
+        self,
+        tier: str,
+        exit_reason: str,
+        stock_code: str = "",
+        theme: Optional[str] = None,
+        pnl: float = 0.0,
+    ) -> None:
+        """청산 결과 기록 - 전역(SL 쿨다운 등) + 티어(손익/수익잠금)."""
+        self.record_trade_result(exit_reason, stock_code)
+        state = self._tiers.get(tier)
+        if state:
+            state.record_exit(stock_code, theme, pnl, self._tier_equity(tier))
+
+    def get_tier_status(self) -> dict:
+        return {name: st.status() for name, st in self._tiers.items()}
+
     # ── Daily Reset ───────────────────────────────────────
 
     def reset_daily(self) -> None:
@@ -313,6 +367,8 @@ class RiskManager:
         self._market_change_pct = 0.0
         self._market_regime = "NORMAL"
         self._market_updated_at = None
+        for state in self._tiers.values():
+            state.reset_daily()
         self.reset_circuit_breaker()
         logger.info("[리스크] 일일 리셋 완료")
 

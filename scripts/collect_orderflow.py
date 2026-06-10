@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""장중 호가/체결강도 전진 수집 — OHLC 봉에 없는 '오를 놈' 신호.
+
+그날 movers 유니버스를 장중 폴링하며 체결강도(cttr)·호가잔량비를 DB에 적재한다.
+이 데이터가 쌓이면 mine_orderflow 로 "체결강도/잔량비가 상승 지속을 예측하나"를 검증.
+
+네트워크 + KIS 키 필요(시세 조회, 모의/실전 무관). 장중에 실행:
+    python scripts/collect_orderflow.py                 # 오늘 movers, 장중 폴링
+    python scripts/collect_orderflow.py --codes 005930,000660 --minutes 30
+    python scripts/collect_orderflow.py --interval 10 --book   # 10단계 호가도 저장
+"""
+
+import argparse
+import asyncio
+import sys
+from datetime import date, datetime, time as dtime
+from decimal import Decimal
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(project_root / ".env")
+
+from src.broker.kis_auth import KISAuth  # noqa: E402
+from src.broker.kis_client import KISClient  # noqa: E402
+from src.config.settings import settings  # noqa: E402
+from src.database.connection import get_session  # noqa: E402
+from src.database.repositories import DailyMoversRepository, OrderFlowSnapshotRepository  # noqa: E402
+from src.utils.logger import get_logger  # noqa: E402
+
+logger = get_logger(__name__)
+
+MARKET_CLOSE = dtime(15, 30)
+
+
+def _record(of, now: datetime, book: bool) -> dict:
+    ratio = (of.total_bid_qty / of.total_ask_qty) if of.total_ask_qty else None
+    return {
+        "code": of.code, "captured_at": now, "current_price": of.current_price,
+        "exec_strength": Decimal(str(of.exec_strength)) if of.exec_strength else None,
+        "total_bid_qty": of.total_bid_qty, "total_ask_qty": of.total_ask_qty,
+        "bid_ask_ratio": Decimal(str(round(ratio, 4))) if ratio is not None else None,
+        "volume": of.volume,
+        "book": ({"asks": of.asks, "bids": of.bids} if book and of.asks else None),
+    }
+
+
+async def collect(codes: list[str], interval: int, minutes: int, book: bool) -> None:
+    if not settings.kis_app_key:
+        logger.error("KIS API 키 없음(.env) — 중단")
+        return
+    auth = KISAuth(
+        app_key=settings.kis_app_key, app_secret=settings.kis_app_secret,
+        account_no=settings.kis_account_no, is_mock=settings.kis_is_mock,
+    )
+    client = KISClient(auth)
+    await client.start()
+    logger.info(f"호가/체결강도 수집 시작: {len(codes)}종목, {interval}초 간격")
+
+    deadline = None
+    if minutes:
+        deadline = datetime.now().timestamp() + minutes * 60
+    cycles = total = 0
+    try:
+        while True:
+            now = datetime.now()
+            if now.time() >= MARKET_CLOSE:
+                logger.info("장 마감 — 수집 종료")
+                break
+            if deadline and now.timestamp() >= deadline:
+                break
+            records = []
+            for code in codes:
+                try:
+                    of = await client.get_orderbook(code) if book else await client.get_orderflow(code)
+                    records.append(_record(of, datetime.now(), book))
+                except Exception as e:  # noqa: BLE001
+                    logger.debug(f"{code} orderflow 실패: {e}")
+            if records:
+                with get_session() as s:
+                    total += OrderFlowSnapshotRepository(s).insert_many(records)
+            cycles += 1
+            if cycles % 10 == 0:
+                logger.info(f"  {cycles}사이클 / 누적 {total}스냅샷")
+            await asyncio.sleep(interval)
+    finally:
+        await client.stop()
+    logger.info(f"수집 완료: {cycles}사이클 / {total}스냅샷")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="장중 호가/체결강도 수집")
+    p.add_argument("--codes", help="콤마구분 종목코드(미지정시 오늘 movers)")
+    p.add_argument("--interval", type=int, default=10, help="폴링 간격(초)")
+    p.add_argument("--minutes", type=int, default=0, help="최대 수집 시간(분, 0=장마감까지)")
+    p.add_argument("--book", action="store_true", help="10단계 호가도 저장")
+    args = p.parse_args()
+
+    if args.codes:
+        codes = [c.strip() for c in args.codes.split(",") if c.strip()]
+    else:
+        with get_session() as s:
+            codes = DailyMoversRepository(s).get_universe(date.today())
+        if not codes:
+            logger.error("오늘 movers 없음 — collect_daily_movers 먼저 실행하거나 --codes 지정")
+            return 1
+    asyncio.run(collect(codes, args.interval, args.minutes, args.book))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

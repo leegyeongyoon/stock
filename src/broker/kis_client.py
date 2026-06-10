@@ -1,7 +1,7 @@
 """KIS REST API async client - quotation and trading."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from loguru import logger
@@ -15,8 +15,12 @@ from src.broker.kis_constants import (
     ORDER_PATH,
     ORD_TYPE_LIMIT,
     ORD_TYPE_MARKET,
+    ORDERBOOK_PATH,
     PRICE_PATH,
     PSBL_ORDER_PATH,
+    TR_ORDERBOOK,
+    TR_VOLUME_RANK,
+    VOLUME_RANK_PATH,
     TR_BALANCE,
     TR_BALANCE_MOCK,
     TR_BUY,
@@ -37,6 +41,7 @@ from src.broker.kis_models import (
     BalanceItem,
     ExecutionInfo,
     MinuteBar,
+    OrderFlow,
     OrderRequest,
     OrderResponse,
     OrderSide,
@@ -151,6 +156,93 @@ class KISClient:
             change_rate=float(output.get("prdy_ctrt", 0)),
         )
 
+    @staticmethod
+    def _to_int(v) -> int:
+        try:
+            return int(float(v))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _price_from_book(o: dict) -> int:
+        """호가 응답에서 현재가 추정: stck_prpr 없으면 최우선 매수/매도 중간값."""
+        p = KISClient._to_int(o.get("stck_prpr"))
+        if p:
+            return p
+        bid1 = KISClient._to_int(o.get("bidp1"))
+        ask1 = KISClient._to_int(o.get("askp1"))
+        if bid1 and ask1:
+            return (bid1 + ask1) // 2
+        return bid1 or ask1
+
+    async def get_orderflow(self, stock_code: str) -> OrderFlow:
+        """호가 총잔량 → 잔량비 (호가 API 1콜). 체결강도는 실시간 WS(H0STCNT0)에서.
+
+        실측 확인: 체결강도/잔량은 현재가 API(inquire-price)엔 없고 호가 API에 있음.
+        """
+        params = {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": stock_code}
+        data = await self._get(ORDERBOOK_PATH, TR_ORDERBOOK, params)
+        o = data.get("output1", {})
+        return OrderFlow(
+            code=stock_code,
+            current_price=self._price_from_book(o),
+            total_bid_qty=self._to_int(o.get("total_bidp_rsqn")),
+            total_ask_qty=self._to_int(o.get("total_askp_rsqn")),
+        )
+
+    async def get_volume_rank(
+        self, market: str = "ALL", blng: str = "surge", top_n: int = 30,
+    ) -> list[dict]:
+        """오늘 거래량 순위 — '거래량 폭발' 종목 선별. blng: surge(증가율)/volume/value.
+
+        반환: [{code, name, price, change_rate, volume}, ...]
+        """
+        iscd = {"ALL": "0000", "KOSPI": "0001", "KOSDAQ": "1001"}.get(market, "0000")
+        blng_code = {"volume": "0", "surge": "1", "turnover": "2", "value": "3"}.get(blng, "1")
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J", "FID_COND_SCR_DIV_CODE": "20171",
+            "FID_INPUT_ISCD": iscd, "FID_DIV_CLS_CODE": "0", "FID_BLNG_CLS_CODE": blng_code,
+            "FID_TRGT_CLS_CODE": "111111111", "FID_TRGT_EXLS_CLS_CODE": "0000000000",
+            "FID_INPUT_PRICE_1": "", "FID_INPUT_PRICE_2": "",
+            "FID_VOL_CNT": "", "FID_INPUT_DATE_1": "",
+        }
+        data = await self._get(VOLUME_RANK_PATH, TR_VOLUME_RANK, params)
+        out = data.get("output", []) or []
+        result = []
+        for r in out[:top_n]:
+            code = r.get("mksc_shrn_iscd")
+            if not code:
+                continue
+            result.append({
+                "code": code, "name": r.get("hts_kor_isnm", ""),
+                "price": self._to_int(r.get("stck_prpr")),
+                "change_rate": float(r.get("prdy_ctrt", 0) or 0),
+                "volume": self._to_int(r.get("acml_vol")),
+            })
+        return result
+
+    async def get_orderbook(self, stock_code: str) -> OrderFlow:
+        """10단계 호가 + 잔량 (호가 API). 깊이 분석용."""
+        params = {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": stock_code}
+        data = await self._get(ORDERBOOK_PATH, TR_ORDERBOOK, params)
+        o = data.get("output1", {})
+        asks = [
+            (self._to_int(o.get(f"askp{i}")), self._to_int(o.get(f"askp_rsqn{i}")))
+            for i in range(1, 11)
+        ]
+        bids = [
+            (self._to_int(o.get(f"bidp{i}")), self._to_int(o.get(f"bidp_rsqn{i}")))
+            for i in range(1, 11)
+        ]
+        return OrderFlow(
+            code=stock_code,
+            current_price=self._price_from_book(o),
+            total_bid_qty=self._to_int(o.get("total_bidp_rsqn")),
+            total_ask_qty=self._to_int(o.get("total_askp_rsqn")),
+            asks=asks,
+            bids=bids,
+        )
+
     async def get_minute_bars(
         self,
         stock_code: str,
@@ -187,6 +279,79 @@ class KISClient:
 
         bars.reverse()
         return bars
+
+    async def get_intraday_full_day(
+        self,
+        stock_code: str,
+        time_unit: str = "1",
+        market_open: str = "090000",
+        market_close: str = "153000",
+        max_batches: int = 12,
+    ) -> list[MinuteBar]:
+        """당일 전 세션 분봉을 FID_INPUT_HOUR_1 역방향 페이징으로 복원.
+
+        KIS 분봉 API는 한 번에 ~120봉, 당일만 제공하므로 끝시각→시작시각으로 내려가며 모은다.
+        과거일 백필은 불가(전진 수집 전용). 장마감 스냅샷 배치에서 사용.
+        """
+        collected: dict[datetime, MinuteBar] = {}
+        cursor = market_close
+
+        for _ in range(max_batches):
+            params = {
+                "FID_ETC_CLS_CODE": "",
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": stock_code,
+                "FID_INPUT_HOUR_1": cursor,
+                "FID_PW_DATA_INCU_YN": "N",
+            }
+            # 모의(VTS) 시세서버는 간헐적 500 → 페이지별 재시도
+            data = None
+            for attempt in range(3):
+                try:
+                    data = await self._get(MINUTE_CHART_PATH, TR_MINUTE_CHART, params)
+                    break
+                except Exception:  # noqa: BLE001
+                    if attempt < 2:
+                        await asyncio.sleep(0.4)
+            if data is None:
+                break
+            output2 = data.get("output2", [])
+            if not output2:
+                break
+
+            batch: list[MinuteBar] = []
+            for item in output2:
+                try:
+                    dt = datetime.strptime(
+                        f"{item['stck_bsop_date']}{item['stck_cntg_hour']}", "%Y%m%d%H%M%S"
+                    )
+                    batch.append(MinuteBar(
+                        code=stock_code,
+                        datetime=dt,
+                        open=int(item.get("stck_oprc", 0)),
+                        high=int(item.get("stck_hgpr", 0)),
+                        low=int(item.get("stck_lwpr", 0)),
+                        close=int(item.get("stck_prpr", 0)),
+                        volume=int(item.get("cntg_vol", 0)),
+                    ))
+                except (KeyError, ValueError):
+                    continue
+
+            if not batch:
+                break
+
+            new_count = 0
+            for b in batch:
+                if b.datetime not in collected:
+                    collected[b.datetime] = b
+                    new_count += 1
+
+            earliest = min(b.datetime for b in batch)
+            if new_count == 0 or earliest.strftime("%H%M%S") <= market_open:
+                break
+            cursor = (earliest - timedelta(minutes=1)).strftime("%H%M%S")
+
+        return sorted(collected.values(), key=lambda b: b.datetime)
 
     # ── Trading APIs ───────────────────────────────────────
 

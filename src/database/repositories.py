@@ -22,6 +22,14 @@ from src.database.models import (
     PortfolioSnapshot,
     SystemEvent,
     StrategyPerformance,
+    OHLCVIntraday,
+    DailyMovers,
+    LimitEvent,
+    StockTheme,
+    DailyHotTheme,
+    CollectionJobLog,
+    MockForwardFill,
+    OrderFlowSnapshot,
 )
 
 
@@ -544,3 +552,338 @@ class StrategyPerformanceRepository:
             },
         )
         self.session.execute(stmt)
+
+
+# ── 단타 재설계: 데이터 기반 리포지토리 ─────────────────────────────
+
+
+class OHLCVIntradayRepository:
+    """분봉 데이터 멱등 upsert/조회.
+
+    기존 raw 테이블과 공존하므로 conflict 대상은 (constraint 이름이 아니라)
+    컬럼 집합으로 지정한다.
+    """
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_many(self, records: list[dict]) -> int:
+        """분봉 레코드 멱등 upsert. records: code/datetime/open/high/low/close/volume/interval."""
+        if not records:
+            return 0
+        stmt = insert(OHLCVIntraday).values(records)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["code", "datetime", "interval"],
+            set_={
+                "open": stmt.excluded.open,
+                "high": stmt.excluded.high,
+                "low": stmt.excluded.low,
+                "close": stmt.excluded.close,
+                "volume": stmt.excluded.volume,
+            },
+        )
+        self.session.execute(stmt)
+        return len(records)
+
+    def get_codes_for_date(self, target_date: date, interval: str = "1m") -> set[str]:
+        """해당 일자에 이미 분봉이 적재된 종목코드 집합(재개용 skip 판단)."""
+        start = datetime.combine(target_date, datetime.min.time())
+        end = datetime.combine(target_date, datetime.max.time())
+        query = (
+            select(OHLCVIntraday.code)
+            .where(
+                OHLCVIntraday.interval == interval,
+                OHLCVIntraday.datetime >= start,
+                OHLCVIntraday.datetime <= end,
+            )
+            .distinct()
+        )
+        return set(self.session.execute(query).scalars().all())
+
+    def get_by_code(
+        self, code: str, interval: str = "1m",
+        start: Optional[datetime] = None, end: Optional[datetime] = None,
+    ) -> pd.DataFrame:
+        """단일 종목 분봉을 datetime 인덱스 DataFrame으로."""
+        query = select(OHLCVIntraday).where(
+            OHLCVIntraday.code == code, OHLCVIntraday.interval == interval
+        )
+        if start:
+            query = query.where(OHLCVIntraday.datetime >= start)
+        if end:
+            query = query.where(OHLCVIntraday.datetime <= end)
+        query = query.order_by(OHLCVIntraday.datetime)
+        rows = self.session.execute(query).scalars().all()
+        if not rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(
+            [
+                {
+                    "datetime": r.datetime,
+                    "open": r.open,
+                    "high": r.high,
+                    "low": r.low,
+                    "close": r.close,
+                    "volume": r.volume,
+                }
+                for r in rows
+            ]
+        )
+        df.set_index("datetime", inplace=True)
+        return df
+
+
+class DailyMoversRepository:
+    """생존편향 없는 그날 유니버스 멱등 upsert/조회."""
+
+    _UPDATABLE = (
+        "market", "open", "high", "low", "close", "change_rate", "volume", "value",
+        "market_cap", "volume_ratio", "is_limit_up", "is_limit_down",
+        "rank_change", "rank_value", "rank_volume_ratio", "flags", "theme_tags",
+    )
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_many(self, records: list[dict]) -> int:
+        if not records:
+            return 0
+        stmt = insert(DailyMovers).values(records)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_daily_movers_date_code",
+            set_={c: getattr(stmt.excluded, c) for c in self._UPDATABLE},
+        )
+        self.session.execute(stmt)
+        return len(records)
+
+    def get_universe(self, target_date: date) -> list[str]:
+        """해당 일자에 포착된 모든 종목코드(거래대금 순)."""
+        query = (
+            select(DailyMovers.code)
+            .where(DailyMovers.date == target_date)
+            .order_by(DailyMovers.value.desc().nullslast())
+        )
+        return list(self.session.execute(query).scalars().all())
+
+    def get_for_date(self, target_date: date) -> list[DailyMovers]:
+        query = (
+            select(DailyMovers)
+            .where(DailyMovers.date == target_date)
+            .order_by(DailyMovers.change_rate.desc().nullslast())
+        )
+        return list(self.session.execute(query).scalars().all())
+
+    def get_dates(self, start: date, end: date) -> list[date]:
+        query = (
+            select(DailyMovers.date)
+            .where(DailyMovers.date >= start, DailyMovers.date <= end)
+            .distinct()
+            .order_by(DailyMovers.date)
+        )
+        return list(self.session.execute(query).scalars().all())
+
+    def update_theme_tags(self, target_date: date, code: str, theme_tags: list[str]) -> None:
+        """테마 수집 후 theme_tags 역정규화 갱신."""
+        row = self.session.execute(
+            select(DailyMovers).where(
+                DailyMovers.date == target_date, DailyMovers.code == code
+            )
+        ).scalar_one_or_none()
+        if row:
+            row.theme_tags = theme_tags
+
+
+class LimitEventRepository:
+    """상한가/하한가 이벤트 멱등 upsert/조회."""
+
+    _UPDATABLE = (
+        "limit_price", "first_hit_time", "hit_count", "closed_at_limit", "source",
+    )
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_many(self, records: list[dict]) -> int:
+        if not records:
+            return 0
+        stmt = insert(LimitEvent).values(records)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_limit_events_date_code_type",
+            set_={c: getattr(stmt.excluded, c) for c in self._UPDATABLE},
+        )
+        self.session.execute(stmt)
+        return len(records)
+
+    def get_for_date(self, target_date: date) -> list[LimitEvent]:
+        query = select(LimitEvent).where(LimitEvent.date == target_date)
+        return list(self.session.execute(query).scalars().all())
+
+
+class StockThemeRepository:
+    """일자별 테마 소속 멱등 upsert/조회."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_many(self, records: list[dict]) -> int:
+        if not records:
+            return 0
+        stmt = insert(StockTheme).values(records)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_stock_themes_date_code_theme",
+            set_={
+                "theme_name": stmt.excluded.theme_name,
+                "is_leader": stmt.excluded.is_leader,
+            },
+        )
+        self.session.execute(stmt)
+        return len(records)
+
+    def get_for_date(self, target_date: date) -> dict[str, list[str]]:
+        """{code: [theme_name, ...]} 형태로 그날 테마 소속 반환."""
+        rows = self.session.execute(
+            select(StockTheme).where(StockTheme.date == target_date)
+        ).scalars().all()
+        out: dict[str, list[str]] = {}
+        for r in rows:
+            out.setdefault(r.code, []).append(r.theme_name or r.theme_code)
+        return out
+
+
+class DailyHotThemeRepository:
+    """일자별 핫테마 리더보드 멱등 upsert/조회."""
+
+    _UPDATABLE = (
+        "theme_name", "rank", "change_rate", "up_count", "down_count", "stock_count",
+        "leader_code", "leader_name", "total_score", "news_hot_score", "sentiment",
+    )
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_many(self, records: list[dict]) -> int:
+        if not records:
+            return 0
+        stmt = insert(DailyHotTheme).values(records)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_daily_hot_themes_date_theme",
+            set_={c: getattr(stmt.excluded, c) for c in self._UPDATABLE},
+        )
+        self.session.execute(stmt)
+        return len(records)
+
+    def get_for_date(self, target_date: date) -> list[DailyHotTheme]:
+        query = (
+            select(DailyHotTheme)
+            .where(DailyHotTheme.date == target_date)
+            .order_by(DailyHotTheme.rank.asc().nullslast())
+        )
+        return list(self.session.execute(query).scalars().all())
+
+
+class CollectionJobLogRepository:
+    """배치 수집 작업 재개·멱등성 체크포인트."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get(self, job_name: str, target_date: date) -> Optional[CollectionJobLog]:
+        return self.session.execute(
+            select(CollectionJobLog).where(
+                CollectionJobLog.job_name == job_name,
+                CollectionJobLog.target_date == target_date,
+            )
+        ).scalar_one_or_none()
+
+    def is_completed(self, job_name: str, target_date: date) -> bool:
+        row = self.get(job_name, target_date)
+        return bool(row and row.status == "completed")
+
+    def start(self, job_name: str, target_date: date, codes_total: int = 0) -> None:
+        """작업 시작 기록(멱등: 기존 행이 있으면 running으로 리셋)."""
+        stmt = insert(CollectionJobLog).values(
+            job_name=job_name, target_date=target_date,
+            status="running", codes_total=codes_total,
+            codes_done=0, records_written=0, error=None,
+            started_at=datetime.now(), finished_at=None,
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_collection_job_name_date",
+            set_={
+                "status": "running",
+                "codes_total": stmt.excluded.codes_total,
+                "started_at": stmt.excluded.started_at,
+                "error": None,
+                "finished_at": None,
+            },
+        )
+        self.session.execute(stmt)
+
+    def finish(
+        self, job_name: str, target_date: date, status: str,
+        codes_done: int = 0, records_written: int = 0, error: Optional[str] = None,
+    ) -> None:
+        row = self.get(job_name, target_date)
+        if row:
+            row.status = status
+            row.codes_done = codes_done
+            row.records_written = records_written
+            row.error = error
+            row.finished_at = datetime.now()
+
+
+class MockForwardFillRepository:
+    """모의 포워드 체결 로그 기록/조회."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create(self, data: dict) -> None:
+        self.session.add(MockForwardFill(**data))
+        self.session.flush()
+
+    def get_for_date(self, target_date: date) -> list[MockForwardFill]:
+        start = datetime.combine(target_date, datetime.min.time())
+        end = datetime.combine(target_date, datetime.max.time())
+        query = (
+            select(MockForwardFill)
+            .where(MockForwardFill.traded_at >= start, MockForwardFill.traded_at <= end)
+            .order_by(MockForwardFill.traded_at)
+        )
+        return list(self.session.execute(query).scalars().all())
+
+
+class OrderFlowSnapshotRepository:
+    """호가/체결강도 스냅샷 기록/조회."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def insert_many(self, records: list[dict]) -> int:
+        if not records:
+            return 0
+        self.session.execute(insert(OrderFlowSnapshot), records)
+        return len(records)
+
+    def get_by_code(
+        self, code: str, start: Optional[datetime] = None, end: Optional[datetime] = None
+    ) -> pd.DataFrame:
+        query = select(OrderFlowSnapshot).where(OrderFlowSnapshot.code == code)
+        if start:
+            query = query.where(OrderFlowSnapshot.captured_at >= start)
+        if end:
+            query = query.where(OrderFlowSnapshot.captured_at <= end)
+        query = query.order_by(OrderFlowSnapshot.captured_at)
+        rows = self.session.execute(query).scalars().all()
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame([
+            {
+                "captured_at": r.captured_at, "current_price": r.current_price,
+                "exec_strength": float(r.exec_strength) if r.exec_strength is not None else None,
+                "total_bid_qty": r.total_bid_qty, "total_ask_qty": r.total_ask_qty,
+                "bid_ask_ratio": float(r.bid_ask_ratio) if r.bid_ask_ratio is not None else None,
+                "volume": r.volume,
+            }
+            for r in rows
+        ]).set_index("captured_at")

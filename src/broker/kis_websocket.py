@@ -239,7 +239,11 @@ class KISWebSocket:
             self._handle_execution_notice(body)
 
     def _handle_trade_tick(self, body: str) -> None:
-        """Parse real-time trade tick data."""
+        """Parse real-time trade tick data (H0STCNT0).
+
+        필드: 10=매도호가1, 11=매수호가1, 12=체결거래량, 13=누적거래량,
+              15=매도체결건수, 16=매수체결건수, 18=체결강도(cttr).
+        """
         fields = body.split("^")
         if len(fields) < 20:
             return
@@ -251,8 +255,11 @@ class KISWebSocket:
                 volume=int(fields[12]),
                 timestamp=fields[1],
                 change_rate=float(fields[5]) if fields[5] else 0.0,
-                ask_price=int(fields[3]) if fields[3] else 0,
-                bid_price=int(fields[4]) if fields[4] else 0,
+                ask_price=int(fields[10]) if fields[10] else 0,
+                bid_price=int(fields[11]) if fields[11] else 0,
+                exec_strength=float(fields[18]) if fields[18] else 0.0,  # 체결강도
+                sell_cnt=int(fields[15]) if fields[15] else 0,
+                buy_cnt=int(fields[16]) if fields[16] else 0,
             )
             if self.on_tick:
                 self.on_tick(tick)

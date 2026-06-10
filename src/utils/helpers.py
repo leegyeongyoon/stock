@@ -5,6 +5,15 @@ from typing import TypeVar
 
 import pandas as pd
 
+# KRX 호가단위/상하한가 헬퍼는 의존성 없는 src/utils/krx.py 에 정의하고 여기서 재노출한다.
+from src.utils.krx import (  # noqa: F401
+    krx_tick_size,
+    round_to_tick,
+    limit_price,
+    is_at_upper_limit,
+    is_at_lower_limit,
+)
+
 T = TypeVar("T")
 
 

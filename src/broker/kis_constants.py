@@ -16,6 +16,7 @@ PRICE_PATH = "/uapi/domestic-stock/v1/quotations/inquire-price"
 MINUTE_CHART_PATH = "/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice"
 DAILY_CHART_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
 ORDERBOOK_PATH = "/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn"
+VOLUME_RANK_PATH = "/uapi/domestic-stock/v1/quotations/volume-rank"
 
 # ── Trading (매매) ─────────────────────────────────────────
 ORDER_PATH = "/uapi/domestic-stock/v1/trading/order-cash"
@@ -30,6 +31,7 @@ TR_PRICE = "FHKST01010100"           # 현재가 조회
 TR_MINUTE_CHART = "FHKST03010200"    # 분봉 조회
 TR_DAILY_CHART = "FHKST03010100"     # 일봉 조회
 TR_ORDERBOOK = "FHKST01010200"       # 호가 조회
+TR_VOLUME_RANK = "FHPST01710000"     # 거래량 순위
 
 TR_BUY = "TTTC0802U"                 # 매수 주문 (실전)
 TR_SELL = "TTTC0801U"                # 매도 주문 (실전)

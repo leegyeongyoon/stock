@@ -46,6 +46,9 @@ env/
 logs/
 *.log
 
+# ML 모델 바이너리 (auto_optimize가 재생성, 로컬 보관)
+models/
+
 # Reports (but keep the directory)
 reports/*.html
 reports/*.pdf
