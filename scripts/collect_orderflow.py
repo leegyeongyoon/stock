@@ -48,7 +48,7 @@ def _record(of, now: datetime, book: bool) -> dict:
     }
 
 
-async def collect(codes: list[str], interval: int, minutes: int, book: bool) -> None:
+async def collect(codes: list[str], interval: int, minutes: int, book: bool, topk: int = 40) -> None:
     if not settings.kis_app_key:
         logger.error("KIS API 키 없음(.env) — 중단")
         return
@@ -58,6 +58,19 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool) -> 
     )
     client = KISClient(auth)
     await client.start()
+    # 유니버스 없으면 KIS 거래량순위로 자동 선정 (pykrx 의존 제거)
+    if not codes:
+        try:
+            rank = await client.get_volume_rank(market="KOSDAQ", blng="surge", top_n=topk)
+            codes = [r["code"] for r in rank if r.get("code") and len(r["code"]) == 6]
+            logger.info(f"KIS 거래량순위로 유니버스 {len(codes)}종목 선정")
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"유니버스 확보 실패: {e}")
+            codes = []
+    if not codes:
+        logger.error("유니버스 없음 — 중단")
+        await client.stop()
+        return
     logger.info(f"호가/체결강도 수집 시작: {len(codes)}종목, {interval}초 간격")
 
     deadline = None
@@ -97,17 +110,20 @@ def main() -> int:
     p.add_argument("--interval", type=int, default=10, help="폴링 간격(초)")
     p.add_argument("--minutes", type=int, default=0, help="최대 수집 시간(분, 0=장마감까지)")
     p.add_argument("--book", action="store_true", help="10단계 호가도 저장")
+    p.add_argument("--topk", type=int, default=40, help="유니버스 자동선정 시 종목수")
     args = p.parse_args()
 
+    codes: list[str] = []
     if args.codes:
         codes = [c.strip() for c in args.codes.split(",") if c.strip()]
     else:
-        with get_session() as s:
-            codes = DailyMoversRepository(s).get_universe(date.today())
-        if not codes:
-            logger.error("오늘 movers 없음 — collect_daily_movers 먼저 실행하거나 --codes 지정")
-            return 1
-    asyncio.run(collect(codes, args.interval, args.minutes, args.book))
+        try:
+            with get_session() as s:
+                codes = DailyMoversRepository(s).get_universe(date.today())
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"DailyMovers 조회 실패({e}) — KIS 거래량순위로 대체")
+    # codes 비어있으면 collect() 안에서 KIS 거래량순위로 자동 선정
+    asyncio.run(collect(codes, args.interval, args.minutes, args.book, args.topk))
     return 0
 
 
