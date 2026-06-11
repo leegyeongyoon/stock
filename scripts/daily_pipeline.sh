@@ -17,7 +17,8 @@ echo "[$(date)] daily_pipeline: $MODE"
 
 case "$MODE" in
   intraday)
-    $PY scripts/collect_daily_movers.py
+    # movers 수집(pykrx)은 실패해도 무시 — collect_orderflow가 KIS 거래량순위로 자체 유니버스 확보
+    $PY scripts/collect_daily_movers.py || echo "[경고] movers 수집 실패 — KIS fallback 사용"
     # caffeinate -i: 수집이 도는 동안 시스템 sleep 방지 (화면 잠금은 원래 무관).
     # 09:00 시작되면 collect_orderflow가 끝나는 15:30까지 맥이 안 잔다.
     caffeinate -i -- $PY scripts/collect_orderflow.py --interval 10
