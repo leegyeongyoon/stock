@@ -181,7 +181,16 @@ class KISClient:
         실측 확인: 체결강도/잔량은 현재가 API(inquire-price)엔 없고 호가 API에 있음.
         """
         params = {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": stock_code}
-        data = await self._get(ORDERBOOK_PATH, TR_ORDERBOOK, params)
+        # 모의(VTS) 호가서버 간헐 500 → 재시도
+        data = None
+        for attempt in range(3):
+            try:
+                data = await self._get(ORDERBOOK_PATH, TR_ORDERBOOK, params)
+                break
+            except Exception:  # noqa: BLE001
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.3)
         o = data.get("output1", {})
         return OrderFlow(
             code=stock_code,
