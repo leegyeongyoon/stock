@@ -5,8 +5,8 @@
 #   postmarket : 15:45 — 오늘 1분봉 수집 + ML 고도화(auto_optimize) → 최적 모델 갱신
 #
 # crontab -e 에 (평일만):
-#   0  9  * * 1-5  cd /Users/igyeong-yun/Desktop/gylee/stock && scripts/daily_pipeline.sh intraday   >> logs/collect.log 2>&1
-#   45 15 * * 1-5  cd /Users/igyeong-yun/Desktop/gylee/stock && scripts/daily_pipeline.sh postmarket >> logs/optimize.log 2>&1
+#   0  9  * * 1-5  cd /Users/igyeong-yun/stock && scripts/daily_pipeline.sh intraday   >> logs/collect.log 2>&1
+#   45 15 * * 1-5  cd /Users/igyeong-yun/stock && scripts/daily_pipeline.sh postmarket >> logs/optimize.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
