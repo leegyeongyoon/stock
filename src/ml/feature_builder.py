@@ -27,6 +27,9 @@ def _align_flow(bar_times, flow):
     ft = flow.index.to_numpy().astype("datetime64[ns]")
     es = flow["exec_strength"].to_numpy(float)
     br = flow["bid_ask_ratio"].to_numpy(float)
+    # 잔량비 winsorize: 매도잔량≈0이면 비율이 수천까지 폭발(실측 max 3022, sd 35)
+    # → 극단 이상치를 20배(압도적 매수우위)로 클리핑. NaN은 보존(직전 스냅샷 없음 표식).
+    br = np.clip(br, 0.0, 20.0)
     bt = np.array(list(bar_times), dtype="datetime64[ns]")
     idx = np.searchsorted(ft, bt, side="right") - 1
     ok = idx >= 0
