@@ -24,7 +24,7 @@ case "$MODE" in
     caffeinate -i -- $PY scripts/collect_orderflow.py --interval 10
     ;;
   postmarket)
-    $PY scripts/fetch_kis_today.py 80                # 오늘 movers 1분봉 (캐시 + 추후 DB적재 확장)
+    $PY scripts/fetch_kis_today.py 150               # 오늘 거래상위(KOSDAQ+KOSPI) 1분봉 (캐시 + DB적재)
     # DB에 분봉/호가가 쌓이면 날짜범위로 고도화 (최근 30일 누적 학습)
     START=$(date -v-30d +%Y-%m-%d 2>/dev/null || date -d '30 days ago' +%Y-%m-%d)
     END=$(date +%Y-%m-%d)

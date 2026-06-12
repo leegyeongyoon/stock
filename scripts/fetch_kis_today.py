@@ -40,19 +40,35 @@ def _is_real_stock(code: str, name: str) -> bool:
     return True
 
 
+async def _rank_with_retry(client, market: str, blng: str, tries: int = 4) -> list[dict]:
+    """거래량순위 1회 — 모의서버 간헐 500/rate-limit 대비 재시도(점증 백오프)."""
+    for i in range(tries):
+        try:
+            return await client.get_volume_rank(market=market, blng=blng, top_n=40)
+        except Exception:  # noqa: BLE001
+            if i == tries - 1:
+                return []
+            await asyncio.sleep(1.5 * (i + 1))
+    return []
+
+
 async def _movers_universe(client, n_codes: int) -> list[str]:
-    """거래량 순위(증가율/거래대금)에서 실제 종목 선별 + KOSDAQ 보강."""
+    """거래량 순위에서 실제 거래상위 종목 선별 (KOSDAQ 우선 + KOSPI 보강).
+
+    KIS 거래량순위 API는 호출당 최대 30종목 → 시장 2개 × surge/value/volume 3종으로
+    진짜 거래상위 ~150종목까지 확보. KOSDAQ을 먼저 채워 단타 성격을 유지하고,
+    그래도 부족하면 stocks 테이블(KOSDAQ)로 최종 패딩.
+    """
     codes: list[str] = []
     seen = set()
-    for blng in ("surge", "value", "volume"):
-        try:
-            rank = await client.get_volume_rank(market="KOSDAQ", blng=blng, top_n=40)
-        except Exception:  # noqa: BLE001
-            continue
-        for r in rank:
-            if _is_real_stock(r["code"], r["name"]) and r["code"] not in seen:
-                seen.add(r["code"]); codes.append(r["code"])
-    # KOSDAQ 보강
+    for market in ("KOSDAQ", "KOSPI"):
+        for blng in ("surge", "value", "volume"):
+            rank = await _rank_with_retry(client, market, blng)
+            for r in rank:
+                if _is_real_stock(r["code"], r["name"]) and r["code"] not in seen:
+                    seen.add(r["code"]); codes.append(r["code"])
+            await asyncio.sleep(0.8)  # 모의서버 rate-limit 회피
+    # 거래상위만으로 부족하면 KOSDAQ 종목으로 최종 패딩
     if len(codes) < n_codes:
         with get_session() as s:
             for (c,) in s.execute(text(
