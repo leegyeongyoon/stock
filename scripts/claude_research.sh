@@ -38,7 +38,9 @@ orderflow_snapshots)에 수집됐고 models/optimize_log.json 에 OOS 성과 이
 EOF
 
 echo "[$(date)] 자율 연구 시작" | tee -a "$LOG"
-claude --bare -p "$PROMPT" \
+# --bare 금지: 그 모드는 인증을 ANTHROPIC_API_KEY로만 한정해서 setup-token의
+# OAuth 토큰(CLAUDE_CODE_OAUTH_TOKEN)을 무시한다. 구독 토큰을 쓰려면 --bare 빼야 함.
+claude -p "$PROMPT" \
   --permission-mode dontAsk \
   --allowedTools "Read,Write(research/**),Edit(research/**),Bash(.venv/bin/python scripts/ml_edge_full_yf.py *),Bash(.venv/bin/python scripts/mine_intraday_patterns_yf.py *),Bash(git log *),Bash(git diff *),Bash(git status)" \
   --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git checkout *),Bash(rm *),Edit(src/**),Write(src/**)" \
