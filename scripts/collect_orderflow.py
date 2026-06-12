@@ -13,6 +13,7 @@
 import argparse
 import asyncio
 import sys
+import time
 from datetime import date, datetime, time as dtime
 from decimal import Decimal
 from pathlib import Path
@@ -26,6 +27,8 @@ load_dotenv(project_root / ".env")
 
 from src.broker.kis_auth import KISAuth  # noqa: E402
 from src.broker.kis_client import KISClient  # noqa: E402
+from src.broker.kis_constants import WS_MAX_SUBSCRIPTIONS  # noqa: E402
+from src.broker.kis_websocket import KISWebSocket  # noqa: E402
 from src.config.settings import settings  # noqa: E402
 from src.database.connection import get_session  # noqa: E402
 from src.database.repositories import DailyMoversRepository, OrderFlowSnapshotRepository  # noqa: E402
@@ -36,11 +39,13 @@ logger = get_logger(__name__)
 MARKET_CLOSE = dtime(15, 30)
 
 
-def _record(of, now: datetime, book: bool) -> dict:
+def _record(of, now: datetime, book: bool, strength: float | None = None) -> dict:
     ratio = (of.total_bid_qty / of.total_ask_qty) if of.total_ask_qty else None
+    # 체결강도: REST 호가엔 없음 → WS(H0STCNT0)에서 받은 최신값 우선, 없으면 of값
+    es = strength if strength is not None else (of.exec_strength or None)
     return {
         "code": of.code, "captured_at": now, "current_price": of.current_price,
-        "exec_strength": Decimal(str(of.exec_strength)) if of.exec_strength else None,
+        "exec_strength": Decimal(str(es)) if es else None,
         "total_bid_qty": of.total_bid_qty, "total_ask_qty": of.total_ask_qty,
         "bid_ask_ratio": Decimal(str(round(ratio, 4))) if ratio is not None else None,
         "volume": of.volume,
@@ -73,6 +78,35 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool, top
         return
     logger.info(f"호가/체결강도 수집 시작: {len(codes)}종목, {interval}초 간격")
 
+    # WS 체결강도(H0STCNT0) — additive: 실패해도 REST 스냅샷은 그대로 저장(exec_strength=null).
+    # REST 호가 API엔 체결강도가 없어 WS 실시간 체결에서만 받을 수 있다.
+    latest_strength: dict[str, tuple[float, float]] = {}  # code -> (체결강도, monotonic ts)
+
+    def _on_tick(t) -> None:
+        if t.exec_strength:
+            latest_strength[t.code] = (t.exec_strength, time.monotonic())
+
+    def _fresh_strength(code: str, max_age: float = 120.0) -> float | None:
+        # 신선도 가드: WS 끊겨 값이 오래되면(>max_age) 묵힌 값으로 오염시키지 않는다.
+        v = latest_strength.get(code)
+        return v[0] if v and (time.monotonic() - v[1]) <= max_age else None
+
+    ws = None
+    try:
+        approval = await client.get_ws_approval_key()
+        ws = KISWebSocket(
+            app_key=settings.kis_app_key, app_secret=settings.kis_app_secret,
+            approval_key=approval, is_mock=settings.kis_is_mock, on_tick=_on_tick,
+        )
+        await ws.start(approval)
+        for code in codes[:WS_MAX_SUBSCRIPTIONS]:
+            await ws.subscribe_trade(code)
+            await asyncio.sleep(0.05)
+        logger.info(f"WS 체결강도 구독: {min(len(codes), WS_MAX_SUBSCRIPTIONS)}종목")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"WS 체결강도 비활성(REST만 수집): {e}")
+        ws = None
+
     deadline = None
     if minutes:
         deadline = datetime.now().timestamp() + minutes * 60
@@ -89,7 +123,7 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool, top
             for code in codes:
                 try:
                     of = await client.get_orderbook(code) if book else await client.get_orderflow(code)
-                    records.append(_record(of, datetime.now(), book))
+                    records.append(_record(of, datetime.now(), book, _fresh_strength(code)))
                 except Exception as e:  # noqa: BLE001
                     logger.debug(f"{code} orderflow 실패: {e}")
             if records:
@@ -100,8 +134,14 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool, top
                 logger.info(f"  {cycles}사이클 / 누적 {total}스냅샷")
             await asyncio.sleep(interval)
     finally:
+        if ws is not None:
+            try:
+                await ws.stop()
+            except Exception:  # noqa: BLE001
+                pass
         await client.stop()
-    logger.info(f"수집 완료: {cycles}사이클 / {total}스냅샷")
+    es_codes = len({c for c in codes if _fresh_strength(c, max_age=1e9) is not None})
+    logger.info(f"수집 완료: {cycles}사이클 / {total}스냅샷 (체결강도 수신 {es_codes}종목)")
 
 
 def main() -> int:
