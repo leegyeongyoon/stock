@@ -42,7 +42,7 @@ echo "[$(date)] 자율 연구 시작" | tee -a "$LOG"
 # OAuth 토큰(CLAUDE_CODE_OAUTH_TOKEN)을 무시한다. 구독 토큰을 쓰려면 --bare 빼야 함.
 claude -p "$PROMPT" \
   --permission-mode dontAsk \
-  --allowedTools "Read,Write(research/**),Edit(research/**),Bash(.venv/bin/python scripts/ml_edge_full_yf.py *),Bash(.venv/bin/python scripts/mine_intraday_patterns_yf.py *),Bash(git log *),Bash(git diff *),Bash(git status)" \
+  --allowedTools "Read,Write(research/**),Edit(research/**),Bash(.venv/bin/python *),Bash(git log *),Bash(git diff *),Bash(git status)" \
   --disallowedTools "Bash(git push *),Bash(git commit *),Bash(git checkout *),Bash(rm *),Edit(src/**),Write(src/**)" \
   --max-turns 12 \
   --output-format text \
