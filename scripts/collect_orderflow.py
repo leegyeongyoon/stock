@@ -159,7 +159,10 @@ def main() -> int:
     else:
         try:
             with get_session() as s:
-                codes = DailyMoversRepository(s).get_universe(date.today())
+                # 거래대금 상위 topk만 — get_universe는 그날 전 종목 반환(KRX 연동 후 수천)이라
+                # 그대로 쓰면 10초폴링·WS40 상한과 안 맞고 사이클이 안 끝난다.
+                codes = DailyMoversRepository(s).get_universe(date.today())[: args.topk]
+                logger.info(f"DailyMovers 거래대금 상위 {len(codes)}종목 유니버스")
         except Exception as e:  # noqa: BLE001
             logger.warning(f"DailyMovers 조회 실패({e}) — KIS 거래량순위로 대체")
     # codes 비어있으면 collect() 안에서 KIS 거래량순위로 자동 선정
