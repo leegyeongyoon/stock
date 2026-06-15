@@ -110,7 +110,7 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool, top
     deadline = None
     if minutes:
         deadline = datetime.now().timestamp() + minutes * 60
-    cycles = total = 0
+    cycles = total = empty_streak = 0
     try:
         while True:
             now = datetime.now()
@@ -129,6 +129,12 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool, top
             if records:
                 with get_session() as s:
                     total += OrderFlowSnapshotRepository(s).insert_many(records)
+                empty_streak = 0
+            else:
+                # 전 종목 실패(네트워크 단절 등) — stall 가시화. 종료는 안 함(복구 시 자동 재개).
+                empty_streak += 1
+                if empty_streak in (3, 10, 30) or empty_streak % 60 == 0:
+                    logger.warning(f"⚠️ {empty_streak}사이클 연속 0건 — 네트워크/API 점검 필요 (누적 {total})")
             cycles += 1
             if cycles % 10 == 0:
                 logger.info(f"  {cycles}사이클 / 누적 {total}스냅샷")

@@ -58,6 +58,8 @@ class KISWebSocket:
             self.ws_url,
             ping_interval=30,
             ping_timeout=10,
+            open_timeout=10,   # 연결(+DNS) 무한 대기 방지 — 네트워크 단절 시 빨리 실패
+            close_timeout=5,
         )
         self._running = True
         self._recv_task = asyncio.create_task(self._recv_loop())
@@ -192,6 +194,8 @@ class KISWebSocket:
                     self.ws_url,
                     ping_interval=30,
                     ping_timeout=10,
+                    open_timeout=10,   # 재연결도 무한 대기 금지 (DNS풀 포화→메인루프 정지 방지)
+                    close_timeout=5,
                 )
                 # Re-subscribe market data
                 for code in codes:
