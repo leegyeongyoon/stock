@@ -15,6 +15,7 @@ PRICE_FEATURES = [
     "green_streak", "bar_range", "above_vwap", "hour", "close_strength",
     "from_low", "down_streak", "rel_vol_daymax",
     "prior_run10", "bars_since_high", "pullback_vol", "accel",
+    "vol_surge_at_high",
 ]
 FLOW_FEATURES = ["exec_strength", "bid_ask_ratio"]
 
@@ -68,10 +69,17 @@ def build_features(
             rsi = rsi_np(c, 14); ret3 = np.full(n, np.nan); ret3[3:] = c[3:] / c[:-3] - 1
             gr = (c > o).astype(float); rd = (c < o).astype(float)
             gs = np.zeros(n); ds = np.zeros(n); since_h = np.zeros(n, int)
+            high_idx = np.zeros(n, int)
             for i in range(n):
                 gs[i] = gs[i - 1] + 1 if (i > 0 and gr[i]) else gr[i]
                 ds[i] = ds[i - 1] + 1 if (i > 0 and rd[i]) else rd[i]
-                since_h[i] = 0 if (i == 0 or h[i] >= rh[i - 1]) else since_h[i - 1] + 1
+                if i == 0 or h[i] >= rh[i - 1]:
+                    since_h[i] = 0; high_idx[i] = i
+                else:
+                    since_h[i] = since_h[i - 1] + 1; high_idx[i] = high_idx[i - 1]
+            # vol_surge_at_high: 누적 고점 봉의 거래량 / 그 봉 직전 12봉 평균(vb). 검증 +5.2%p.
+            base_h = vb[high_idx]
+            vsah = np.where(base_h > 0, v[high_idx] / np.where(base_h > 0, base_h, 1.0), 1.0)
             rng = (h - low) / np.where(c > 0, c, 1)
             hours = np.array([getattr(ts, "hour", 0) for ts in day.index])
             f_es, f_br = _align_flow(list(day.index), flow) if use_flow else (None, None)
@@ -99,6 +107,7 @@ def build_features(
                     (c[i] - low[i]) / (h[i] - low[i]) if h[i] > low[i] else 0.5,
                     c[i] / rl[i] - 1 if rl[i] > 0 else 0, ds[i],
                     v[i] / rmv[i] if rmv[i] > 0 else 0, prun, float(since_h[i]), pbv, accel,
+                    float(vsah[i]),
                 ]
                 if use_flow:
                     row += [f_es[i] if not np.isnan(f_es[i]) else 100.0,
