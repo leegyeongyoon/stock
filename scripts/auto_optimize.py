@@ -26,6 +26,7 @@ from sklearn.ensemble import GradientBoostingClassifier  # noqa: E402
 
 from src.ml.feature_builder import build_features  # noqa: E402
 from src.ml.gate import MLGate  # noqa: E402
+from src.ml.sample_weights import effective_sample_size, to_sample_weight  # noqa: E402
 
 LOG_PATH = Path("models/optimize_log.json")
 
@@ -75,7 +76,8 @@ def main():
     if not data:
         print("데이터 없음"); return 1
 
-    X, y, dates, codes, names = build_features(data, a.horizon, tgt, stp, orderflow=flow)
+    X, y, dates, codes, names, w = build_features(data, a.horizon, tgt, stp, orderflow=flow,
+                                                  return_weights=True)
     if len(y) < 500:
         print(f"샘플 부족 {len(y)} — 더 수집 필요"); return 1
 
@@ -93,7 +95,7 @@ def main():
 
     model = GradientBoostingClassifier(n_estimators=200, max_depth=3, learning_rate=0.05,
                                        min_samples_leaf=100, subsample=0.8, random_state=0)
-    model.fit(X[tr], y[tr])
+    model.fit(X[tr], y[tr], sample_weight=to_sample_weight(w[tr]))
     tr_proba = model.predict_proba(X[tr])[:, 1]
     thr = float(np.quantile(tr_proba, 1 - a.top_pct))
     te_proba = model.predict_proba(X[te])[:, 1]
@@ -104,7 +106,9 @@ def main():
 
     flow_tag = "호가포함" if flow else "가격만"
     print(f"=== 고도화 1회 ({src}, {flow_tag}) ===")
-    print(f"샘플 {len(y):,} / {len(udates)}일 / {len(set(codes))}종목 | 검증: {mode}")
+    eff = effective_sample_size(w)
+    print(f"샘플 {len(y):,} (유효 {eff:,.0f} / 고유성 {eff/len(y):.3f}) / {len(udates)}일 / "
+          f"{len(set(codes))}종목 | 검증: {mode}")
     print(f"검증 기본승률 {y[te].mean():.1%} | 상위{a.top_pct*100:.0f}% 선별 승률 {wr:.1%} "
           f"(손익분기 {be:.0%}) | 기대 {exp:+.2f}%{'  <== 비용 넘김!' if exp > 0 else ''}")
     top_feats = sorted(zip(names, model.feature_importances_), key=lambda x: -x[1])[:6]

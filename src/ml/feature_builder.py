@@ -46,15 +46,21 @@ def build_features(
     stop: float = 0.01,
     orderflow: Optional[dict] = None,
     max_entry_hour: int = 14,
+    return_weights: bool = False,
 ):
-    """(X, y, dates, codes, feature_names) 반환. orderflow가 있으면 2특징 추가."""
+    """(X, y, dates, codes, feature_names) 반환. orderflow가 있으면 2특징 추가.
+
+    return_weights=True 면 6번째로 표본 고유성 가중치(겹치는 라벨 보정, López Ch4)도 반환.
+    """
     use_flow = orderflow is not None
     names = PRICE_FEATURES + (FLOW_FEATURES if use_flow else [])
     X, y, dates, codes = [], [], [], []
+    gid, gstart, gend, _g = [], [], [], -1  # 표본별 (그룹=종목일, 라벨시작, 라벨종료)
 
     for code, df in data.items():
         flow = orderflow.get(code) if use_flow else None
         for d, day in df.groupby(df.index.date):
+            _g += 1
             o = day["open"].to_numpy(float); h = day["high"].to_numpy(float)
             low = day["low"].to_numpy(float); c = day["close"].to_numpy(float)
             v = day["volume"].to_numpy(float); n = len(c)
@@ -94,11 +100,12 @@ def build_features(
                 accel = ((c[i] / c[i - 1] - 1) - (c[i - 1] / c[i - 2] - 1)
                          if i >= 2 and c[i - 1] > 0 and c[i - 2] > 0 else 0.0)
                 entry = c[i]; tpx = entry * (1 + target); spx = entry * (1 - stop); win = 0
+                end_bar = min(i + horizon, n - 1)
                 for j in range(i + 1, min(i + 1 + horizon, n)):
                     if low[j] <= spx:
-                        win = 0; break
+                        win = 0; end_bar = j; break
                     if h[j] >= tpx:
-                        win = 1; break
+                        win = 1; end_bar = j; break
                 row = [
                     vr[i], c[i] / vwap[i] - 1 if vwap[i] > 0 else 0,
                     c[i] / dopen - 1 if dopen > 0 else 0, c[i] / rh[i] - 1 if rh[i] > 0 else 0,
@@ -113,5 +120,10 @@ def build_features(
                     row += [f_es[i] if not np.isnan(f_es[i]) else 100.0,
                             f_br[i] if not np.isnan(f_br[i]) else 1.0]
                 X.append(row); y.append(win); dates.append(d); codes.append(code)
+                gid.append(_g); gstart.append(i); gend.append(end_bar)
 
+    if return_weights:
+        from src.ml.sample_weights import uniqueness_weights
+        w = uniqueness_weights(gid, gstart, gend) if gid else np.ones(len(X))
+        return (np.array(X), np.array(y), np.array(dates), np.array(codes), names, w)
     return (np.array(X), np.array(y), np.array(dates), np.array(codes), names)
