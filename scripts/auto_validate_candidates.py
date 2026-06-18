@@ -25,7 +25,7 @@ load_dotenv(project / ".env")
 from sqlalchemy import text  # noqa: E402
 
 from src.database.connection import get_session  # noqa: E402
-from src.ml.feature_builder import PRICE_FEATURES, rolling_mean_np  # noqa: E402
+from src.ml.feature_builder import PRICE_FEATURES, _align_flow, rolling_mean_np  # noqa: E402
 
 HORIZON, TARGET, STOP, MAX_HOUR, THRESH = 20, 0.015, 0.01, 14, 3.0
 LOG = project / "logs" / "candidate_validation.log"
@@ -49,23 +49,34 @@ def load_candidate_funcs(path: Path) -> dict:
     return funcs
 
 
-def load_data() -> pd.DataFrame:
+def load_data():
     with get_session() as s:
         rows = s.execute(text(
             "select code, datetime, open, high, low, close, volume from ohlcv_intraday "
             "where interval='1m' and datetime >= now() - interval '45 days' order by code, datetime"
         )).fetchall()
+        ofr = s.execute(text(
+            "select code, captured_at, exec_strength, bid_ask_ratio from orderflow_snapshots "
+            "where captured_at >= now() - interval '45 days' order by code, captured_at"
+        )).fetchall()
     df = pd.DataFrame(rows, columns=["code", "datetime", "open", "high", "low", "close", "volume"])
     df["datetime"] = pd.to_datetime(df["datetime"])
     for c in ("open", "high", "low", "close", "volume"):
         df[c] = df[c].astype(float)
-    return df
+    of = pd.DataFrame(ofr, columns=["code", "captured_at", "exec_strength", "bid_ask_ratio"])
+    of["captured_at"] = pd.to_datetime(of["captured_at"])
+    for c in ("exec_strength", "bid_ask_ratio"):
+        of[c] = pd.to_numeric(of[c], errors="coerce")
+    flow = {code: g.set_index("captured_at")[["exec_strength", "bid_ask_ratio"]]
+            for code, g in of.groupby("code")} if not of.empty else {}
+    return df, flow
 
 
-def collect(funcs: dict, df: pd.DataFrame):
+def collect(funcs: dict, df: pd.DataFrame, flow: dict):
     vals = {name: [] for name in funcs}
     ys = []
-    for _code, g in df.groupby("code"):
+    for code, g in df.groupby("code"):
+        fdf = flow.get(code)
         for _d, day in g.groupby(g["datetime"].dt.date):
             day = day.sort_values("datetime")
             h = day["high"].to_numpy(); low = day["low"].to_numpy()
@@ -76,7 +87,13 @@ def collect(funcs: dict, df: pd.DataFrame):
             rm = rolling_mean_np(v, 12); vb = np.full(n, np.nan); vb[1:] = rm[:-1]
             hours = day["datetime"].dt.hour.to_numpy()
             vr = np.where(vb > 0, v / np.where(vb > 0, vb, 1), np.nan)
-            avail = {"h": h, "low": low, "c": c, "v": v, "vb": vb}
+            if fdf is not None and not fdf.empty:
+                es, br = _align_flow(list(day["datetime"]), fdf)
+            else:
+                es = np.full(n, np.nan); br = np.full(n, np.nan)
+            # 봉배열 + 체결강도(es)/잔량비(br) — orderflow 피처도 검증 가능하게 별칭 제공
+            avail = {"h": h, "low": low, "c": c, "v": v, "vb": vb,
+                     "es": es, "br": br, "exec_strength": es, "bid_ask_ratio": br}
             for i in range(14, n - 1):
                 if hours[i] >= MAX_HOUR or np.isnan(vr[i]):
                     continue
@@ -110,8 +127,8 @@ def main() -> int:
         _write(lines, "신규 후보 없음")
         return 0
 
-    df = load_data()
-    vals, ys = collect(funcs, df)
+    df, flow = load_data()
+    vals, ys = collect(funcs, df, flow)
     lines.append(f"  표본 {len(ys):,} / 기본승률 {ys.mean() * 100:.1f}%")
     recommend = []
     for name, raw in vals.items():
