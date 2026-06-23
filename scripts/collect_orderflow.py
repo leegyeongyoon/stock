@@ -86,8 +86,9 @@ async def collect(codes: list[str], interval: int, minutes: int, book: bool, top
         if t.exec_strength:
             latest_strength[t.code] = (t.exec_strength, time.monotonic())
 
-    def _fresh_strength(code: str, max_age: float = 120.0) -> float | None:
+    def _fresh_strength(code: str, max_age: float = 300.0) -> float | None:
         # 신선도 가드: WS 끊겨 값이 오래되면(>max_age) 묵힌 값으로 오염시키지 않는다.
+        # 300초 — 체결강도는 누적값이라 5분 묵어도 현재값에 근접. 봉당 커버리지 ↑ (120초는 결손 과다).
         v = latest_strength.get(code)
         return v[0] if v and (time.monotonic() - v[1]) <= max_age else None
 
