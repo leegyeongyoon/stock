@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -44,6 +45,8 @@ class KISWebSocket:
         self._subscribed: set[str] = set()
         self._running = False
         self._recv_task: asyncio.Task | None = None
+        self._watchdog_task: asyncio.Task | None = None
+        self._last_tick = 0.0  # 마지막 체결틱 수신 시각(monotonic) — 좀비연결 감시용
 
     @property
     def subscribed_count(self) -> int:
@@ -62,18 +65,21 @@ class KISWebSocket:
             close_timeout=5,
         )
         self._running = True
+        self._last_tick = time.monotonic()
         self._recv_task = asyncio.create_task(self._recv_loop())
+        self._watchdog_task = asyncio.create_task(self._staleness_watchdog())
         logger.info(f"KIS WebSocket 연결 완료 ({'모의' if self.is_mock else '실전'})")
 
     async def stop(self) -> None:
         """Disconnect from WebSocket."""
         self._running = False
-        if self._recv_task:
-            self._recv_task.cancel()
-            try:
-                await self._recv_task
-            except asyncio.CancelledError:
-                pass
+        for _t in (self._recv_task, self._watchdog_task):
+            if _t:
+                _t.cancel()
+                try:
+                    await _t
+                except asyncio.CancelledError:
+                    pass
         if self._ws:
             await self._ws.close()
             self._ws = None
@@ -166,6 +172,25 @@ class KISWebSocket:
                 }
             },
         }
+
+    async def _staleness_watchdog(self, stale_sec: float = 120.0) -> None:
+        """좀비 연결 감시: 연결은 살아도 체결틱이 stale_sec 동안 안 오면 강제 재연결.
+
+        KIS WS는 끊겨도 에러 없이 데이터만 멈추는 경우가 있어 ping/pong으론 못 잡는다.
+        실측(2026-06-24): 개장 30분 후 체결틱이 종일 멈춰 커버리지 9%로 추락.
+        """
+        while self._running:
+            await asyncio.sleep(30)
+            if not self._running or not self._subscribed:
+                continue
+            if time.monotonic() - self._last_tick > stale_sec:
+                logger.warning(f"WS {stale_sec:.0f}초간 체결틱 없음(좀비 연결) — 강제 재연결")
+                self._last_tick = time.monotonic()  # 재연결 중 재발동 방지
+                try:
+                    if self._ws:
+                        await self._ws.close()  # recv_loop의 ConnectionClosed → _reconnect 발동
+                except Exception:  # noqa: BLE001
+                    pass
 
     async def _recv_loop(self) -> None:
         """Main receive loop for WebSocket messages."""
@@ -265,6 +290,7 @@ class KISWebSocket:
                 sell_cnt=int(fields[15]) if fields[15] else 0,
                 buy_cnt=int(fields[16]) if fields[16] else 0,
             )
+            self._last_tick = time.monotonic()
             if self.on_tick:
                 self.on_tick(tick)
         except (ValueError, IndexError) as e:
