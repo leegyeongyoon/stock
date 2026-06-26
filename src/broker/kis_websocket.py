@@ -248,6 +248,15 @@ class KISWebSocket:
             tr_id = header.get("tr_id", "")
             msg_cd = header.get("msg_cd", "")
 
+            if tr_id == "PINGPONG":
+                # KIS 연결유지: PINGPONG을 그대로 되돌려줘야 서버가 연결을 안 끊는다.
+                # 안 하면 개장 직후 연결 끊김+재연결 스톰 → 체결강도 커버리지 추락(실측).
+                try:
+                    await self._ws.send(raw)
+                    self._last_tick = time.monotonic()  # 연결 살아있음 → 좀비감시 오발동 방지
+                except Exception:  # noqa: BLE001
+                    pass
+                return
             if msg_cd == "OPSP0000":
                 return  # 구독 성공 ACK
             if "error" in str(data).lower() or msg_cd.startswith("E"):
