@@ -212,32 +212,33 @@ class KISWebSocket:
         codes = set(self._subscribed)
         self._subscribed.clear()
 
-        for attempt in range(5):
+        # 영구 포기 금지: 장중 네트워크가 잠깐 끊겨도 복구되면 다시 붙는다(이전 '5회 후 수신중단'
+        # 버그로 아침 단절 후 WS가 종일 죽어 커버리지 0% 됐었음). _running=False(stop)면 종료.
+        attempt = 0
+        while self._running:
             try:
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(min(2 ** min(attempt, 5), 30))  # 점증 백오프(최대 30초)
                 self._ws = await websockets.connect(
                     self.ws_url,
                     ping_interval=30,
                     ping_timeout=10,
-                    open_timeout=10,   # 재연결도 무한 대기 금지 (DNS풀 포화→메인루프 정지 방지)
+                    open_timeout=10,
                     close_timeout=5,
                 )
-                # Re-subscribe market data
                 for code in codes:
                     await self.subscribe_trade(code)
-                    await asyncio.sleep(0.1)
-                # Re-subscribe execution notices
+                    await asyncio.sleep(0.05)
                 try:
                     await self.subscribe_my_executions()
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning(f"체결통보 재구독 실패: {e}")
+                self._last_tick = time.monotonic()  # 재연결 직후 좀비감시 오발동 방지
                 logger.info(f"KIS WebSocket 재연결 성공 (시도 {attempt + 1})")
                 return
-            except Exception as e:
-                logger.warning(f"재연결 실패 (시도 {attempt + 1}): {e}")
-
-        logger.error("KIS WebSocket 재연결 5회 실패, 수신 중단")
-        self._running = False
+            except Exception as e:  # noqa: BLE001
+                attempt += 1
+                if attempt <= 3 or attempt % 20 == 0:  # 로그 스팸 방지
+                    logger.warning(f"재연결 실패 (시도 {attempt}): {e}")
 
     async def _handle_message(self, raw: str) -> None:
         """Parse and dispatch a WebSocket message."""
