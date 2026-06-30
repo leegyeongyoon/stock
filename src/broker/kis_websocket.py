@@ -47,6 +47,7 @@ class KISWebSocket:
         self._recv_task: asyncio.Task | None = None
         self._watchdog_task: asyncio.Task | None = None
         self._last_tick = 0.0  # 마지막 체결틱 수신 시각(monotonic) — 좀비연결 감시용
+        self._close_count = 0  # 누적 끊김 횟수(로그 throttle용)
 
     @property
     def subscribed_count(self) -> int:
@@ -198,8 +199,10 @@ class KISWebSocket:
             try:
                 raw = await self._ws.recv()
                 await self._handle_message(raw)
-            except websockets.ConnectionClosed:
-                logger.warning("KIS WebSocket 연결 끊김, 재연결 시도...")
+            except websockets.ConnectionClosed as e:
+                self._close_count += 1
+                if self._close_count <= 3 or self._close_count % 100 == 0:
+                    logger.warning(f"KIS WS 끊김 #{self._close_count} (code={e.code}, {e.reason or '-'}) — 재연결")
                 await self._reconnect()
             except asyncio.CancelledError:
                 break
@@ -217,7 +220,7 @@ class KISWebSocket:
         attempt = 0
         while self._running:
             try:
-                await asyncio.sleep(min(2 ** min(attempt, 5), 30))  # 점증 백오프(최대 30초)
+                await asyncio.sleep(min(max(2 ** min(attempt, 5), 3), 30))  # 백오프 최소3초~최대30초(storm 억제)
                 self._ws = await websockets.connect(
                     self.ws_url,
                     ping_interval=30,
