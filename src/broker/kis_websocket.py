@@ -48,6 +48,8 @@ class KISWebSocket:
         self._watchdog_task: asyncio.Task | None = None
         self._last_tick = 0.0  # 마지막 체결틱 수신 시각(monotonic) — 좀비연결 감시용
         self._close_count = 0  # 누적 끊김 횟수(로그 throttle용)
+        self._last_connect_ts = 0.0  # 마지막 연결 성공 시각 — 연결 수명 측정
+        self._unstable = 0  # 짧게 끊기는 연속 횟수 → 재접속 백오프 증가(storm 억제)
 
     @property
     def subscribed_count(self) -> int:
@@ -67,6 +69,7 @@ class KISWebSocket:
         )
         self._running = True
         self._last_tick = time.monotonic()
+        self._last_connect_ts = time.monotonic()
         self._recv_task = asyncio.create_task(self._recv_loop())
         self._watchdog_task = asyncio.create_task(self._staleness_watchdog())
         logger.info(f"KIS WebSocket 연결 완료 ({'모의' if self.is_mock else '실전'})")
@@ -201,8 +204,13 @@ class KISWebSocket:
                 await self._handle_message(raw)
             except websockets.ConnectionClosed as e:
                 self._close_count += 1
+                # 30초 못 버티고 끊기면 불안정 → 재접속 간격을 키운다(KIS 등록한도 소진 storm 억제)
+                if time.monotonic() - self._last_connect_ts < 30:
+                    self._unstable = min(self._unstable + 1, 5)
+                else:
+                    self._unstable = 0
                 if self._close_count <= 3 or self._close_count % 100 == 0:
-                    logger.warning(f"KIS WS 끊김 #{self._close_count} (code={e.code}, {e.reason or '-'}) — 재연결")
+                    logger.warning(f"KIS WS 끊김 #{self._close_count} (code={e.code}, unstable={self._unstable}) — 재연결")
                 await self._reconnect()
             except asyncio.CancelledError:
                 break
@@ -220,7 +228,8 @@ class KISWebSocket:
         attempt = 0
         while self._running:
             try:
-                await asyncio.sleep(min(max(2 ** min(attempt, 5), 3), 30))  # 백오프 최소3초~최대30초(storm 억제)
+                # 불안정할수록 길게: 3→6→12→24→48→60초. storm이 스스로 잦아들어 KIS 등록한도 회복.
+                await asyncio.sleep(min(3 * (2 ** self._unstable), 60))
                 self._ws = await websockets.connect(
                     self.ws_url,
                     ping_interval=30,
@@ -235,11 +244,13 @@ class KISWebSocket:
                     await self.subscribe_my_executions()
                 except Exception as e:  # noqa: BLE001
                     logger.warning(f"체결통보 재구독 실패: {e}")
+                self._last_connect_ts = time.monotonic()
                 self._last_tick = time.monotonic()  # 재연결 직후 좀비감시 오발동 방지
-                logger.info(f"KIS WebSocket 재연결 성공 (시도 {attempt + 1})")
+                logger.info(f"KIS WebSocket 재연결 성공 (시도 {attempt + 1}, unstable={self._unstable})")
                 return
             except Exception as e:  # noqa: BLE001
                 attempt += 1
+                self._unstable = min(self._unstable + 1, 5)  # 접속 실패도 불안정 → 더 늘림
                 if attempt <= 3 or attempt % 20 == 0:  # 로그 스팸 방지
                     logger.warning(f"재연결 실패 (시도 {attempt}): {e}")
 
