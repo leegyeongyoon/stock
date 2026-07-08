@@ -206,7 +206,7 @@ class KISWebSocket:
                 self._close_count += 1
                 # 30초 못 버티고 끊기면 불안정 → 재접속 간격을 키운다(KIS 등록한도 소진 storm 억제)
                 if time.monotonic() - self._last_connect_ts < 30:
-                    self._unstable = min(self._unstable + 1, 5)
+                    self._unstable = min(self._unstable + 1, 7)
                 else:
                     self._unstable = 0
                 if self._close_count <= 3 or self._close_count % 100 == 0:
@@ -228,8 +228,9 @@ class KISWebSocket:
         attempt = 0
         while self._running:
             try:
-                # 불안정할수록 길게: 3→6→12→24→48→60초. storm이 스스로 잦아들어 KIS 등록한도 회복.
-                await asyncio.sleep(min(3 * (2 ** self._unstable), 60))
+                # 불안정할수록 길게: 3→6→12→24→48→96→192→300초(최대 5분). 총체적 실패(계좌 throttle 등)
+                # 시 거의 안 두들겨 KIS가 제한을 빨리 풀게. 연결이 30초+ 버티면 _unstable=0으로 리셋.
+                await asyncio.sleep(min(3 * (2 ** self._unstable), 300))
                 self._ws = await websockets.connect(
                     self.ws_url,
                     ping_interval=30,
@@ -250,7 +251,7 @@ class KISWebSocket:
                 return
             except Exception as e:  # noqa: BLE001
                 attempt += 1
-                self._unstable = min(self._unstable + 1, 5)  # 접속 실패도 불안정 → 더 늘림
+                self._unstable = min(self._unstable + 1, 7)  # 접속 실패도 불안정 → 더 늘림
                 if attempt <= 3 or attempt % 20 == 0:  # 로그 스팸 방지
                     logger.warning(f"재연결 실패 (시도 {attempt}): {e}")
 
