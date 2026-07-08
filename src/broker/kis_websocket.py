@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -44,6 +45,11 @@ class KISWebSocket:
         self._subscribed: set[str] = set()
         self._running = False
         self._recv_task: asyncio.Task | None = None
+        self._watchdog_task: asyncio.Task | None = None
+        self._last_tick = 0.0  # 마지막 체결틱 수신 시각(monotonic) — 좀비연결 감시용
+        self._close_count = 0  # 누적 끊김 횟수(로그 throttle용)
+        self._last_connect_ts = 0.0  # 마지막 연결 성공 시각 — 연결 수명 측정
+        self._unstable = 0  # 짧게 끊기는 연속 횟수 → 재접속 백오프 증가(storm 억제)
 
     @property
     def subscribed_count(self) -> int:
@@ -58,20 +64,26 @@ class KISWebSocket:
             self.ws_url,
             ping_interval=30,
             ping_timeout=10,
+            open_timeout=10,   # 연결(+DNS) 무한 대기 방지 — 네트워크 단절 시 빨리 실패
+            close_timeout=5,
         )
         self._running = True
+        self._last_tick = time.monotonic()
+        self._last_connect_ts = time.monotonic()
         self._recv_task = asyncio.create_task(self._recv_loop())
+        self._watchdog_task = asyncio.create_task(self._staleness_watchdog())
         logger.info(f"KIS WebSocket 연결 완료 ({'모의' if self.is_mock else '실전'})")
 
     async def stop(self) -> None:
         """Disconnect from WebSocket."""
         self._running = False
-        if self._recv_task:
-            self._recv_task.cancel()
-            try:
-                await self._recv_task
-            except asyncio.CancelledError:
-                pass
+        for _t in (self._recv_task, self._watchdog_task):
+            if _t:
+                _t.cancel()
+                try:
+                    await _t
+                except asyncio.CancelledError:
+                    pass
         if self._ws:
             await self._ws.close()
             self._ws = None
@@ -165,14 +177,40 @@ class KISWebSocket:
             },
         }
 
+    async def _staleness_watchdog(self, stale_sec: float = 120.0) -> None:
+        """좀비 연결 감시: 연결은 살아도 체결틱이 stale_sec 동안 안 오면 강제 재연결.
+
+        KIS WS는 끊겨도 에러 없이 데이터만 멈추는 경우가 있어 ping/pong으론 못 잡는다.
+        실측(2026-06-24): 개장 30분 후 체결틱이 종일 멈춰 커버리지 9%로 추락.
+        """
+        while self._running:
+            await asyncio.sleep(30)
+            if not self._running or not self._subscribed:
+                continue
+            if time.monotonic() - self._last_tick > stale_sec:
+                logger.warning(f"WS {stale_sec:.0f}초간 체결틱 없음(좀비 연결) — 강제 재연결")
+                self._last_tick = time.monotonic()  # 재연결 중 재발동 방지
+                try:
+                    if self._ws:
+                        await self._ws.close()  # recv_loop의 ConnectionClosed → _reconnect 발동
+                except Exception:  # noqa: BLE001
+                    pass
+
     async def _recv_loop(self) -> None:
         """Main receive loop for WebSocket messages."""
         while self._running:
             try:
                 raw = await self._ws.recv()
                 await self._handle_message(raw)
-            except websockets.ConnectionClosed:
-                logger.warning("KIS WebSocket 연결 끊김, 재연결 시도...")
+            except websockets.ConnectionClosed as e:
+                self._close_count += 1
+                # 30초 못 버티고 끊기면 불안정 → 재접속 간격을 키운다(KIS 등록한도 소진 storm 억제)
+                if time.monotonic() - self._last_connect_ts < 30:
+                    self._unstable = min(self._unstable + 1, 7)
+                else:
+                    self._unstable = 0
+                if self._close_count <= 3 or self._close_count % 100 == 0:
+                    logger.warning(f"KIS WS 끊김 #{self._close_count} (code={e.code}, unstable={self._unstable}) — 재연결")
                 await self._reconnect()
             except asyncio.CancelledError:
                 break
@@ -185,30 +223,37 @@ class KISWebSocket:
         codes = set(self._subscribed)
         self._subscribed.clear()
 
-        for attempt in range(5):
+        # 영구 포기 금지: 장중 네트워크가 잠깐 끊겨도 복구되면 다시 붙는다(이전 '5회 후 수신중단'
+        # 버그로 아침 단절 후 WS가 종일 죽어 커버리지 0% 됐었음). _running=False(stop)면 종료.
+        attempt = 0
+        while self._running:
             try:
-                await asyncio.sleep(2 ** attempt)
+                # 불안정할수록 길게: 3→6→12→24→48→96→192→300초(최대 5분). 총체적 실패(계좌 throttle 등)
+                # 시 거의 안 두들겨 KIS가 제한을 빨리 풀게. 연결이 30초+ 버티면 _unstable=0으로 리셋.
+                await asyncio.sleep(min(3 * (2 ** self._unstable), 300))
                 self._ws = await websockets.connect(
                     self.ws_url,
                     ping_interval=30,
                     ping_timeout=10,
+                    open_timeout=10,
+                    close_timeout=5,
                 )
-                # Re-subscribe market data
                 for code in codes:
                     await self.subscribe_trade(code)
-                    await asyncio.sleep(0.1)
-                # Re-subscribe execution notices
+                    await asyncio.sleep(0.05)
                 try:
                     await self.subscribe_my_executions()
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning(f"체결통보 재구독 실패: {e}")
-                logger.info(f"KIS WebSocket 재연결 성공 (시도 {attempt + 1})")
+                self._last_connect_ts = time.monotonic()
+                self._last_tick = time.monotonic()  # 재연결 직후 좀비감시 오발동 방지
+                logger.info(f"KIS WebSocket 재연결 성공 (시도 {attempt + 1}, unstable={self._unstable})")
                 return
-            except Exception as e:
-                logger.warning(f"재연결 실패 (시도 {attempt + 1}): {e}")
-
-        logger.error("KIS WebSocket 재연결 5회 실패, 수신 중단")
-        self._running = False
+            except Exception as e:  # noqa: BLE001
+                attempt += 1
+                self._unstable = min(self._unstable + 1, 7)  # 접속 실패도 불안정 → 더 늘림
+                if attempt <= 3 or attempt % 20 == 0:  # 로그 스팸 방지
+                    logger.warning(f"재연결 실패 (시도 {attempt}): {e}")
 
     async def _handle_message(self, raw: str) -> None:
         """Parse and dispatch a WebSocket message."""
@@ -219,6 +264,15 @@ class KISWebSocket:
             tr_id = header.get("tr_id", "")
             msg_cd = header.get("msg_cd", "")
 
+            if tr_id == "PINGPONG":
+                # KIS 연결유지: PINGPONG을 그대로 되돌려줘야 서버가 연결을 안 끊는다.
+                # 안 하면 개장 직후 연결 끊김+재연결 스톰 → 체결강도 커버리지 추락(실측).
+                try:
+                    await self._ws.send(raw)
+                    self._last_tick = time.monotonic()  # 연결 살아있음 → 좀비감시 오발동 방지
+                except Exception:  # noqa: BLE001
+                    pass
+                return
             if msg_cd == "OPSP0000":
                 return  # 구독 성공 ACK
             if "error" in str(data).lower() or msg_cd.startswith("E"):
@@ -239,7 +293,11 @@ class KISWebSocket:
             self._handle_execution_notice(body)
 
     def _handle_trade_tick(self, body: str) -> None:
-        """Parse real-time trade tick data."""
+        """Parse real-time trade tick data (H0STCNT0).
+
+        필드: 10=매도호가1, 11=매수호가1, 12=체결거래량, 13=누적거래량,
+              15=매도체결건수, 16=매수체결건수, 18=체결강도(cttr).
+        """
         fields = body.split("^")
         if len(fields) < 20:
             return
@@ -251,9 +309,13 @@ class KISWebSocket:
                 volume=int(fields[12]),
                 timestamp=fields[1],
                 change_rate=float(fields[5]) if fields[5] else 0.0,
-                ask_price=int(fields[3]) if fields[3] else 0,
-                bid_price=int(fields[4]) if fields[4] else 0,
+                ask_price=int(fields[10]) if fields[10] else 0,
+                bid_price=int(fields[11]) if fields[11] else 0,
+                exec_strength=float(fields[18]) if fields[18] else 0.0,  # 체결강도
+                sell_cnt=int(fields[15]) if fields[15] else 0,
+                buy_cnt=int(fields[16]) if fields[16] else 0,
             )
+            self._last_tick = time.monotonic()
             if self.on_tick:
                 self.on_tick(tick)
         except (ValueError, IndexError) as e:

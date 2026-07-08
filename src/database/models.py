@@ -1,6 +1,6 @@
 """SQLAlchemy database models."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Optional
 
@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -383,3 +384,240 @@ class StrategyPerformance(Base):
 
     def __repr__(self) -> str:
         return f"<StrategyPerformance(date={self.date}, strategy={self.strategy_name}, pnl={self.pnl})>"
+
+
+# ── 단타 재설계: 데이터 기반 모델 ──────────────────────────────────
+# 모두 insert/upsert 전용(불변 스냅샷). 같은 (date,...) 재수집은 멱등 갱신.
+
+
+class OHLCVIntraday(Base):
+    """분봉 데이터. 기존 raw 테이블(scripts/fetch_top_stocks_data.py)을 ORM에 매핑.
+
+    컬럼/제약은 기존 테이블과 정확히 일치시켜 create_all 충돌을 피한다.
+    1분봉은 interval='1m', 기존 5분봉은 '5m'로 공존한다.
+    """
+
+    __tablename__ = "ohlcv_intraday"
+    __table_args__ = (
+        UniqueConstraint("code", "datetime", "interval", name="uq_ohlcv_intraday_code_dt_iv"),
+        Index("idx_intraday_code", "code"),
+        Index("idx_intraday_datetime", "datetime"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    datetime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    open: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    high: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    low: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    close: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    volume: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    interval: Mapped[str] = mapped_column(String(10), nullable=False, default="5m")
+
+    def __repr__(self) -> str:
+        return f"<OHLCVIntraday(code={self.code}, dt={self.datetime}, iv={self.interval})>"
+
+
+class DailyMovers(Base):
+    """생존편향 없는 '그날의 유니버스' 스냅샷.
+
+    그날 어떤 스캐너 규칙(급등/거래대금/거래량급증/상한가)으로든 포착된 모든 종목을
+    하루 1행으로 기록한다. 백테스트가 "그날 아침 스캐너가 띄웠을 종목"을 재구성할 수 있게 한다.
+    """
+
+    __tablename__ = "daily_movers"
+    __table_args__ = (
+        UniqueConstraint("date", "code", name="uq_daily_movers_date_code"),
+        Index("idx_daily_movers_date", "date"),
+        Index("idx_daily_movers_change", "date", "change_rate"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    market: Mapped[Optional[str]] = mapped_column(String(10))  # KOSPI/KOSDAQ
+
+    open: Mapped[Optional[int]] = mapped_column(Integer)
+    high: Mapped[Optional[int]] = mapped_column(Integer)
+    low: Mapped[Optional[int]] = mapped_column(Integer)
+    close: Mapped[Optional[int]] = mapped_column(Integer)
+    change_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))  # 당일 등락률(%)
+    volume: Mapped[Optional[int]] = mapped_column(BigInteger)
+    value: Mapped[Optional[int]] = mapped_column(BigInteger)  # 거래대금
+    market_cap: Mapped[Optional[int]] = mapped_column(BigInteger)  # 시가총액
+    volume_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))  # 당일/20일평균 거래량
+
+    is_limit_up: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_limit_down: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    rank_change: Mapped[Optional[int]] = mapped_column(Integer)  # 등락률 순위
+    rank_value: Mapped[Optional[int]] = mapped_column(Integer)  # 거래대금 순위
+    rank_volume_ratio: Mapped[Optional[int]] = mapped_column(Integer)  # 거래량급증 순위
+
+    flags: Mapped[Optional[list]] = mapped_column(JSONB)  # ["top_gainer","value_top","vol_surge","limit_up"]
+    theme_tags: Mapped[Optional[list]] = mapped_column(JSONB)  # 후속 join으로 채움(nullable)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<DailyMovers(date={self.date}, code={self.code}, chg={self.change_rate})>"
+
+
+class LimitEvent(Base):
+    """상한가/하한가 이벤트 + 최초 도달 시각(상따 현실성/체결불가 모델의 핵심)."""
+
+    __tablename__ = "limit_events"
+    __table_args__ = (
+        UniqueConstraint("date", "code", "event_type", name="uq_limit_events_date_code_type"),
+        Index("idx_limit_events_date", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(10), nullable=False)  # limit_up/limit_down
+    limit_price: Mapped[Optional[int]] = mapped_column(Integer)
+    first_hit_time: Mapped[Optional[time]] = mapped_column(Time)  # 분봉 확인 시에만
+    hit_count: Mapped[int] = mapped_column(Integer, default=0)
+    closed_at_limit: Mapped[bool] = mapped_column(Boolean, default=False)  # 종가=상한가(굳히기)
+    source: Mapped[str] = mapped_column(String(20), default="daily_inferred")  # daily_inferred/minute_confirmed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<LimitEvent(date={self.date}, code={self.code}, type={self.event_type})>"
+
+
+class StockTheme(Base):
+    """일자별 테마 소속(네이버 크롤 기반, 전진 수집 전용)."""
+
+    __tablename__ = "stock_themes"
+    __table_args__ = (
+        UniqueConstraint("date", "code", "theme_code", name="uq_stock_themes_date_code_theme"),
+        Index("idx_stock_themes_date", "date"),
+        Index("idx_stock_themes_theme", "date", "theme_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    theme_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    theme_name: Mapped[Optional[str]] = mapped_column(String(100))
+    is_leader: Mapped[bool] = mapped_column(Boolean, default=False)  # 대장주
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<StockTheme(date={self.date}, code={self.code}, theme={self.theme_name})>"
+
+
+class DailyHotTheme(Base):
+    """일자별 핫테마 리더보드 스냅샷."""
+
+    __tablename__ = "daily_hot_themes"
+    __table_args__ = (
+        UniqueConstraint("date", "theme_code", name="uq_daily_hot_themes_date_theme"),
+        Index("idx_daily_hot_themes_date", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    theme_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    theme_name: Mapped[Optional[str]] = mapped_column(String(100))
+    rank: Mapped[Optional[int]] = mapped_column(Integer)
+    change_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))  # 테마 평균 등락률
+    up_count: Mapped[Optional[int]] = mapped_column(Integer)
+    down_count: Mapped[Optional[int]] = mapped_column(Integer)
+    stock_count: Mapped[Optional[int]] = mapped_column(Integer)
+    leader_code: Mapped[Optional[str]] = mapped_column(String(20))
+    leader_name: Mapped[Optional[str]] = mapped_column(String(100))
+    total_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))
+    news_hot_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))
+    sentiment: Mapped[Optional[str]] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<DailyHotTheme(date={self.date}, theme={self.theme_name}, rank={self.rank})>"
+
+
+class MockForwardFill(Base):
+    """모의 포워드 검증용: 신호의 의도 체결 vs 실제(모의) 체결 로그.
+
+    백테스트 가정과 모의 실측의 슬리피지/체결률/승률을 비교(실거래 진입 게이트)하기 위함.
+    라이브 스키마(live_trades)를 건드리지 않도록 별도 테이블로 둔다.
+    """
+
+    __tablename__ = "mock_forward_fills"
+    __table_args__ = (
+        Index("idx_mock_fills_date", "traded_at"),
+        Index("idx_mock_fills_tier", "tier"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    traded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    tier: Mapped[str] = mapped_column(String(20), nullable=False)  # BALANCED/AGGRESSIVE
+    side: Mapped[str] = mapped_column(String(4), nullable=False)   # buy/sell
+    strategy_name: Mapped[Optional[str]] = mapped_column(String(50))
+    theme: Mapped[Optional[str]] = mapped_column(String(100))
+
+    intended_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    intended_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    actual_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    actual_qty: Mapped[int] = mapped_column(Integer, default=0)
+    reason: Mapped[Optional[str]] = mapped_column(String(20))  # filled/partial/blocked/failed
+    is_win: Mapped[Optional[bool]] = mapped_column(Boolean)     # 청산 결과(있으면)
+    is_mock: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<MockForwardFill(code={self.code}, tier={self.tier}, side={self.side})>"
+
+
+class OrderFlowSnapshot(Base):
+    """호가/체결강도 스냅샷 — OHLC 봉에 없는 '오를 놈' 신호(전진 수집).
+
+    그리드 전수 검색 결과 OHLC만으론 엣지가 없었음. 체결강도/호가잔량비가
+    상승 지속을 예측하는지 검증하기 위해 장중 폴링으로 모은다.
+    """
+
+    __tablename__ = "orderflow_snapshots"
+    __table_args__ = (
+        Index("idx_orderflow_code_dt", "code", "captured_at"),
+        Index("idx_orderflow_dt", "captured_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    current_price: Mapped[Optional[int]] = mapped_column(Integer)
+    exec_strength: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))   # 체결강도
+    total_bid_qty: Mapped[Optional[int]] = mapped_column(BigInteger)          # 총매수호가잔량
+    total_ask_qty: Mapped[Optional[int]] = mapped_column(BigInteger)          # 총매도호가잔량
+    bid_ask_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))  # 매수/매도 잔량비
+    volume: Mapped[Optional[int]] = mapped_column(BigInteger)
+    book: Mapped[Optional[dict]] = mapped_column(JSONB)  # 10단계 호가(옵션)
+
+    def __repr__(self) -> str:
+        return f"<OrderFlowSnapshot(code={self.code}, at={self.captured_at}, str={self.exec_strength})>"
+
+
+class CollectionJobLog(Base):
+    """배치 수집 작업 재개·멱등성 체크포인트."""
+
+    __tablename__ = "collection_job_logs"
+    __table_args__ = (
+        UniqueConstraint("job_name", "target_date", name="uq_collection_job_name_date"),
+        Index("idx_collection_job_date", "target_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="running")  # running/completed/failed/partial
+    codes_total: Mapped[int] = mapped_column(Integer, default=0)
+    codes_done: Mapped[int] = mapped_column(Integer, default=0)
+    records_written: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    def __repr__(self) -> str:
+        return f"<CollectionJobLog(job={self.job_name}, date={self.target_date}, status={self.status})>"

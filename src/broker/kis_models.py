@@ -59,6 +59,29 @@ class MinuteBar(BaseModel):
     volume: int
 
 
+class OrderFlow(BaseModel):
+    """호가/체결강도 스냅샷 — OHLC 봉에 없는 '오를 놈' 신호.
+
+    exec_strength(체결강도): 100 기준, >100이면 매수 체결 우위(매수세 강함).
+    bid_ask_ratio(호가 잔량비): 총매수잔량/총매도잔량, >1이면 매수 대기 우위(지지).
+    """
+    code: str
+    timestamp: Optional[datetime] = None
+    current_price: int = 0
+    exec_strength: float = 0.0       # 체결강도 (cttr)
+    total_bid_qty: int = 0           # 총매수호가잔량
+    total_ask_qty: int = 0           # 총매도호가잔량
+    volume: int = 0                  # 누적거래량
+    # 10단계 호가 (옵션): [(가격, 잔량), ...]
+    asks: list[tuple[int, int]] = Field(default_factory=list)
+    bids: list[tuple[int, int]] = Field(default_factory=list)
+
+    @property
+    def bid_ask_ratio(self) -> float:
+        """총매수잔량/총매도잔량 (>1 = 매수 우위)."""
+        return self.total_bid_qty / self.total_ask_qty if self.total_ask_qty else 0.0
+
+
 class OrderRequest(BaseModel):
     """Order request to KIS API."""
     stock_code: str = Field(..., max_length=6)
@@ -134,7 +157,7 @@ class ExecutionInfo(BaseModel):
 
 
 class WSTickData(BaseModel):
-    """Real-time tick data from WebSocket."""
+    """Real-time tick data from WebSocket (H0STCNT0 실시간 체결)."""
     code: str
     price: int
     volume: int
@@ -142,3 +165,7 @@ class WSTickData(BaseModel):
     change_rate: float = 0.0
     ask_price: int = 0
     bid_price: int = 0
+    # 체결강도/체결건수 — OHLC 봉에 없는 매수세 신호 (실시간)
+    exec_strength: float = 0.0   # 체결강도 cttr (>100 매수 우위)
+    buy_cnt: int = 0             # 매수 체결건수
+    sell_cnt: int = 0           # 매도 체결건수

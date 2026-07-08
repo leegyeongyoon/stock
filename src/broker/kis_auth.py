@@ -1,7 +1,9 @@
 """KIS OAuth2 authentication - token issuance and renewal."""
 
 import asyncio
+import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import httpx
 from loguru import logger
@@ -36,6 +38,8 @@ class KISAuth:
         self.base_url = MOCK_BASE_URL if is_mock else REAL_BASE_URL
         self._token: TokenInfo | None = None
         self._lock = asyncio.Lock()
+        # 토큰 디스크 캐시(24h 유효) — 재시작마다 재발급 방지(rate limit 회피). 모의/실전 분리.
+        self._cache_path = Path.home() / ".config" / f"kis_token_{'mock' if is_mock else 'live'}.json"
 
     @property
     def token(self) -> TokenInfo | None:
@@ -51,8 +55,46 @@ class KISAuth:
         """Get valid access token, refreshing if needed."""
         async with self._lock:
             if not self.is_token_valid:
+                self._load_cached_token()  # 디스크에 살아있는 토큰 있으면 재사용
+            if not self.is_token_valid:
                 await self._issue_token()
             return self._token.access_token
+
+    def _load_cached_token(self) -> None:
+        """디스크 캐시에서 유효 토큰 로드 — 재발급(rate limit) 회피."""
+        try:
+            if not self._cache_path.exists():
+                return
+            d = json.loads(self._cache_path.read_text())
+            if d.get("app_key") != self.app_key:  # 키 바뀌면 무효
+                return
+            expires_at = datetime.fromisoformat(d["expires_at"])
+            if datetime.now() < expires_at - timedelta(minutes=30):
+                self._token = TokenInfo(
+                    access_token=d["access_token"],
+                    token_type=d.get("token_type", "Bearer"),
+                    expires_at=expires_at,
+                    expires_in=int(d.get("expires_in", 86400)),
+                )
+                logger.info(f"KIS 토큰 디스크 캐시 재사용 ({'모의' if self.is_mock else '실전'}), "
+                            f"만료 {expires_at:%m-%d %H:%M}")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _save_token(self) -> None:
+        """발급 토큰을 디스크에 저장(chmod 600) — 다음 프로세스가 재사용."""
+        try:
+            self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+            self._cache_path.write_text(json.dumps({
+                "app_key": self.app_key,
+                "access_token": self._token.access_token,
+                "token_type": self._token.token_type,
+                "expires_at": self._token.expires_at.isoformat(),
+                "expires_in": self._token.expires_in,
+            }))
+            self._cache_path.chmod(0o600)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def _issue_token(self) -> None:
         """Request new access token from KIS API (with retry for rate limit)."""
@@ -95,6 +137,7 @@ class KISAuth:
             expires_at=datetime.now() + timedelta(seconds=expires_in),
             expires_in=expires_in,
         )
+        self._save_token()
 
         logger.info(
             f"KIS 토큰 발급 완료 ({'모의' if self.is_mock else '실전'}), "

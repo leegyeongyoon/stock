@@ -16,69 +16,16 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
+# 거래일/장중 판정은 경량 모듈로 분리(데이터 수집 스크립트가 엔진 스택을 끌어오지 않게).
+# 하위호환: 기존 `from src.engine.scheduler import is_trading_day/KOREAN_HOLIDAYS` 유지.
+from src.utils.trading_calendar import (  # noqa: F401
+    KOREAN_HOLIDAYS,
+    is_market_hours,
+    is_trading_day,
+)
+
 if TYPE_CHECKING:
     from src.engine.trading_engine import TradingEngine
-
-# 2025-2026 한국 공휴일 (주식시장 휴장일)
-KOREAN_HOLIDAYS: set[date] = {
-    # 2025
-    date(2025, 1, 1),   # 신정
-    date(2025, 1, 28),  # 설날 연휴
-    date(2025, 1, 29),  # 설날
-    date(2025, 1, 30),  # 설날 연휴
-    date(2025, 3, 1),   # 삼일절
-    date(2025, 5, 1),   # 근로자의 날
-    date(2025, 5, 5),   # 어린이날
-    date(2025, 5, 6),   # 부처님오신날
-    date(2025, 6, 6),   # 현충일
-    date(2025, 8, 15),  # 광복절
-    date(2025, 10, 3),  # 개천절
-    date(2025, 10, 6),  # 추석 연휴
-    date(2025, 10, 7),  # 추석
-    date(2025, 10, 8),  # 추석 연휴
-    date(2025, 10, 9),  # 한글날
-    date(2025, 12, 25), # 크리스마스
-    date(2025, 12, 31), # 연말 휴장
-    # 2026
-    date(2026, 1, 1),   # 신정
-    date(2026, 2, 16),  # 설날 연휴
-    date(2026, 2, 17),  # 설날
-    date(2026, 2, 18),  # 설날 연휴
-    date(2026, 3, 1),   # 삼일절 (일요일→3/2 대체)
-    date(2026, 3, 2),   # 삼일절 대체휴일
-    date(2026, 5, 1),   # 근로자의 날
-    date(2026, 5, 5),   # 어린이날
-    date(2026, 5, 24),  # 부처님오신날
-    date(2026, 6, 6),   # 현충일
-    date(2026, 8, 15),  # 광복절
-    date(2026, 9, 24),  # 추석 연휴
-    date(2026, 9, 25),  # 추석
-    date(2026, 9, 26),  # 추석 연휴
-    date(2026, 10, 3),  # 개천절
-    date(2026, 10, 9),  # 한글날
-    date(2026, 12, 25), # 크리스마스
-    date(2026, 12, 31), # 연말 휴장
-}
-
-
-def is_trading_day(d: date | None = None) -> bool:
-    """Check if given date is a trading day (weekday + not holiday)."""
-    d = d or date.today()
-    if d.weekday() >= 5:  # Saturday=5, Sunday=6
-        return False
-    if d in KOREAN_HOLIDAYS:
-        return False
-    return True
-
-
-def is_market_hours() -> bool:
-    """Check if current time is within market trading hours (09:00 ~ 15:30 KST)."""
-    if not is_trading_day():
-        return False
-    now = datetime.now()
-    market_open = time(9, 0)
-    market_close = time(15, 30)
-    return market_open <= now.time() <= market_close
 
 
 class TradingScheduler:

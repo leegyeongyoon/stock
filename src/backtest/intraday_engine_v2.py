@@ -7,6 +7,7 @@ Key optimizations:
 - Merged timestamp iteration across all stocks per day
 """
 
+from dataclasses import replace
 from datetime import time
 
 import numpy as np
@@ -27,8 +28,41 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _vol_avg_at(ind: dict, idx: int):
+    """precompute의 20일 평균 거래량(있으면)을 NaN-safe하게 반환. realism 슬리피지용."""
+    arr = ind.get("vol_avg_20")
+    if arr is None or idx >= len(arr):
+        return None
+    v = float(arr[idx])
+    return v if v == v and v > 0 else None  # NaN 체크
+
+
+def _normalize_exit(exit_signal) -> tuple[str, str, float]:
+    """check_exit_fast 반환을 (action, reason, fraction)으로 정규화.
+
+    - str  → 전체청산 ("close")
+    - dict → {"action": "close"|"partial", "reason": str, "fraction": float}
+    """
+    if isinstance(exit_signal, dict):
+        action = exit_signal.get("action", "close")
+        reason = exit_signal.get("reason", action)
+        fraction = float(exit_signal.get("fraction", 1.0))
+        return action, reason, fraction
+    return "close", str(exit_signal), 1.0
+
+
 class IntradayBacktestEngineV2(IntradayBacktestEngine):
     """Optimized intraday backtest engine using pre-computed numpy arrays."""
+
+    def _sell_fill(self, realism, level_price: float, ind: dict, idx: int, qty: int) -> float:
+        """매도 체결가. realism이 있으면 슬리피지로 레벨을 뚫고 불리하게 체결."""
+        if realism is None:
+            return level_price
+        return realism.apply_slippage(
+            "sell", level_price,
+            float(ind["high"][idx]), float(ind["low"][idx]), float(ind["volume"][idx]),
+            qty, _vol_avg_at(ind, idx),
+        )
 
     def run(
         self,
@@ -64,6 +98,8 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
         logger.info(f"Trading days: {len(all_dates)}")
 
         force_close_time = self.config.force_close_time
+        realism = self.config.realism            # None이면 기존 동작
+        execution = self.config.execution         # "signal_close" | "next_open"
 
         for current_date in tqdm(all_dates, desc="Backtesting [V2]", disable=not show_progress):
             day_pnl = 0.0
@@ -127,9 +163,14 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
                     low_val = float(ind["low"][idx])
                     high_val = float(ind["high"][idx])
 
+                    # 트레일링용 최고가 갱신 (불변: 새 객체로 교체). 전략이 pos.peak_price로 트레일링 구현 가능
+                    if high_val > pos.peak_price:
+                        pos = positions[code] = replace(pos, peak_price=high_val)
+
                     # Stop loss
                     if low_val <= pos.stop_loss:
-                        trade = self._close_position(pos, pos.stop_loss, ts, "Stop loss")
+                        fill = self._sell_fill(realism, pos.stop_loss, ind, idx, pos.quantity)
+                        trade = self._close_position(pos, fill, ts, "Stop loss")
                         all_trades.append(trade)
                         capital += trade.pnl
                         day_pnl += trade.pnl
@@ -138,18 +179,35 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
 
                     # Take profit
                     if high_val >= pos.take_profit:
-                        trade = self._close_position(pos, pos.take_profit, ts, "Take profit")
+                        fill = self._sell_fill(realism, pos.take_profit, ind, idx, pos.quantity)
+                        trade = self._close_position(pos, fill, ts, "Take profit")
                         all_trades.append(trade)
                         capital += trade.pnl
                         day_pnl += trade.pnl
                         del positions[code]
                         continue
 
-                    # Strategy exit signal (fast path)
+                    # Strategy exit signal (fast path) — str(전체청산) 또는 dict(부분/트레일링)
                     exit_signal = strategy.check_exit_fast(pos, idx, ind)
                     if exit_signal:
-                        price = float(ind["close"][idx])
-                        trade = self._close_position(pos, price, ts, exit_signal)
+                        close_px = float(ind["close"][idx])
+                        action, reason, fraction = _normalize_exit(exit_signal)
+                        if action == "partial":
+                            sold = int(pos.quantity * fraction)
+                            if 0 < sold < pos.quantity:
+                                fill = self._sell_fill(realism, close_px, ind, idx, sold)
+                                trade = self._close_position_qty(pos, fill, ts, reason, sold)
+                                all_trades.append(trade)
+                                capital += trade.pnl
+                                day_pnl += trade.pnl
+                                # 불변: 부분익절 후 잔량/플래그를 새 객체로 교체
+                                positions[code] = replace(
+                                    pos, quantity=pos.quantity - sold, partial_done=True
+                                )
+                                continue
+                            # sold가 전체 이상이면 전체청산으로 처리
+                        fill = self._sell_fill(realism, close_px, ind, idx, pos.quantity)
+                        trade = self._close_position(pos, fill, ts, reason)
                         all_trades.append(trade)
                         capital += trade.pnl
                         day_pnl += trade.pnl
@@ -183,31 +241,64 @@ class IntradayBacktestEngineV2(IntradayBacktestEngine):
                     # 확신도 내림차순 정렬
                     pending_signals.sort(key=lambda x: x[4], reverse=True)
 
-                    for code, idx, ind, signal, _ in pending_signals:
+                    for code, sig_idx, ind, signal, _ in pending_signals:
                         if len(positions) >= self.config.max_positions:
                             break
 
-                        price = float(ind["close"][idx])
-                        quantity = int(available_capital / price)
+                        # 체결 시점: next_open이면 다음 봉 시가, 아니면 신호 봉 종가
+                        if execution == "next_open":
+                            fill_idx = sig_idx + 1
+                            if fill_idx >= ind["n_bars"]:
+                                continue  # 다음 봉 없음 → 진입 불가
+                            base_price = float(ind["open"][fill_idx])
+                            entry_ts = ind["timestamps"][fill_idx]
+                        else:
+                            fill_idx = sig_idx
+                            base_price = float(ind["close"][sig_idx])
+                            entry_ts = ts
 
-                        if quantity > 0:
-                            stop_loss_price = price * (1 - signal.get("stop_loss", 0.02))
-                            take_profit_price = price * (1 + signal.get("take_profit", 0.03))
+                        if base_price <= 0:
+                            continue
+                        desired_qty = int(available_capital / base_price)
+                        if desired_qty <= 0:
+                            continue
 
-                            positions[code] = IntradayPosition(
-                                code=code,
-                                entry_price=price,
-                                entry_time=ts,
-                                quantity=quantity,
-                                strategy_name=strategy.name,
-                                stop_loss=stop_loss_price,
-                                take_profit=take_profit_price,
-                                entry_reason=signal.get("reason", ""),
-                                entry_bar_idx=idx,
+                        # 체결 게이트 (realism): 상한가 잠김/유동성/슬리피지 반영
+                        if realism is not None:
+                            res = realism.can_fill(
+                                "buy", base_price,
+                                float(ind["high"][fill_idx]), float(ind["low"][fill_idx]),
+                                float(ind["volume"][fill_idx]), desired_qty,
+                                is_limit_locked=bool(signal.get("limit_locked", False)),
+                                vol_avg_20=_vol_avg_at(ind, fill_idx),
                             )
+                            if res.filled_qty <= 0:
+                                continue
+                            qty = res.filled_qty
+                            entry_price = res.fill_price
+                        else:
+                            qty = desired_qty
+                            entry_price = base_price
 
-                            commission = price * quantity * self.config.commission_rate
-                            capital -= commission
+                        stop_loss_price = entry_price * (1 - signal.get("stop_loss", 0.02))
+                        take_profit_price = entry_price * (1 + signal.get("take_profit", 0.03))
+
+                        positions[code] = IntradayPosition(
+                            code=code,
+                            entry_price=entry_price,
+                            entry_time=entry_ts,
+                            quantity=qty,
+                            strategy_name=strategy.name,
+                            stop_loss=stop_loss_price,
+                            take_profit=take_profit_price,
+                            entry_reason=signal.get("reason", ""),
+                            entry_bar_idx=fill_idx,
+                            peak_price=entry_price,
+                            original_quantity=qty,
+                        )
+
+                        commission = entry_price * qty * self.config.commission_rate
+                        capital -= commission
 
             # Close remaining positions at end of day
             for code in list(positions.keys()):

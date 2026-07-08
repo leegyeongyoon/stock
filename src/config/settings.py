@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     kis_account_no: str = ""           # 계좌번호 (8자리+2자리)
     kis_is_mock: bool = True           # True=모의투자, False=실전투자
 
+    # KRX 정보데이터시스템 (data.krx.co.kr) — pykrx 로그인용
+    krx_id: str = ""
+    krx_pw: str = ""
+
     # Logging
     log_level: str = "INFO"
 

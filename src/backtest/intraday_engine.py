@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
+from src.backtest.realism import RealismModel
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,6 +34,10 @@ class IntradayPosition:
     take_profit: float
     entry_reason: str = ""
     entry_bar_idx: int = 0
+    # 부분익절/트레일링용 (realism 경로에서만 갱신)
+    peak_price: float = 0.0          # 진입 후 최고가 (트레일링 스톱용)
+    original_quantity: int = 0       # 진입 시 수량 (부분익절 추적용)
+    partial_done: bool = False       # 부분익절 1회 실행 여부
 
 
 @dataclass
@@ -59,6 +64,10 @@ class IntradayBacktestConfig:
     commission_rate: float = COMMISSION_RATE
     tax_rate: float = TAX_RATE
     force_close_time: time = time(15, 20)  # 장 마감 10분 전 강제 청산
+    # 체결 현실성 (옵트인). None이면 기존 동작과 동일(종가 정확체결/무한수량).
+    realism: Optional[RealismModel] = None
+    # 체결 시점: "signal_close"(기존, 신호 봉 종가) | "next_open"(다음 봉 시가, 룩어헤드 제거)
+    execution: Literal["signal_close", "next_open"] = "signal_close"
 
 
 @dataclass
@@ -295,13 +304,24 @@ class IntradayBacktestEngine:
         exit_time: datetime,
         reason: str,
     ) -> IntradayTrade:
-        """Close a position and create a trade record."""
+        """Close a full position and create a trade record."""
+        return self._close_position_qty(pos, exit_price, exit_time, reason, pos.quantity)
+
+    def _close_position_qty(
+        self,
+        pos: IntradayPosition,
+        exit_price: float,
+        exit_time: datetime,
+        reason: str,
+        quantity: int,
+    ) -> IntradayTrade:
+        """Create a trade record for `quantity` shares (full or partial close)."""
         # Calculate P&L
-        gross_pnl = (exit_price - pos.entry_price) * pos.quantity
+        gross_pnl = (exit_price - pos.entry_price) * quantity
 
         # Deduct commission and tax
-        commission = exit_price * pos.quantity * self.config.commission_rate
-        tax = exit_price * pos.quantity * self.config.tax_rate if gross_pnl > 0 else 0
+        commission = exit_price * quantity * self.config.commission_rate
+        tax = exit_price * quantity * self.config.tax_rate if gross_pnl > 0 else 0
 
         net_pnl = gross_pnl - commission - tax
         pnl_pct = ((exit_price / pos.entry_price) - 1) * 100
@@ -312,7 +332,7 @@ class IntradayBacktestEngine:
             exit_price=exit_price,
             entry_time=pos.entry_time,
             exit_time=exit_time,
-            quantity=pos.quantity,
+            quantity=quantity,
             strategy_name=pos.strategy_name,
             pnl=net_pnl,
             pnl_pct=pnl_pct,
